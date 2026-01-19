@@ -28,6 +28,7 @@ export default function HomePage() {
     totalSongs: number;
     addedCount: number;
     notFoundCount: number;
+    notFound: Array<{ artist: string; title: string }>;
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -244,6 +245,14 @@ export default function HomePage() {
         totalSongs: Number(data?.totalSongs ?? 0),
         addedCount: Number(data?.addedCount ?? 0),
         notFoundCount: Number(data?.notFoundCount ?? 0),
+        notFound: Array.isArray(data?.notFound)
+          ? data.notFound
+            .map((s: any) => ({
+              artist: typeof s?.artist === "string" ? s.artist : "",
+              title: typeof s?.title === "string" ? s.title : "",
+            }))
+            .filter((s: any) => Boolean(s.artist && s.title))
+          : [],
       });
     } catch (err: any) {
       setError(err?.message ?? "Failed to create Spotify playlist.");
@@ -410,6 +419,19 @@ export default function HomePage() {
                       Open in Spotify
                     </a>
                   </>
+                ) : null}
+                <div className="small" style={{ marginTop: 8 }}>
+                  Playlist track order is shuffled before adding.
+                </div>
+                {spotifyResult.notFoundCount && spotifyResult.notFound.length ? (
+                  <details style={{ marginTop: 8 }}>
+                    <summary style={{ cursor: "pointer" }}>
+                      Show songs not found ({spotifyResult.notFound.length})
+                    </summary>
+                    <div className="mono" style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>
+                      {spotifyResult.notFound.map((s) => `${s.artist} – ${s.title}`).join("\n")}
+                    </div>
+                  </details>
                 ) : null}
               </div>
             ) : null}
