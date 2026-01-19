@@ -19,7 +19,6 @@ export default function HomePage() {
   const [error, setError] = useState<string>("");
   const [qrNotice, setQrNotice] = useState<string>("");
   const [busy, setBusy] = useState<boolean>(false);
-  const [spotifyBusy, setSpotifyBusy] = useState<boolean>(false);
   const [spotifyConnected, setSpotifyConnected] = useState<boolean>(false);
   const [spotifyConnecting, setSpotifyConnecting] = useState<boolean>(false);
   const [spotifyCreating, setSpotifyCreating] = useState<boolean>(false);
@@ -53,65 +52,83 @@ export default function HomePage() {
     e.preventDefault();
     setError("");
     setQrNotice("");
+    setSpotifyResult(null);
     setBusy(true);
     try {
-      const form = new FormData();
-      form.set("event_date", eventDate);
-      form.set("count", String(count));
-      if (seed.trim()) form.set("seed", seed.trim());
-      if (file) form.set("file", file, file.name);
-      else form.set("songs", songsText);
+      const pdfForm = new FormData();
+      pdfForm.set("event_date", eventDate);
+      pdfForm.set("count", String(count));
+      if (seed.trim()) pdfForm.set("seed", seed.trim());
+      if (file) pdfForm.set("file", file, file.name);
+      else pdfForm.set("songs", songsText);
 
-      const res = await fetch("/api/generate/bundle", { method: "POST", body: form });
-      if (!res.ok) {
-        const msg = await res.text();
-        throw new Error(msg || "Failed to generate ZIP.");
-      }
+      const spotifyForm = new FormData();
+      spotifyForm.set("event_date", eventDate);
+      if (file) spotifyForm.set("file", file, file.name);
+      else spotifyForm.set("songs", songsText);
 
-      const qrStatus = res.headers.get("x-music-bingo-qr-status");
-      const requestedRaw = res.headers.get("x-music-bingo-events-requested");
-      const eventsCount = res.headers.get("x-music-bingo-events-count");
-      const eventsWithUrl = res.headers.get("x-music-bingo-events-with-url");
-      const qrError = res.headers.get("x-music-bingo-qr-error");
+      const pdfPromise = (async () => {
+        const res = await fetch("/api/generate", { method: "POST", body: pdfForm });
+        if (!res.ok) {
+          const msg = await res.text();
+          throw new Error(msg || "Failed to generate PDF.");
+        }
 
-      const expectedEvents = (() => {
-        const n = requestedRaw ? Number.parseInt(requestedRaw, 10) : 3;
-        return Number.isFinite(n) && n > 0 ? n : 3;
+        const qrStatus = res.headers.get("x-music-bingo-qr-status");
+        const requestedRaw = res.headers.get("x-music-bingo-events-requested");
+        const eventsCount = res.headers.get("x-music-bingo-events-count");
+        const eventsWithUrl = res.headers.get("x-music-bingo-events-with-url");
+        const qrError = res.headers.get("x-music-bingo-qr-error");
+
+        const expectedEvents = (() => {
+          const n = requestedRaw ? Number.parseInt(requestedRaw, 10) : 3;
+          return Number.isFinite(n) && n > 0 ? n : 3;
+        })();
+
+        if (qrStatus && qrStatus !== "ok") {
+          if (qrStatus === "missing_config") {
+            setQrNotice(
+              "Upcoming event QRs: management API not configured (set MANAGEMENT_API_BASE_URL + MANAGEMENT_API_TOKEN in music bingo/.env.local, then restart npm run dev)."
+            );
+          } else if (qrStatus === "no_events") {
+            setQrNotice("Upcoming event QRs: no upcoming events found after this date (placeholders used).");
+          } else if (qrStatus === "error") {
+            setQrNotice(`Upcoming event QRs: ${qrError || "failed to fetch events"} (placeholders used).`);
+          }
+        } else if (eventsWithUrl && eventsWithUrl !== String(expectedEvents)) {
+          const count = Number.parseInt(eventsWithUrl, 10);
+          if (Number.isFinite(count) && count >= 0 && count < expectedEvents) {
+            setQrNotice(`Upcoming event QRs: only ${count}/${expectedEvents} event URLs resolved (placeholders used).`);
+          }
+        } else if (eventsCount && eventsCount !== String(expectedEvents)) {
+          const count = Number.parseInt(eventsCount, 10);
+          if (Number.isFinite(count) && count >= 0 && count < expectedEvents) {
+            setQrNotice(`Upcoming event QRs: only ${count}/${expectedEvents} upcoming events found (placeholders used).`);
+          }
+        }
+
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement("a");
+        a.href = url;
+        const filename = res.headers.get("content-disposition")?.match(/filename=\"(.+)\"/)?.[1];
+        a.download = filename ?? "music-bingo.pdf";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
       })();
 
-      if (qrStatus && qrStatus !== "ok") {
-        if (qrStatus === "missing_config") {
-          setQrNotice(
-            "Upcoming event QRs: management API not configured (set MANAGEMENT_API_BASE_URL + MANAGEMENT_API_TOKEN in music bingo/.env.local, then restart npm run dev)."
-          );
-        } else if (qrStatus === "no_events") {
-          setQrNotice("Upcoming event QRs: no upcoming events found after this date (placeholders used).");
-        } else if (qrStatus === "error") {
-          setQrNotice(`Upcoming event QRs: ${qrError || "failed to fetch events"} (placeholders used).`);
+      const spotifyPromise = (async () => {
+        if (!spotifyConnected) {
+          const ok = await connectSpotify({ clearError: false });
+          if (!ok) return;
         }
-      } else if (eventsWithUrl && eventsWithUrl !== String(expectedEvents)) {
-        const count = Number.parseInt(eventsWithUrl, 10);
-        if (Number.isFinite(count) && count >= 0 && count < expectedEvents) {
-          setQrNotice(`Upcoming event QRs: only ${count}/${expectedEvents} event URLs resolved (placeholders used).`);
-        }
-      } else if (eventsCount && eventsCount !== String(expectedEvents)) {
-        const count = Number.parseInt(eventsCount, 10);
-        if (Number.isFinite(count) && count >= 0 && count < expectedEvents) {
-          setQrNotice(`Upcoming event QRs: only ${count}/${expectedEvents} upcoming events found (placeholders used).`);
-        }
-      }
+        await createSpotifyPlaylist({ form: spotifyForm, clearError: false });
+      })();
 
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-
-      const a = document.createElement("a");
-      a.href = url;
-      const filename = res.headers.get("content-disposition")?.match(/filename=\"(.+)\"/)?.[1];
-      a.download = filename ?? "music-bingo.zip";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      await Promise.all([pdfPromise, spotifyPromise]);
     } catch (err: any) {
       setError(err?.message ?? "Something went wrong.");
     } finally {
@@ -119,41 +136,12 @@ export default function HomePage() {
     }
   }
 
-  async function downloadSpotifyZip() {
-    setError("");
-    setSpotifyBusy(true);
-    try {
-      const form = new FormData();
-      form.set("event_date", eventDate);
-      if (file) form.set("file", file, file.name);
-      else form.set("songs", songsText);
-
-      const res = await fetch("/api/download/spotify-script", { method: "POST", body: form });
-      if (!res.ok) {
-        const msg = await res.text();
-        throw new Error(msg || "Failed to download zip.");
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-
-      const a = document.createElement("a");
-      a.href = url;
-      const filename = res.headers.get("content-disposition")?.match(/filename=\"(.+)\"/)?.[1];
-      a.download = filename ?? "spotify_playlist_helper.zip";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch (err: any) {
-      setError(err?.message ?? "Something went wrong.");
-    } finally {
-      setSpotifyBusy(false);
+  async function connectSpotify(opts: { clearError?: boolean } = {}): Promise<boolean> {
+    const clearError = opts.clearError ?? true;
+    if (clearError) {
+      setError("");
+      setSpotifyResult(null);
     }
-  }
-
-  async function connectSpotify() {
-    setError("");
-    setSpotifyResult(null);
     setSpotifyConnecting(true);
     try {
       const w = window.open(
@@ -203,9 +191,11 @@ export default function HomePage() {
         .then((res) => (res.ok ? res.json() : { connected: false }))
         .catch(() => ({ connected: false }));
       setSpotifyConnected(Boolean(status.connected));
+      return Boolean(status.connected);
     } catch (err: any) {
       setError(err?.message ?? "Failed to connect Spotify.");
       setSpotifyConnected(false);
+      return false;
     } finally {
       setSpotifyConnecting(false);
     }
@@ -225,15 +215,21 @@ export default function HomePage() {
     }
   }
 
-  async function createSpotifyPlaylist() {
-    setError("");
-    setSpotifyResult(null);
+  async function createSpotifyPlaylist(opts: { form?: FormData; clearError?: boolean } = {}) {
+    const clearError = opts.clearError ?? true;
+    if (clearError) {
+      setError("");
+      setSpotifyResult(null);
+    }
     setSpotifyCreating(true);
     try {
-      const form = new FormData();
-      form.set("event_date", eventDate);
-      if (file) form.set("file", file, file.name);
-      else form.set("songs", songsText);
+      const form = opts.form ?? (() => {
+        const fd = new FormData();
+        fd.set("event_date", eventDate);
+        if (file) fd.set("file", file, file.name);
+        else fd.set("songs", songsText);
+        return fd;
+      })();
 
       const res = await fetch("/api/spotify/create-playlist", { method: "POST", body: form });
       if (!res.ok) {
@@ -340,11 +336,15 @@ export default function HomePage() {
         </div>
 
         <button type="submit" className="primary-btn" disabled={!canSubmit || busy}>
-          {busy ? (
-            <span>Preparing ZIP...</span>
-          ) : (
-            <span>Generate ZIP (PDF + Spotify Helper)</span>
-          )}
+          <span>
+            {spotifyConnecting
+              ? "Connecting Spotify..."
+              : spotifyCreating
+                ? "Creating Spotify playlist..."
+                : busy
+                  ? "Generating PDF..."
+                  : "Generate PDF + Create Spotify Playlist"}
+          </span>
         </button>
 
         <div className="small" style={{ textAlign: "center", marginTop: 16 }}>
@@ -365,19 +365,19 @@ export default function HomePage() {
       <div className="card helper-card">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 16 }}>
           <div style={{ flex: 1, minWidth: 280 }}>
-            <h2>Spotify Playlist</h2>
+            <h2>Spotify</h2>
             <p style={{ color: "var(--text-secondary)", marginBottom: 16 }}>
-              Connect Spotify and create a <strong>private</strong> playlist from your song list (no downloads needed).
+              Connect Spotify once, then use the main button above to generate your PDF and create a <strong>private</strong> playlist.
             </p>
             <div className="small" style={{ marginTop: 8 }}>
-              Redirect URI to add in Spotify app settings:
+              Add this exact Redirect URI in your Spotify app settings (not just the site URL):
               <div className="mono" style={{ display: "inline-block", marginLeft: 8 }}>{spotifyCallbackUrl || "/api/spotify/callback"}</div>
             </div>
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
               {!spotifyConnected ? (
                 <button
                   type="button"
-                  onClick={connectSpotify}
+                  onClick={() => connectSpotify()}
                   className="primary-btn"
                   disabled={spotifyConnecting}
                   style={{ width: "auto", marginTop: 0 }}
@@ -386,15 +386,6 @@ export default function HomePage() {
                 </button>
               ) : (
                 <>
-                  <button
-                    type="button"
-                    onClick={createSpotifyPlaylist}
-                    className="primary-btn"
-                    disabled={spotifyCreating || !eventDate.trim() || (!file && !songsText.trim())}
-                    style={{ width: "auto", marginTop: 0 }}
-                  >
-                    {spotifyCreating ? "Creating..." : "Create Spotify Playlist"}
-                  </button>
                   <button
                     type="button"
                     onClick={disconnectSpotify}
@@ -424,19 +415,15 @@ export default function HomePage() {
             ) : null}
           </div>
           <div style={{ flex: 1, minWidth: 280, background: "rgba(0,0,0,0.2)", padding: 16, borderRadius: 8 }}>
-            <div className="mono" style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>
-              Prefer offline? Download the helper ZIP:
-            </div>
-            <div style={{ marginTop: 12 }}>
-              <button
-                type="button"
-                onClick={downloadSpotifyZip}
-                className="primary-btn"
-                disabled={spotifyBusy || !eventDate.trim() || (!file && !songsText.trim())}
-                style={{ width: "auto", marginTop: 0 }}
-              >
-                {spotifyBusy ? "Preparing ZIP..." : "↓ Download Helper Only (ZIP)"}
-              </button>
+            <div className="small" style={{ marginTop: 0 }}>
+              Spotify settings checklist:
+              <div className="small" style={{ marginTop: 8 }}>
+                - In Spotify Dashboard → your app → Settings → Redirect URIs, add:
+                <div className="mono" style={{ display: "inline-block", marginLeft: 8 }}>{spotifyCallbackUrl || "/api/spotify/callback"}</div>
+              </div>
+              <div className="small" style={{ marginTop: 8 }}>
+                - In Vercel Environment Variables, set <span className="mono">SPOTIFY_CLIENT_ID</span> and <span className="mono">SPOTIFY_CLIENT_SECRET</span>
+              </div>
             </div>
           </div>
         </div>

@@ -62,14 +62,12 @@
   - Optional “seed” advanced option for reproducibility
 - Ensure UI does not persist uploaded song lists.
 
-## Milestone 6 — Spotify playlist script
-- Add `scripts/create_spotify_playlist.py` that:
-  - Reads the same input `.txt`
-  - Parses songs
-  - Authenticates via Spotify OAuth (Spotipy)
-  - Creates a playlist (private) named `Music Bingo - <Event Date>`
-  - Searches and adds tracks in batches of 100
-  - Writes a report of unmatched tracks
+## Milestone 6 — Spotify playlist (in-app)
+- Add server-side Spotify integration:
+  - OAuth routes (authorize + callback) to store a refresh token (httpOnly cookie)
+  - API route to create a private playlist named `Music Bingo - <Event Date>`
+  - Search and add tracks in batches of 100
+  - Return a not-found report to the UI
 
 ## Milestone 7 — Documentation & handoff
 - `README.md`:
@@ -77,10 +75,10 @@
   - Input format examples
   - How to replace the logo assets
   - How to generate PDF output
-- Spotify instructions:
+- Spotify instructions (in-app):
   - How to create a Spotify Developer app
   - Which env vars to set
-  - How to set redirect URI and authorize
+  - Which redirect URIs to add (local + hosted)
 
 ## Acceptance Checklist (Definition of Done)
 - Generates a single 200-page A4 PDF with:

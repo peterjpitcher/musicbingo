@@ -164,7 +164,7 @@ Recommended matching behavior:
 - Use a small candidate set (e.g., top 5) and pick best match by exact/near-exact name match.
 
 Authentication:
-- Use Spotify OAuth (Spotipy).
+- Use Spotify OAuth (Authorization Code flow) via Spotify Web API.
 - Credentials must be supplied via environment variables / `.env` file and must not be committed.
 
 ## Non-Goals
@@ -180,7 +180,7 @@ Modules/components:
 - `lib/generator`: produce unique card payloads.
 - `lib/pdf`: generate A4 PDF pages (logo, grids, QR codes).
 - `app/`: UI and `app/api/generate` endpoint (offline/local use; deployable later).
-- `scripts/create_spotify_playlist.py`: separate Python script for Spotify playlist creation (Spotipy).
+- `app/api/spotify/*`: server-side OAuth + Spotify Web API playlist creation.
 
 ## Acceptance Criteria
 1) Given a valid input list with ≥25 unique artists and ≥25 unique titles, the app generates a single PDF containing exactly **200 pages**, each page A4 portrait.
@@ -192,7 +192,7 @@ Modules/components:
    - Three QR codes at bottom, including the static menu QR
 3) No two cards in the PDF are identical (per signature definition).
 4) The app does not persist the uploaded song list (no DB/files saved besides the PDF output).
-5) The Spotify script can authenticate, create a playlist, add tracks in batches, and produces a not-found report.
+5) The app can authenticate with Spotify, create a private playlist, add tracks in batches, and report not-found tracks.
 
 ## Open Questions (needs your input)
 ### Logo asset
@@ -208,8 +208,8 @@ Modules/components:
 
 ### Spotify credentials & preferences
 - Spotify credentials are provided via `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` (via env vars / `.env`, never committed).
-- Redirect URI must be configurable via `SPOTIFY_REDIRECT_URI`:
-  - Default for local script usage: `http://localhost:8888/callback`
-  - Placeholder for hosted callback (Vercel) until provided
+- Redirect URI must match the deployed origin, e.g.:
+  - Local: `http://127.0.0.1:3000/api/spotify/callback`
+  - Hosted: `https://your-app.vercel.app/api/spotify/callback`
 - Playlist must be **private**.
 - Playlist name defaults to: `Music Bingo - <Event Date>`

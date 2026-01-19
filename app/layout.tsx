@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Music Bingo",
-  description: "Generate a ZIP bundle: music bingo cards (PDF) + Spotify helper.",
+  description: "Generate music bingo cards (PDF) and a private Spotify playlist.",
 };
 
 export default function RootLayout({
