@@ -12,6 +12,8 @@ type ApiEventsResponse = {
 type ManagementApiEvent = {
   id?: unknown;
   slug?: unknown;
+  eventUrl?: unknown;
+  event_url?: unknown;
   bookingUrl?: unknown;
   booking_url?: unknown;
   name?: unknown;
@@ -52,13 +54,20 @@ function normalizeHttpOrigin(urlish: string): string | null {
   }
 }
 
-function getManagementApiConfig(): { baseUrl: string; apiKey: string } | null {
+function getManagementApiConfig(): { baseUrl: string; apiKey: string; publicEventsBaseUrl: string } | null {
   const baseUrlRaw = envString("MANAGEMENT_API_BASE_URL");
   const apiKey = envString("MANAGEMENT_API_TOKEN");
   if (!baseUrlRaw || !apiKey) return null;
   const baseUrl = normalizeHttpOrigin(baseUrlRaw);
   if (!baseUrl) return null;
-  return { baseUrl, apiKey };
+  const publicEventsBaseUrl =
+    normalizeHttpOrigin(
+      envString("MANAGEMENT_PUBLIC_EVENTS_BASE_URL") ??
+        envString("MANAGEMENT_PUBLIC_SITE_URL") ??
+        envString("NEXT_PUBLIC_SITE_URL") ??
+        "https://www.the-anchor.pub"
+    ) ?? "https://www.the-anchor.pub";
+  return { baseUrl, apiKey, publicEventsBaseUrl };
 }
 
 function isoDateInLondon(date: Date): string | null {
@@ -165,17 +174,28 @@ function getEventName(event: ManagementApiEvent): string | null {
   return getString(event.name) ?? getString(event.title) ?? getString(event.event_name);
 }
 
-function getEventUrl(event: ManagementApiEvent, baseUrl: string): string | null {
+function getCanonicalEventUrlBySlug(event: ManagementApiEvent, publicEventsBaseUrl: string): string | null {
+  const slugRaw = getString(event.slug);
+  if (!slugRaw) return null;
+  const slug = slugRaw.replace(/^\/+|\/+$/g, "");
+  if (!slug) return null;
+  return resolveHttpUrl(`/events/${slug}`, publicEventsBaseUrl);
+}
+
+function getEventUrl(event: ManagementApiEvent, baseUrl: string, publicEventsBaseUrl: string): string | null {
   const candidates = [
+    // Prefer canonical event URLs first (customer-facing event pages).
+    getString(event.eventUrl),
+    getString(event.event_url),
+    getString(event.publicUrl),
+    getString(event.public_url),
+    getCanonicalEventUrlBySlug(event, publicEventsBaseUrl),
+    getString(event.url),
+    // Legacy and fallback fields.
     getString(event.qrUrl),
     getString(event.qr_url),
     getString(event.qrCodeUrl),
     getString(event.qr_code_url),
-    getString(event.bookingUrl),
-    getString(event.booking_url),
-    getString(event.publicUrl),
-    getString(event.public_url),
-    getString(event.url),
   ].filter((v): v is string => !!v);
 
   for (const url of candidates) {
@@ -198,6 +218,13 @@ function getEventUrl(event: ManagementApiEvent, baseUrl: string): string | null 
       const resolved = resolveHttpUrl(offerUrl, baseUrl);
       if (resolved) return resolved;
     }
+  }
+
+  // Booking URL is treated as a final fallback rather than the primary destination.
+  const bookingCandidates = [getString(event.bookingUrl), getString(event.booking_url)].filter((v): v is string => !!v);
+  for (const url of bookingCandidates) {
+    const resolved = resolveHttpUrl(url, baseUrl);
+    if (resolved) return resolved;
   }
 
   return null;
@@ -382,7 +409,10 @@ export async function fetchNextUpcomingEventLinks(params: {
     .filter((x): x is { e: ManagementApiEvent; start: Date } => !!x.start)
     .filter((x) => x.start.getTime() > cutoffMs)
     .sort((a, b) => a.start.getTime() - b.start.getTime())
-    .map(({ e }) => ({ label: formatEventLabel(e) ?? "Upcoming event", url: getEventUrl(e, config.baseUrl) }));
+    .map(({ e }) => ({
+      label: formatEventLabel(e) ?? "Upcoming event",
+      url: getEventUrl(e, config.baseUrl, config.publicEventsBaseUrl),
+    }));
 
   return candidates.slice(0, requestedCount);
 }

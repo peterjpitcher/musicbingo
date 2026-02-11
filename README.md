@@ -19,6 +19,7 @@ Next.js app to generate **black & white** A4 music bingo cards (PDF) from a plai
    - Copy `.env.example` to `.env.local`
    - Set `MANAGEMENT_API_BASE_URL` (e.g. `https://management.orangejelly.co.uk`)
    - Set `MANAGEMENT_API_TOKEN` (API key with `read:events`)
+   - Optional: set `MANAGEMENT_PUBLIC_EVENTS_BASE_URL` if your customer-facing event site is not `https://www.the-anchor.pub`
    - Restart `npm run dev` after changing env vars
 5) Run:
    - `npm run dev`
