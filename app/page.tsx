@@ -10,6 +10,18 @@ function todayIso(): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function downloadTextFile(content: string, filename: string) {
+  const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 export default function HomePage() {
   const [eventDate, setEventDate] = useState<string>(todayIso());
   const [count, setCount] = useState<number>(200);
@@ -29,6 +41,7 @@ export default function HomePage() {
     addedCount: number;
     notFoundCount: number;
     notFound: Array<{ artist: string; title: string }>;
+    songOrderFilename: string;
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -239,6 +252,11 @@ export default function HomePage() {
         throw new Error(msg || "Failed to create Spotify playlist.");
       }
       const data = await res.json();
+      const songOrderFilename = typeof data?.songOrderFilename === "string" && data.songOrderFilename.trim()
+        ? data.songOrderFilename.trim()
+        : "spotify-song-order.txt";
+      const songOrderText = typeof data?.songOrderText === "string" ? data.songOrderText : "";
+
       setSpotifyResult({
         playlistName: String(data?.playlistName ?? "Music Bingo"),
         playlistUrl: typeof data?.playlistUrl === "string" ? data.playlistUrl : null,
@@ -253,7 +271,10 @@ export default function HomePage() {
             }))
             .filter((s: any) => Boolean(s.artist && s.title))
           : [],
+        songOrderFilename,
       });
+
+      downloadTextFile(songOrderText, songOrderFilename);
     } catch (err: any) {
       setError(err?.message ?? "Failed to create Spotify playlist.");
     } finally {
@@ -422,6 +443,9 @@ export default function HomePage() {
                 ) : null}
                 <div className="small" style={{ marginTop: 8 }}>
                   Playlist track order is shuffled before adding.
+                </div>
+                <div className="small" style={{ marginTop: 4 }}>
+                  Downloaded song order file: <span className="mono">{spotifyResult.songOrderFilename}</span>
                 </div>
                 {spotifyResult.notFoundCount && spotifyResult.notFound.length ? (
                   <details style={{ marginTop: 8 }}>

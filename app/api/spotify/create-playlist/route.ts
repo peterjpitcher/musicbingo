@@ -75,6 +75,12 @@ type SpotifySearchResponse = {
   };
 };
 
+type MatchedTrack = {
+  uri: string;
+  artist: string;
+  title: string;
+};
+
 function getString(v: unknown): string | null {
   return typeof v === "string" && v.trim() ? v.trim() : null;
 }
@@ -178,6 +184,15 @@ function safeSearchTerm(raw: string): string {
   return raw.replace(/"/g, "").trim();
 }
 
+function makeSongOrderFilename(eventDateDisplay: string): string {
+  const normalized = eventDateDisplay
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return `spotify-song-order-${normalized || "music-bingo"}.txt`;
+}
+
 export async function POST(request: NextRequest) {
   const origin = new URL(request.url).origin;
   const secure = process.env.NODE_ENV === "production";
@@ -253,7 +268,7 @@ export async function POST(request: NextRequest) {
         { q: `"${title}" "${artist}"`, limit: 12 },
       ];
 
-      type Candidate = { uri: string; score: number };
+      type Candidate = MatchedTrack & { score: number };
 
       let best: Candidate | null = null;
       for (const { q, limit } of queries) {
@@ -280,20 +295,36 @@ export async function POST(request: NextRequest) {
           );
 
           const score = Math.max(normalScore, swappedScore);
-          if (!best || score > best.score) best = { uri, score };
+          if (!best || score > best.score) {
+            best = {
+              uri,
+              score,
+              title: name,
+              artist: artists.join(", ") || song.artist,
+            };
+          }
         }
 
         if (best && best.score >= 0.85) break;
       }
 
-      if (best && best.score >= 0.62) return { uri: best.uri };
+      if (best && best.score >= 0.62) {
+        return {
+          match: {
+            uri: best.uri,
+            artist: best.artist,
+            title: best.title,
+          },
+        };
+      }
       return { notFound: { artist: song.artist, title: song.title } };
     });
 
-    const trackUris = results.flatMap((r: any) => (r?.uri ? [r.uri as string] : []));
+    const matchedTracks = results.flatMap((r: any) => (r?.match ? [r.match as MatchedTrack] : []));
     const notFound = results.flatMap((r: any) => (r?.notFound ? [r.notFound as { artist: string; title: string }] : []));
 
-    shuffleInPlace(trackUris);
+    shuffleInPlace(matchedTracks);
+    const trackUris = matchedTracks.map((track) => track.uri);
     for (const uris of chunk(trackUris, 100)) {
       await spotifyJson(accessToken, `https://api.spotify.com/v1/playlists/${encodeURIComponent(playlistId)}/tracks`, {
         method: "POST",
@@ -301,6 +332,11 @@ export async function POST(request: NextRequest) {
         body: JSON.stringify({ uris }),
       });
     }
+
+    const songOrderText = matchedTracks
+      .map((track, index) => `${index + 1}. ${track.artist} - ${track.title}`)
+      .join("\n");
+    const songOrderFilename = makeSongOrderFilename(eventDateDisplay || playlistName);
 
     const body = {
       playlistId,
@@ -310,6 +346,8 @@ export async function POST(request: NextRequest) {
       addedCount: trackUris.length,
       notFoundCount: notFound.length,
       notFound,
+      songOrderText,
+      songOrderFilename,
     };
 
     const res = NextResponse.json(body, { headers: { "Cache-Control": "no-store" } });
