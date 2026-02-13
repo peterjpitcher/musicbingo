@@ -141,6 +141,7 @@ label {
 input[type="text"],
 input[type="number"],
 input[type="date"],
+select,
 textarea,
 .file-drop-zone {
   width: 100%;
@@ -157,6 +158,7 @@ textarea,
 }
 
 input:focus,
+select:focus,
 textarea:focus {
   border-color: var(--border-focus);
   box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
@@ -168,6 +170,19 @@ textarea {
   min-height: 200px;
   line-height: 1.5;
   resize: vertical;
+}
+
+select {
+  appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--text-secondary) 50%),
+    linear-gradient(135deg, var(--text-secondary) 50%, transparent 50%);
+  background-position:
+    calc(100% - 20px) calc(1em + 2px),
+    calc(100% - 14px) calc(1em + 2px);
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+  padding-right: 36px;
 }
 
 /* Custom File Input Styling */
@@ -292,6 +307,13 @@ button.secondary-btn:hover:not(:disabled) {
 
 .mt-8 {
   margin-top: 32px;
+}
+
+.game-section {
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.5);
 }
 
 .error-message {

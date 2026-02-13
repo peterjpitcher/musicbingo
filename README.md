@@ -1,6 +1,10 @@
 # Music Bingo
 
-Next.js app to generate **black & white** A4 music bingo cards (PDF) from a plain-text song list, with an optional in-app button to create a private Spotify playlist from the same list.
+Next.js app to generate a full Music Bingo event pack from two plain-text song lists:
+- Game 1 cards PDF
+- Game 2 cards PDF
+- Event Clipboard DOCX (with schedule, bonus challenge songs, and both 1-50 song lists)
+- Two private Spotify playlists (one per game)
 
 ## Web app (Next.js)
 1) Install:
@@ -23,13 +27,14 @@ Next.js app to generate **black & white** A4 music bingo cards (PDF) from a plai
    - Restart `npm run dev` after changing env vars
 5) Run:
    - `npm run dev`
-6) Open the URL shown in your terminal (usually `http://127.0.0.1:3000`), paste/upload your songs, enter the event date, and click **Generate PDF + Create Spotify Playlist**.
-   - PDF downloads immediately; Spotify playlist creation requires a one-time “Connect Spotify” step.
-   - Seed is optional: same seed + same songs = same PDF.
+6) Open the URL shown in your terminal (usually `http://127.0.0.1:3000`), paste songs for both games, set themes, choose challenge songs, enter the event date, and click **Generate Event Pack + Create 2 Spotify Playlists**.
+   - Download is a single zip with 2 PDFs + 1 DOCX.
+   - Spotify playlist creation requires a one-time “Connect Spotify” step.
 
 ## Input format
 - Ignore decade headers like `1950s (25)`
 - Song lines like `Artist – Title` (en-dash preferred; `-` and `—` supported when spaced)
+- Max 50 parsed songs per game list
 
 ## Notes
 - No database; uploaded song lists are processed in-memory only.

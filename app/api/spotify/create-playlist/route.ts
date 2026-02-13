@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
 
 import { formatEventDateDisplay } from "@/lib/eventDate";
-import { parseSongListText } from "@/lib/parser";
+import {
+  normalizeGameTheme,
+  parseGameSongsText,
+} from "@/lib/gameInput";
+import type { ParseResult, Song } from "@/lib/types";
 import {
   getSpotifyWebConfig,
   refreshSpotifyAccessToken,
@@ -184,13 +188,124 @@ function safeSearchTerm(raw: string): string {
   return raw.replace(/"/g, "").trim();
 }
 
-function makeSongOrderFilename(eventDateDisplay: string): string {
-  const normalized = eventDateDisplay
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+type PlaylistBuildResult = {
+  playlistId: string;
+  playlistName: string;
+  playlistUrl: string | null;
+  totalSongs: number;
+  addedCount: number;
+  notFoundCount: number;
+  notFound: Array<{ artist: string; title: string }>;
+};
 
-  return `spotify-song-order-${normalized || "music-bingo"}.txt`;
+async function createPlaylistForGame(params: {
+  accessToken: string;
+  userId: string;
+  playlistName: string;
+  description: string;
+  songs: Song[];
+}): Promise<PlaylistBuildResult> {
+  const playlist = await spotifyJson<SpotifyPlaylistResponse>(
+    params.accessToken,
+    `https://api.spotify.com/v1/users/${encodeURIComponent(params.userId)}/playlists`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: params.playlistName,
+        public: false,
+        description: params.description,
+      }),
+    }
+  );
+
+  const playlistId = getString(playlist.id);
+  const playlistUrl = getString((playlist.external_urls as any)?.spotify);
+  if (!playlistId) throw new Error("Spotify API error: missing playlist id");
+
+  const results = await mapWithConcurrency(params.songs, 5, async (song) => {
+    const title = safeSearchTerm(song.title);
+    const artist = safeSearchTerm(song.artist);
+
+    const queries: Array<{ q: string; limit: number }> = [
+      { q: `track:"${title}" artist:"${artist}"`, limit: 8 },
+      { q: `"${title}" "${artist}"`, limit: 12 },
+    ];
+
+    type Candidate = MatchedTrack & { score: number };
+
+    let best: Candidate | null = null;
+    for (const { q, limit } of queries) {
+      const queryParams = new URLSearchParams({ q, type: "track", limit: String(limit), market: "from_token" });
+      const url = `https://api.spotify.com/v1/search?${queryParams.toString()}`;
+      const json = await spotifyJson<SpotifySearchResponse>(params.accessToken, url);
+      const items = json.tracks?.items ?? [];
+
+      for (const item of items) {
+        const uri = getString(item?.uri);
+        const name = getString(item?.name);
+        const artists = (Array.isArray(item?.artists) ? item.artists : [])
+          .map((a) => getString(a?.name))
+          .filter((v): v is string => Boolean(v));
+        if (!uri || !name) continue;
+
+        const normalScore = combinedScore(
+          titleSimilarity(song.title, name),
+          artistSimilarity(song.artist, artists)
+        );
+        const swappedScore = combinedScore(
+          titleSimilarity(song.artist, name),
+          artistSimilarity(song.title, artists)
+        );
+
+        const score = Math.max(normalScore, swappedScore);
+        if (!best || score > best.score) {
+          best = {
+            uri,
+            score,
+            title: name,
+            artist: artists.join(", ") || song.artist,
+          };
+        }
+      }
+
+      if (best && best.score >= 0.85) break;
+    }
+
+    if (best && best.score >= 0.62) {
+      return {
+        match: {
+          uri: best.uri,
+          artist: best.artist,
+          title: best.title,
+        },
+      };
+    }
+    return { notFound: { artist: song.artist, title: song.title } };
+  });
+
+  const matchedTracks = results.flatMap((r: any) => (r?.match ? [r.match as MatchedTrack] : []));
+  const notFound = results.flatMap((r: any) => (r?.notFound ? [r.notFound as { artist: string; title: string }] : []));
+
+  shuffleInPlace(matchedTracks);
+  const trackUris = matchedTracks.map((track) => track.uri);
+  for (const uris of chunk(trackUris, 100)) {
+    await spotifyJson(params.accessToken, `https://api.spotify.com/v1/playlists/${encodeURIComponent(playlistId)}/tracks`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ uris }),
+    });
+  }
+
+  return {
+    playlistId,
+    playlistName: params.playlistName,
+    playlistUrl,
+    totalSongs: params.songs.length,
+    addedCount: trackUris.length,
+    notFoundCount: notFound.length,
+    notFound,
+  };
 }
 
 export async function POST(request: NextRequest) {
@@ -199,22 +314,23 @@ export async function POST(request: NextRequest) {
 
   const refreshToken = request.cookies.get(COOKIE_REFRESH)?.value ?? "";
   if (!refreshToken.trim()) {
-    return new Response("Spotify is not connected. Click “Connect Spotify” and try again.", { status: 401 });
+    return new Response("Spotify is not connected. Click \"Connect Spotify\" and try again.", { status: 401 });
   }
 
   const form = await request.formData();
 
   const eventDateInput = asString(form.get("event_date")).trim();
   const eventDateDisplay = formatEventDateDisplay(eventDateInput);
-  const playlistName = eventDateDisplay ? `Music Bingo - ${eventDateDisplay}` : "Music Bingo";
+  const game1Theme = normalizeGameTheme(asString(form.get("game1_theme")));
+  const game2Theme = normalizeGameTheme(asString(form.get("game2_theme")));
 
-  let text = asString(form.get("songs"));
-  const file = form.get("file");
-  if (file && typeof file !== "string") {
-    text = await file.text();
-  }
-  if (!text.trim()) {
-    return new Response("Provide a song list (paste text or upload a .txt file).", { status: 400 });
+  let parsedGame1: ParseResult;
+  let parsedGame2: ParseResult;
+  try {
+    parsedGame1 = parseGameSongsText(asString(form.get("game1_songs")), "Game 1");
+    parsedGame2 = parseGameSongsText(asString(form.get("game2_songs")), "Game 2");
+  } catch (err: any) {
+    return new Response(err?.message ? String(err.message) : "Invalid game inputs.", { status: 400 });
   }
 
   let accessToken: string;
@@ -226,8 +342,7 @@ export async function POST(request: NextRequest) {
     newRefreshToken = refreshed.refreshToken;
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Failed to refresh Spotify token.";
-    const res = new Response(`${msg}\n\nTry clicking “Connect Spotify” again.`, { status: 401 });
-    return res;
+    return new Response(`${msg}\n\nTry clicking \"Connect Spotify\" again.`, { status: 401 });
   }
 
   try {
@@ -235,122 +350,41 @@ export async function POST(request: NextRequest) {
     const userId = getString(me.id);
     if (!userId) throw new Error("Spotify API error: missing user id");
 
-    const playlist = await spotifyJson<SpotifyPlaylistResponse>(
-      accessToken,
-      `https://api.spotify.com/v1/users/${encodeURIComponent(userId)}/playlists`,
+    const dateSuffix = eventDateDisplay ? ` - ${eventDateDisplay}` : "";
+    const gameInputs = [
       {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: playlistName,
-          public: false,
-          description: "Generated by Music Bingo",
-        }),
-      }
-    );
+        gameNumber: 1 as const,
+        theme: game1Theme,
+        songs: parsedGame1.songs,
+      },
+      {
+        gameNumber: 2 as const,
+        theme: game2Theme,
+        songs: parsedGame2.songs,
+      },
+    ];
 
-    const playlistId = getString(playlist.id);
-    const playlistUrl = getString((playlist.external_urls as any)?.spotify);
-    if (!playlistId) throw new Error("Spotify API error: missing playlist id");
+    const playlists = [];
+    for (const game of gameInputs) {
+      const playlistName = `Music Bingo Game ${game.gameNumber}${dateSuffix} (${game.theme})`;
+      const description = `Generated by Music Bingo. Game ${game.gameNumber}. Theme: ${game.theme}.`;
 
-    const parsed = parseSongListText(text);
-    const songs = parsed.songs;
-    if (!songs.length) {
-      return new Response("No songs found in the input.", { status: 400 });
-    }
+      const created = await createPlaylistForGame({
+        accessToken,
+        userId,
+        playlistName,
+        description,
+        songs: game.songs,
+      });
 
-    const results = await mapWithConcurrency(songs, 5, async (song) => {
-      const title = safeSearchTerm(song.title);
-      const artist = safeSearchTerm(song.artist);
-
-      const queries: Array<{ q: string; limit: number }> = [
-        { q: `track:"${title}" artist:"${artist}"`, limit: 8 },
-        { q: `"${title}" "${artist}"`, limit: 12 },
-      ];
-
-      type Candidate = MatchedTrack & { score: number };
-
-      let best: Candidate | null = null;
-      for (const { q, limit } of queries) {
-        const params = new URLSearchParams({ q, type: "track", limit: String(limit), market: "from_token" });
-        const url = `https://api.spotify.com/v1/search?${params.toString()}`;
-        const json = await spotifyJson<SpotifySearchResponse>(accessToken, url);
-        const items = json.tracks?.items ?? [];
-
-        for (const item of items) {
-          const uri = getString(item?.uri);
-          const name = getString(item?.name);
-          const artists = (Array.isArray(item?.artists) ? item.artists : [])
-            .map((a) => getString(a?.name))
-            .filter((v): v is string => Boolean(v));
-          if (!uri || !name) continue;
-
-          const normalScore = combinedScore(
-            titleSimilarity(song.title, name),
-            artistSimilarity(song.artist, artists)
-          );
-          const swappedScore = combinedScore(
-            titleSimilarity(song.artist, name),
-            artistSimilarity(song.title, artists)
-          );
-
-          const score = Math.max(normalScore, swappedScore);
-          if (!best || score > best.score) {
-            best = {
-              uri,
-              score,
-              title: name,
-              artist: artists.join(", ") || song.artist,
-            };
-          }
-        }
-
-        if (best && best.score >= 0.85) break;
-      }
-
-      if (best && best.score >= 0.62) {
-        return {
-          match: {
-            uri: best.uri,
-            artist: best.artist,
-            title: best.title,
-          },
-        };
-      }
-      return { notFound: { artist: song.artist, title: song.title } };
-    });
-
-    const matchedTracks = results.flatMap((r: any) => (r?.match ? [r.match as MatchedTrack] : []));
-    const notFound = results.flatMap((r: any) => (r?.notFound ? [r.notFound as { artist: string; title: string }] : []));
-
-    shuffleInPlace(matchedTracks);
-    const trackUris = matchedTracks.map((track) => track.uri);
-    for (const uris of chunk(trackUris, 100)) {
-      await spotifyJson(accessToken, `https://api.spotify.com/v1/playlists/${encodeURIComponent(playlistId)}/tracks`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ uris }),
+      playlists.push({
+        gameNumber: game.gameNumber,
+        theme: game.theme,
+        ...created,
       });
     }
 
-    const songOrderText = matchedTracks
-      .map((track, index) => `${index + 1}. ${track.artist} - ${track.title}`)
-      .join("\n");
-    const songOrderFilename = makeSongOrderFilename(eventDateDisplay || playlistName);
-
-    const body = {
-      playlistId,
-      playlistName,
-      playlistUrl,
-      totalSongs: songs.length,
-      addedCount: trackUris.length,
-      notFoundCount: notFound.length,
-      notFound,
-      songOrderText,
-      songOrderFilename,
-    };
-
-    const res = NextResponse.json(body, { headers: { "Cache-Control": "no-store" } });
+    const res = NextResponse.json({ playlists }, { headers: { "Cache-Control": "no-store" } });
     if (newRefreshToken) {
       res.cookies.set({
         name: COOKIE_REFRESH,
@@ -364,7 +398,7 @@ export async function POST(request: NextRequest) {
     }
     return res;
   } catch (err: any) {
-    const msg = err?.message ? String(err.message) : "Failed to create Spotify playlist.";
+    const msg = err?.message ? String(err.message) : "Failed to create Spotify playlists.";
     return new Response(msg, { status: 500 });
   }
 }
