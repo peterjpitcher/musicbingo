@@ -379,7 +379,7 @@ async function loadFirstExistingPublicImageAsBwPngBytes(
       }
       console.info(`[music-bingo] Loaded logo from filesystem: public/${actualName}`);
       return processed;
-    } catch (err) {
+    } catch {
       // Don't warn here; this is expected if the file doesn't exist in a particular env.
       // We'll warn only if all candidates fail.
       // try next
