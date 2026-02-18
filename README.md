@@ -38,3 +38,4 @@ Next.js app to generate a full Music Bingo event pack from two plain-text song l
 
 ## Notes
 - No database; uploaded song lists are processed in-memory only.
+- Vercel project slug: `music-bingo`.
