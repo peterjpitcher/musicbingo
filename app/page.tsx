@@ -1,12 +1,20 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 
+import { formatEventDateDisplay } from "@/lib/eventDate";
 import {
   DEFAULT_GAME_THEME,
   MAX_SONGS_PER_GAME,
   makeSongSelectionValue,
 } from "@/lib/gameInput";
+import { exportLiveSessionJson, upsertLiveSession } from "@/lib/live/storage";
+import {
+  DEFAULT_REVEAL_CONFIG,
+  LIVE_SESSION_VERSION,
+  type LiveSessionV1,
+} from "@/lib/live/types";
 import { parseSongListText } from "@/lib/parser";
 import type { Song } from "@/lib/types";
 
@@ -33,9 +41,27 @@ function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
+function makeSessionId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `session-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+}
+
+function sanitizeFilenamePart(s: string): string {
+  const cleaned = s
+    .trim()
+    .replace(/[^a-zA-Z0-9 _-]+/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .slice(0, 80);
+  return cleaned || "session";
+}
+
 type SpotifyPlaylistResult = {
   gameNumber: number;
   theme: string;
+  playlistId: string | null;
   playlistName: string;
   playlistUrl: string | null;
   totalSongs: number;
@@ -63,6 +89,9 @@ export default function HomePage() {
   const [spotifyCreating, setSpotifyCreating] = useState<boolean>(false);
   const [spotifyResult, setSpotifyResult] = useState<SpotifyPlaylistResult[] | null>(null);
   const [spotifyCallbackUrl, setSpotifyCallbackUrl] = useState<string>("/api/spotify/callback");
+  const [liveSessionName, setLiveSessionName] = useState<string>("");
+  const [liveSessionNameDirty, setLiveSessionNameDirty] = useState<boolean>(false);
+  const [liveSessionNotice, setLiveSessionNotice] = useState<string>("");
 
   const parsedGame1 = useMemo(() => parseSongListText(game1SongsText), [game1SongsText]);
   const parsedGame2 = useMemo(() => parseSongListText(game2SongsText), [game2SongsText]);
@@ -96,6 +125,22 @@ export default function HomePage() {
       setGame2ChallengeSong(makeSongSelectionValue(parsedGame2.songs[0] as Song));
     }
   }, [parsedGame2.songs, game2ChallengeSong]);
+
+  useEffect(() => {
+    const eventDateDisplay = formatEventDateDisplay(eventDate) || eventDate || todayIso();
+    const defaultName = `Music Bingo - ${eventDateDisplay}`;
+    if (!liveSessionNameDirty || !liveSessionName.trim()) {
+      setLiveSessionName(defaultName);
+    }
+  }, [eventDate, liveSessionName, liveSessionNameDirty]);
+
+  const livePlaylistByGame = useMemo(() => {
+    if (!spotifyResult?.length) return null;
+    const game1 = spotifyResult.find((item) => item.gameNumber === 1 && item.playlistId);
+    const game2 = spotifyResult.find((item) => item.gameNumber === 2 && item.playlistId);
+    if (!game1 || !game2) return null;
+    return { game1, game2 };
+  }, [spotifyResult]);
 
   const canSubmit = useMemo(() => {
     const count = Number.parseInt(countInput, 10);
@@ -132,11 +177,80 @@ export default function HomePage() {
     return form;
   }
 
+  function buildLiveSessionPayload(): LiveSessionV1 {
+    if (!livePlaylistByGame) {
+      throw new Error("Create both Spotify playlists first, then save the live session.");
+    }
+
+    const eventDateDisplay = formatEventDateDisplay(eventDate) || eventDate || todayIso();
+    const sessionName = liveSessionName.trim() || `Music Bingo - ${eventDateDisplay}`;
+    const game1 = livePlaylistByGame.game1;
+    const game2 = livePlaylistByGame.game2;
+
+    return {
+      version: LIVE_SESSION_VERSION,
+      id: makeSessionId(),
+      name: sessionName,
+      createdAt: new Date().toISOString(),
+      eventDateInput: eventDate,
+      eventDateDisplay,
+      revealConfig: DEFAULT_REVEAL_CONFIG,
+      games: [
+        {
+          gameNumber: 1,
+          theme: game1.theme,
+          playlistId: game1.playlistId as string,
+          playlistName: game1.playlistName,
+          playlistUrl: game1.playlistUrl,
+          totalSongs: game1.totalSongs,
+          addedCount: game1.addedCount,
+        },
+        {
+          gameNumber: 2,
+          theme: game2.theme,
+          playlistId: game2.playlistId as string,
+          playlistName: game2.playlistName,
+          playlistUrl: game2.playlistUrl,
+          totalSongs: game2.totalSongs,
+          addedCount: game2.addedCount,
+        },
+      ],
+    };
+  }
+
+  function saveLiveSession() {
+    try {
+      const session = buildLiveSessionPayload();
+      upsertLiveSession(session);
+      setLiveSessionNotice(`Saved live session: ${session.name}`);
+      setError("");
+    } catch (err: any) {
+      setLiveSessionNotice("");
+      setError(err?.message ?? "Failed to save live session.");
+    }
+  }
+
+  function exportLiveSession() {
+    try {
+      const session = buildLiveSessionPayload();
+      upsertLiveSession(session);
+      const json = exportLiveSessionJson(session.id);
+      const blob = new Blob([json], { type: "application/json;charset=utf-8" });
+      downloadBlob(blob, `music-bingo-live-session-${sanitizeFilenamePart(session.name)}.json`);
+      setLiveSessionNotice(`Exported live session: ${session.name}`);
+      setError("");
+    } catch (err: any) {
+      setLiveSessionNotice("");
+      setError(err?.message ?? "Failed to export live session.");
+    }
+  }
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
     setQrNotice("");
     setSpotifyResult(null);
+    setLiveSessionNotice("");
     setBusy(true);
     try {
       const count = Number.parseInt(countInput, 10);
@@ -311,6 +425,7 @@ export default function HomePage() {
           .map((item: any) => ({
             gameNumber: Number(item?.gameNumber ?? 0),
             theme: typeof item?.theme === "string" ? item.theme : DEFAULT_GAME_THEME,
+            playlistId: typeof item?.playlistId === "string" ? item.playlistId : null,
             playlistName: String(item?.playlistName ?? "Music Bingo"),
             playlistUrl: typeof item?.playlistUrl === "string" ? item.playlistUrl : null,
             totalSongs: Number(item?.totalSongs ?? 0),
@@ -337,8 +452,13 @@ export default function HomePage() {
   }
 
   return (
-    <main>
+    <main className="music-prep-page">
       <header style={{ textAlign: "center", marginBottom: 60 }}>
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
+          <Link href="/host" className="secondary-btn" style={{ textDecoration: "none", width: "auto" }}>
+            Live Host Console
+          </Link>
+        </div>
         <h1>Music Bingo</h1>
         <p className="lead" style={{ margin: "0 auto" }}>
           Generate a full event pack with two game card PDFs, an Event Clipboard DOCX, and two Spotify playlists.
@@ -540,6 +660,46 @@ export default function HomePage() {
                     ) : null}
                   </div>
                 ))}
+              </div>
+            ) : null}
+            {livePlaylistByGame ? (
+              <div style={{ marginTop: 18, padding: 14, border: "1px solid var(--border-subtle)", borderRadius: 10 }}>
+                <h3 style={{ margin: "0 0 10px 0", fontSize: "1rem" }}>Live Session</h3>
+                <label style={{ marginBottom: 6 }}>Session Name</label>
+                <input
+                  value={liveSessionName}
+                  onChange={(e) => {
+                    setLiveSessionName(e.target.value);
+                    setLiveSessionNameDirty(true);
+                  }}
+                  placeholder="Music Bingo - Event Date"
+                />
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
+                  <button
+                    type="button"
+                    onClick={saveLiveSession}
+                    className="primary-btn"
+                    style={{ width: "auto", marginTop: 0 }}
+                  >
+                    Save Live Session
+                  </button>
+                  <button
+                    type="button"
+                    onClick={exportLiveSession}
+                    className="secondary-btn"
+                    style={{ width: "auto" }}
+                  >
+                    Export Live Session JSON
+                  </button>
+                  <Link href="/host" className="secondary-btn" style={{ textDecoration: "none", width: "auto" }}>
+                    Open Live Host Console
+                  </Link>
+                </div>
+                {liveSessionNotice ? (
+                  <div className="small" style={{ marginTop: 8 }}>
+                    {liveSessionNotice}
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </div>

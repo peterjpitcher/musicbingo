@@ -380,7 +380,13 @@ export async function POST(request: NextRequest) {
       playlists.push({
         gameNumber: game.gameNumber,
         theme: game.theme,
-        ...created,
+        playlistId: created.playlistId,
+        playlistName: created.playlistName,
+        playlistUrl: created.playlistUrl,
+        totalSongs: created.totalSongs,
+        addedCount: created.addedCount,
+        notFoundCount: created.notFoundCount,
+        notFound: created.notFound,
       });
     }
 

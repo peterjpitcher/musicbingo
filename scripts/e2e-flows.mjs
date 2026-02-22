@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { writeFile, mkdir, readFile } from "node:fs/promises";
+import { writeFile, mkdir, readFile, rm } from "node:fs/promises";
 import { resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
@@ -136,6 +136,7 @@ async function installSpotifyMocks(context, options) {
           {
             gameNumber: 1,
             theme: "General 70's to 2010's",
+            playlistId: "mock-game-1",
             playlistName: "Music Bingo Game 1",
             playlistUrl: "https://open.spotify.com/playlist/mock-game-1",
             totalSongs: 26,
@@ -146,6 +147,7 @@ async function installSpotifyMocks(context, options) {
           {
             gameNumber: 2,
             theme: "General 70's to 2010's",
+            playlistId: "mock-game-2",
             playlistName: "Music Bingo Game 2",
             playlistUrl: "https://open.spotify.com/playlist/mock-game-2",
             totalSongs: 26,
@@ -172,6 +174,149 @@ async function installSpotifyMocks(context, options) {
   return state;
 }
 
+async function installSpotifyLiveMocks(context, options = {}) {
+  const state = {
+    connected: options.initialConnected ?? true,
+    canControlPlayback: options.canControlPlayback ?? true,
+    statusCalls: 0,
+    commandCalls: 0,
+    activeGame: 1,
+    trackIndex: 0,
+    progressMs: 0,
+    isPlaying: false,
+  };
+
+  const tracksByGame = {
+    1: [
+      { trackId: "track-g1-1", title: "Flow Live Song One", artist: "Flow Live Artist A" },
+      { trackId: "track-g1-2", title: "Flow Live Song Two", artist: "Flow Live Artist B" },
+    ],
+    2: [
+      { trackId: "track-g2-1", title: "Flow Live Song Three", artist: "Flow Live Artist C" },
+      { trackId: "track-g2-2", title: "Flow Live Song Four", artist: "Flow Live Artist D" },
+    ],
+  };
+
+  const currentTrack = () => {
+    const tracks = tracksByGame[state.activeGame] ?? tracksByGame[1];
+    return tracks[state.trackIndex % tracks.length];
+  };
+
+  const buildSnapshot = () => {
+    const track = currentTrack();
+    return {
+      connected: state.connected,
+      canControlPlayback: state.canControlPlayback,
+      activeDevice: state.canControlPlayback
+        ? {
+          id: "device-1",
+          name: "Mock Laptop",
+          type: "Computer",
+          isActive: true,
+          isRestricted: false,
+        }
+        : null,
+      playback: {
+        trackId: track.trackId,
+        title: track.title,
+        artist: track.artist,
+        albumImageUrl: "https://example.com/mock-cover.jpg",
+        progressMs: state.progressMs,
+        durationMs: 180000,
+        isPlaying: state.isPlaying,
+      },
+      warnings: state.canControlPlayback ? [] : ["Manual host control mode active."],
+    };
+  };
+
+  await context.route("**/api/spotify/live/status", async (route) => {
+    state.statusCalls += 1;
+    if (state.isPlaying) {
+      state.progressMs += 8_000;
+      if (state.progressMs > 35_000) state.progressMs = 35_000;
+    }
+
+    await route.fulfill({
+      status: state.connected ? 200 : 401,
+      contentType: "application/json",
+      headers: { "Cache-Control": "no-store" },
+      body: JSON.stringify(
+        state.connected
+          ? buildSnapshot()
+          : { connected: false, canControlPlayback: false, activeDevice: null, playback: null, warnings: ["Spotify disconnected"] }
+      ),
+    });
+  });
+
+  await context.route("**/api/spotify/live/command", async (route) => {
+    state.commandCalls += 1;
+    const payload = route.request().postDataJSON?.() ?? {};
+    const action = payload.action;
+
+    if (!state.connected) {
+      await route.fulfill({
+        status: 401,
+        contentType: "application/json",
+        headers: { "Cache-Control": "no-store" },
+        body: JSON.stringify({ ok: false, error: { code: "TOKEN_INVALID", message: "Spotify disconnected" } }),
+      });
+      return;
+    }
+
+    if (!state.canControlPlayback) {
+      await route.fulfill({
+        status: 409,
+        contentType: "application/json",
+        headers: { "Cache-Control": "no-store" },
+        body: JSON.stringify({
+          ok: false,
+          action,
+          ...buildSnapshot(),
+          error: { code: "NO_ACTIVE_DEVICE", message: "Manual host control mode active." },
+        }),
+      });
+      return;
+    }
+
+    if (action === "play_game") {
+      const playlistId = String(payload.playlistId ?? "");
+      state.activeGame = playlistId.includes("2") ? 2 : 1;
+      state.trackIndex = 0;
+      state.progressMs = 0;
+      state.isPlaying = true;
+    } else if (action === "pause") {
+      state.isPlaying = false;
+    } else if (action === "resume") {
+      state.isPlaying = true;
+    } else if (action === "next") {
+      const tracks = tracksByGame[state.activeGame] ?? tracksByGame[1];
+      state.trackIndex = (state.trackIndex + 1) % tracks.length;
+      state.progressMs = 0;
+      state.isPlaying = true;
+    } else if (action === "previous") {
+      const tracks = tracksByGame[state.activeGame] ?? tracksByGame[1];
+      state.trackIndex = (state.trackIndex - 1 + tracks.length) % tracks.length;
+      state.progressMs = 0;
+      state.isPlaying = true;
+    } else if (action === "seek") {
+      state.progressMs = Math.max(0, Number(payload.positionMs ?? 0));
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      headers: { "Cache-Control": "no-store" },
+      body: JSON.stringify({
+        ok: true,
+        action,
+        ...buildSnapshot(),
+      }),
+    });
+  });
+
+  return state;
+}
+
 async function fillValidGameInputs(page, game1Songs, game2Songs) {
   const textareas = page.locator("textarea");
   await textareas.nth(0).fill(game1Songs);
@@ -192,8 +337,25 @@ async function runFlow(results, name, fn) {
 }
 
 async function validateDownloadedBundle(zipPath) {
-  const zipRaw = await readFile(zipPath);
-  const zip = await JSZip.loadAsync(zipRaw);
+  let zip;
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= 5; attempt += 1) {
+    try {
+      const zipRaw = await readFile(zipPath);
+      zip = await JSZip.loadAsync(zipRaw);
+      break;
+    } catch (error) {
+      lastError = error;
+      if (attempt === 5) break;
+      await sleep(200);
+    }
+  }
+
+  if (!zip) {
+    const message = lastError instanceof Error ? lastError.message : String(lastError);
+    throw new Error(`Unable to parse generated event bundle ZIP: ${message}`);
+  }
   const files = Object.values(zip.files)
     .filter((entry) => !entry.dir)
     .map((entry) => entry.name);
@@ -218,6 +380,43 @@ async function validateDownloadedBundle(zipPath) {
 
   const docxZip = await JSZip.loadAsync(docxBytes);
   assert.ok(docxZip.file("word/document.xml"), "DOCX missing word/document.xml");
+}
+
+function makeLiveSessionFixture(sessionId = "flow-live-session") {
+  return {
+    version: "music-bingo-live-session-v1",
+    id: sessionId,
+    name: "Flow Live Session",
+    createdAt: new Date("2026-02-22T10:00:00.000Z").toISOString(),
+    eventDateInput: "2026-03-01",
+    eventDateDisplay: "March 1st 2026",
+    revealConfig: {
+      albumMs: 10000,
+      titleMs: 20000,
+      artistMs: 25000,
+      nextMs: 30000,
+    },
+    games: [
+      {
+        gameNumber: 1,
+        theme: "General 70's to 2010's",
+        playlistId: "mock-game-1",
+        playlistName: "Music Bingo Game 1",
+        playlistUrl: "https://open.spotify.com/playlist/mock-game-1",
+        totalSongs: 26,
+        addedCount: 26,
+      },
+      {
+        gameNumber: 2,
+        theme: "General 70's to 2010's",
+        playlistId: "mock-game-2",
+        playlistName: "Music Bingo Game 2",
+        playlistUrl: "https://open.spotify.com/playlist/mock-game-2",
+        totalSongs: 26,
+        addedCount: 26,
+      },
+    ],
+  };
 }
 
 async function main() {
@@ -272,6 +471,7 @@ async function main() {
 
     await runFlow(flowResults, "Flow 3: Full generate flow returns a valid event-pack zip", async () => {
       await mkdir(OUTPUT_DIR, { recursive: true });
+      await rm(DOWNLOAD_PATH, { force: true });
 
       const submitButton = flow123Page.locator("button[type='submit']");
       const [download] = await Promise.all([
@@ -336,6 +536,80 @@ async function main() {
     });
 
     await flow5Context.close();
+
+    const flow6Context = await browser.newContext();
+    await installSpotifyLiveMocks(flow6Context, { canControlPlayback: true });
+    await flow6Context.addInitScript((payload) => {
+      window.localStorage.setItem("music-bingo-live-sessions-v1", JSON.stringify([payload]));
+    }, makeLiveSessionFixture("flow-live-session"));
+    const flow6HostPage = await flow6Context.newPage();
+    const flow6GuestPage = await flow6Context.newPage();
+
+    await runFlow(flowResults, "Flow 6: Host and guest live screens sync with reveal progression", async () => {
+      await flow6HostPage.goto(`${BASE_URL}/host/flow-live-session`, { waitUntil: "networkidle" });
+      await flow6HostPage.getByRole("heading", { name: /Flow Live Session/i }).waitFor();
+
+      const hostStyles = await flow6HostPage.evaluate(() => {
+        const shell = document.querySelector(".music-live-shell");
+        const title = document.querySelector(".music-live-title");
+        const cardTitle = document.querySelector(".music-live-card-title");
+        const shellRect = shell?.getBoundingClientRect();
+        const shellStyles = shell ? getComputedStyle(shell) : null;
+        const titleStyles = title ? getComputedStyle(title) : null;
+        const cardTitleStyles = cardTitle ? getComputedStyle(cardTitle) : null;
+
+        return {
+          viewportWidth: window.innerWidth,
+          shellWidth: shellRect?.width ?? 0,
+          shellMaxWidth: shellStyles?.maxWidth ?? "",
+          titleTextFill: titleStyles?.webkitTextFillColor ?? "",
+          titleColor: titleStyles?.color ?? "",
+          cardTitleColor: cardTitleStyles?.color ?? "",
+        };
+      });
+
+      assert.ok(
+        hostStyles.shellWidth >= hostStyles.viewportWidth - 1,
+        `Host shell should be full-bleed (shell ${hostStyles.shellWidth}, viewport ${hostStyles.viewportWidth})`
+      );
+      assert.ok(
+        hostStyles.shellMaxWidth === "none" || hostStyles.shellMaxWidth === "",
+        `Host shell should not inherit prep max-width (got ${hostStyles.shellMaxWidth})`
+      );
+      assert.notEqual(hostStyles.titleTextFill, "rgba(0, 0, 0, 0)", "Live title should not be transparent text-fill");
+      assert.equal(hostStyles.titleColor, "rgb(255, 255, 255)", "Live title color should be white");
+      assert.equal(hostStyles.cardTitleColor, "rgb(255, 255, 255)", "Live card title color should be white");
+
+      await flow6GuestPage.goto(`${BASE_URL}/guest/flow-live-session`, { waitUntil: "networkidle" });
+      await flow6GuestPage.getByRole("heading", { name: /Flow Live Session/i }).waitFor();
+
+      await flow6HostPage.getByRole("button", { name: "Start Game 1" }).click();
+
+      await flow6GuestPage.locator("text=Flow Live Song One").waitFor({ timeout: 15_000 });
+      await flow6GuestPage.locator("text=Flow Live Artist A").waitFor({ timeout: 15_000 });
+      await flow6GuestPage.locator("text=Flow Live Song Two").waitFor({ timeout: 20_000 });
+    });
+
+    await flow6Context.close();
+
+    const flow7Context = await browser.newContext();
+    await installSpotifyLiveMocks(flow7Context, { canControlPlayback: false });
+    await flow7Context.addInitScript((payload) => {
+      window.localStorage.setItem("music-bingo-live-sessions-v1", JSON.stringify([payload]));
+    }, makeLiveSessionFixture("flow-live-fallback"));
+    const flow7HostPage = await flow7Context.newPage();
+    const flow7GuestPage = await flow7Context.newPage();
+
+    await runFlow(flowResults, "Flow 7: Live fallback warning appears when Spotify control is unavailable", async () => {
+      await flow7HostPage.goto(`${BASE_URL}/host/flow-live-fallback`, { waitUntil: "networkidle" });
+      await flow7HostPage.getByRole("button", { name: "Start Game 1" }).click();
+      await flow7HostPage.locator("text=Manual host control mode").first().waitFor({ timeout: 15_000 });
+
+      await flow7GuestPage.goto(`${BASE_URL}/guest/flow-live-fallback`, { waitUntil: "networkidle" });
+      await flow7GuestPage.locator("text=Manual host control mode").first().waitFor({ timeout: 10_000 });
+    });
+
+    await flow7Context.close();
   } finally {
     if (browser) await browser.close();
     await stopAppServer(server);

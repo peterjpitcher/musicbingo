@@ -3,6 +3,9 @@ import crypto from "node:crypto";
 export const SPOTIFY_OAUTH_SCOPES = [
   "playlist-modify-private",
   "user-read-private",
+  "user-read-playback-state",
+  "user-modify-playback-state",
+  "user-read-currently-playing",
 ] as const;
 
 export type SpotifyWebConfig = {
@@ -162,4 +165,3 @@ export async function spotifyApiRequest(params: {
 
   throw new Error("Spotify API request failed after retries");
 }
-
