@@ -134,6 +134,8 @@ export default function HostSessionControllerPage() {
   const tabIdRef = useRef<string>(makeTabId());
   const runtimeRef = useRef<LiveRuntimeState>(makeEmptyRuntimeState(sessionId || "pending"));
   const pollAbortRef = useRef<AbortController | null>(null);
+  // Circuit-breaker: stop polling after a 401 until the user reconnects Spotify.
+  const spotifyDisconnectedRef = useRef<boolean>(false);
 
   const [session, setSession] = useState<LiveSessionV1 | null>(null);
   const [runtime, setRuntime] = useState<LiveRuntimeState>(
@@ -142,6 +144,7 @@ export default function HostSessionControllerPage() {
   const [notice, setNotice] = useState<string>("");
   const [error, setError] = useState<string>("");
   const [isController, setIsController] = useState<boolean>(false);
+  const [spotifyDisconnected, setSpotifyDisconnected] = useState<boolean>(false);
   const [lockOwnerLabel, setLockOwnerLabel] = useState<string>("");
   const [commandBusy, setCommandBusy] = useState<boolean>(false);
 
@@ -298,6 +301,8 @@ export default function HostSessionControllerPage() {
 
   const pollStatus = useCallback(async () => {
     if (!session) return;
+    // Circuit-breaker: don't keep hammering the token endpoint after a 401.
+    if (spotifyDisconnectedRef.current) return;
     pollAbortRef.current?.abort();
     const controller = new AbortController();
     pollAbortRef.current = controller;
@@ -307,11 +312,14 @@ export default function HostSessionControllerPage() {
         signal: controller.signal,
       });
       if (res.status === 401) {
+        const bodyText = await res.text().catch(() => "");
+        const msg = bodyText.trim() || "Spotify auth expired. Use the Reconnect button below.";
+        spotifyDisconnectedRef.current = true;
+        setSpotifyDisconnected(true);
         commitRuntime((prev) => ({
           ...prev,
           spotifyControlAvailable: false,
-          warningMessage:
-            "Spotify is disconnected. Reconnect Spotify on the prep page.",
+          warningMessage: msg,
         }));
         return;
       }
@@ -397,11 +405,14 @@ export default function HostSessionControllerPage() {
           body: JSON.stringify({ action, ...(payload ?? {}) }),
         });
         if (res.status === 401) {
+          const bodyText = await res.text().catch(() => "");
+          const msg = bodyText.trim() || "Spotify auth expired. Use the Reconnect button below.";
+          spotifyDisconnectedRef.current = true;
+          setSpotifyDisconnected(true);
           commitRuntime((prev) => ({
             ...prev,
             spotifyControlAvailable: false,
-            warningMessage:
-              "Spotify is disconnected. Reconnect Spotify on the prep page.",
+            warningMessage: msg,
           }));
           return false;
         }
@@ -525,6 +536,42 @@ export default function HostSessionControllerPage() {
     );
   }
 
+  async function reconnectSpotify() {
+    setError("");
+    try {
+      const popup = window.open("/api/spotify/authorize", "spotify_auth", "popup,width=520,height=720");
+      if (!popup) {
+        setError("Popup blocked. Allow popups for this site and try again.");
+        return;
+      }
+      await new Promise<void>((resolve, reject) => {
+        const cleanup = () => {
+          window.removeEventListener("message", onMessage);
+          window.clearInterval(timer);
+        };
+        const onMessage = (event: MessageEvent) => {
+          if (event.origin !== window.location.origin) return;
+          const data = event.data as { type?: string; ok?: boolean; error?: string } | null;
+          if (!data || data.type !== "spotify-auth") return;
+          cleanup();
+          if (data.ok) resolve();
+          else reject(new Error(data.error || "Spotify auth failed."));
+        };
+        const timer = window.setInterval(() => {
+          if (popup.closed) { cleanup(); reject(new Error("Spotify auth window was closed.")); }
+        }, 500);
+        window.addEventListener("message", onMessage);
+      });
+      // Success — reset circuit-breaker and resume polling.
+      spotifyDisconnectedRef.current = false;
+      setSpotifyDisconnected(false);
+      commitRuntime((prev) => ({ ...prev, warningMessage: null }));
+      void pollStatus();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to reconnect Spotify.");
+    }
+  }
+
   function openGuestDisplay() {
     if (!sessionId) return;
     window.open(`/guest/${sessionId}`, "music_bingo_guest", "noopener,noreferrer");
@@ -577,7 +624,17 @@ export default function HostSessionControllerPage() {
       <main className="max-w-5xl mx-auto px-4 py-6 space-y-4">
         {notice ? <Notice variant="success">{notice}</Notice> : null}
         {error ? <Notice variant="error">{error}</Notice> : null}
-        {runtime.warningMessage ? (
+        {spotifyDisconnected ? (
+          <Card className="border-red-300 bg-red-50">
+            <h2 className="text-base font-bold text-red-800 mb-1">Spotify disconnected</h2>
+            <p className="text-sm text-red-700 mb-3">
+              {runtime.warningMessage || "Spotify auth expired. Reconnect to restore playback control."}
+            </p>
+            <Button variant="primary" size="sm" onClick={() => void reconnectSpotify()}>
+              Reconnect Spotify
+            </Button>
+          </Card>
+        ) : runtime.warningMessage ? (
           <Notice variant="warning">{runtime.warningMessage}</Notice>
         ) : null}
 
