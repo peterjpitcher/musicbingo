@@ -721,7 +721,7 @@ export default function HostSessionControllerPage() {
               <Badge active={runtime.revealState.showTitle}>Title @20s</Badge>
               <Badge active={runtime.revealState.showArtist}>Artist @25s</Badge>
               <Badge active={runtime.revealState.shouldAdvance}>
-                {isChallenge ? "Next @60s" : "Next @30s"}
+                {isChallenge ? "Next @90s" : "Next @30s"}
               </Badge>
             </div>
             {activeGame?.challengeSongTitle ? (
@@ -732,7 +732,7 @@ export default function HostSessionControllerPage() {
                 <p className="text-sm font-semibold text-amber-900">
                   {activeGame.challengeSongArtist} — {activeGame.challengeSongTitle}
                 </p>
-                <p className="text-xs text-amber-600 mt-0.5">Plays for 60s instead of 30s</p>
+                <p className="text-xs text-amber-600 mt-0.5">Plays for 90s instead of 30s</p>
               </div>
             ) : null}
             <p className="text-xs text-slate-400">

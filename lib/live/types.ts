@@ -17,12 +17,12 @@ export const DEFAULT_REVEAL_CONFIG: RevealConfig = {
   nextMs: 30_000,
 };
 
-/** Challenge songs play for 60 seconds instead of 30. */
+/** Challenge songs play for 90 seconds instead of 30. */
 export const CHALLENGE_REVEAL_CONFIG: RevealConfig = {
   albumMs: 10_000,
   titleMs: 20_000,
   artistMs: 25_000,
-  nextMs: 60_000,
+  nextMs: 90_000,
 };
 
 export type LiveGameConfig = {
