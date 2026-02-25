@@ -457,6 +457,7 @@ export default function HostSessionControllerPage() {
     const gamePlaylistId = runtimeRef.current.activeGameNumber
       ? session?.games.find((g) => g.gameNumber === runtimeRef.current.activeGameNumber)?.playlistId ?? null
       : null;
+    const spotifyAvailable = runtimeRef.current.spotifyControlAvailable;
 
     commitRuntime((prev) => ({
       ...prev,
@@ -465,8 +466,14 @@ export default function HostSessionControllerPage() {
       preBreakPlaylistId: gamePlaylistId,
     }));
 
-    if (session?.breakPlaylistId && runtime.spotifyControlAvailable) {
-      void sendCommand("play_break", { playlistId: session.breakPlaylistId });
+    if (spotifyAvailable) {
+      if (session?.breakPlaylistId) {
+        void sendCommand("play_break", { playlistId: session.breakPlaylistId });
+      } else {
+        // No break playlist configured — pause Spotify so the game doesn't
+        // keep advancing silently while the guest display shows the break screen.
+        void sendCommand("pause");
+      }
     }
   }
 
@@ -481,10 +488,14 @@ export default function HostSessionControllerPage() {
       preBreakPlaylistId: null,
     }));
 
-    void sendCommand("resume_from_track", {
-      ...(trackId ? { trackId } : {}),
-      ...(playlistId ? { playlistId } : {}),
-    });
+    void sendCommand(
+      "resume_from_track",
+      {
+        ...(trackId ? { trackId } : {}),
+        ...(playlistId ? { playlistId } : {}),
+      },
+      { modeOnSuccess: "running" }
+    );
   }
 
   function openGuestDisplay() {
@@ -649,6 +660,7 @@ export default function HostSessionControllerPage() {
               <Button
                 variant="secondary"
                 size="sm"
+                disabled={!isController || commandBusy}
                 onClick={openBreakScreen}
               >
                 Show Break Screen
@@ -656,6 +668,7 @@ export default function HostSessionControllerPage() {
               <Button
                 variant="secondary"
                 size="sm"
+                disabled={!isController || commandBusy}
                 onClick={resumeFromBreak}
               >
                 Resume Display
