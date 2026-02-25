@@ -165,3 +165,105 @@ export async function spotifyApiRequest(params: {
 
   throw new Error("Spotify API request failed after retries");
 }
+
+// ---------------------------------------------------------------------------
+// Access-token cache helpers
+// ---------------------------------------------------------------------------
+
+/** Cookie name for the short-lived cached access token (server-side httpOnly). */
+export const SPOTIFY_COOKIE_ACCESS = "spotify_access_cache";
+
+export type GetOrRefreshTokenResult = {
+  accessToken: string;
+  /** Non-null only when a fresh refresh was performed and the caller must persist the new value. */
+  newRefreshToken: string | null;
+  /** Non-null only when a fresh access token was obtained; set as SPOTIFY_COOKIE_ACCESS on the response. */
+  newCacheValue: string | null;
+  newCacheMaxAge: number | null; // seconds
+};
+
+/**
+ * Returns a valid Spotify access token.
+ * Uses the cached value (from the SPOTIFY_COOKIE_ACCESS cookie) when it is
+ * still fresh (more than 60 s of validity remaining).  Only calls the Spotify
+ * token endpoint when the cache is absent or about to expire.
+ *
+ * Callers MUST write `newCacheValue` to the SPOTIFY_COOKIE_ACCESS cookie
+ * (httpOnly, maxAge = newCacheMaxAge) on their response when it is non-null.
+ */
+export async function getOrRefreshAccessToken(params: {
+  refreshToken: string;
+  cachedRaw: string | null;
+  origin: string;
+}): Promise<GetOrRefreshTokenResult> {
+  if (params.cachedRaw) {
+    try {
+      const cached = JSON.parse(params.cachedRaw) as { at?: unknown; exp?: unknown };
+      const at = typeof cached.at === "string" && cached.at ? cached.at : null;
+      const exp =
+        typeof cached.exp === "number" && Number.isFinite(cached.exp) ? cached.exp : null;
+      if (at && exp !== null && exp > Date.now() + 60_000) {
+        return { accessToken: at, newRefreshToken: null, newCacheValue: null, newCacheMaxAge: null };
+      }
+    } catch {
+      // Invalid cache — fall through to a fresh refresh.
+    }
+  }
+
+  const cfg = getSpotifyWebConfig(params.origin);
+  const refreshed = await refreshSpotifyAccessToken(cfg, params.refreshToken);
+  const expiresAtMs = Date.now() + (refreshed.expiresIn - 60) * 1000;
+  const newCacheValue = JSON.stringify({ at: refreshed.accessToken, exp: expiresAtMs });
+
+  return {
+    accessToken: refreshed.accessToken,
+    newRefreshToken: refreshed.refreshToken,
+    newCacheValue,
+    newCacheMaxAge: Math.max(60, refreshed.expiresIn - 60),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// OAuth popup HTML helper (shared between authorize and callback routes)
+// ---------------------------------------------------------------------------
+
+/**
+ * Renders the small HTML page shown inside the Spotify OAuth popup window.
+ * Posts a `spotify-auth` message back to the opener and optionally self-closes.
+ */
+export function makeSpotifyPopupHtml(params: {
+  ok: boolean;
+  error?: string;
+  closeWindow?: boolean;
+}): string {
+  const message = { type: "spotify-auth", ok: params.ok, error: params.error ?? null };
+  const safeJson = JSON.stringify(message).replace(/</g, "\\u003c");
+  const safeText = (
+    params.error ??
+    (params.ok ? "Connected to Spotify. You can close this window." : "Spotify auth failed.")
+  )
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  const closeScript = params.closeWindow ? "\n        try { window.close(); } catch (e) {}" : "";
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Spotify</title>
+  </head>
+  <body style="font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; padding: 24px;">
+    <pre style="white-space: pre-wrap; word-break: break-word;">${safeText}</pre>
+    <script>
+      (function () {
+        try {
+          if (window.opener && window.location && window.location.origin) {
+            window.opener.postMessage(${safeJson}, window.location.origin);
+          }
+        } catch (e) {}${closeScript}
+      })();
+    </script>
+  </body>
+</html>`;
+}

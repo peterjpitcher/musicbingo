@@ -12,8 +12,9 @@ import {
   type SpotifyLiveState,
 } from "@/lib/spotifyLive";
 import {
-  getSpotifyWebConfig,
-  refreshSpotifyAccessToken,
+  SPOTIFY_COOKIE_ACCESS,
+  getOrRefreshAccessToken,
+  type GetOrRefreshTokenResult,
 } from "@/lib/spotifyWeb";
 
 export const runtime = "nodejs";
@@ -50,6 +51,35 @@ function asAction(value: unknown): LiveCommandAction | null {
     || value === "seek"
     ? value
     : null;
+}
+
+function applyTokenCookies(
+  response: NextResponse,
+  tokenResult: GetOrRefreshTokenResult,
+  secure: boolean
+): void {
+  if (tokenResult.newRefreshToken) {
+    response.cookies.set({
+      name: COOKIE_REFRESH,
+      value: tokenResult.newRefreshToken,
+      httpOnly: true,
+      sameSite: "lax",
+      secure,
+      path: "/",
+      maxAge: 60 * 60 * 24 * 30,
+    });
+  }
+  if (tokenResult.newCacheValue && tokenResult.newCacheMaxAge) {
+    response.cookies.set({
+      name: SPOTIFY_COOKIE_ACCESS,
+      value: tokenResult.newCacheValue,
+      httpOnly: true,
+      sameSite: "lax",
+      secure,
+      path: "/",
+      maxAge: tokenResult.newCacheMaxAge,
+    });
+  }
 }
 
 async function runCommand(params: {
@@ -112,18 +142,19 @@ export async function POST(request: NextRequest) {
     return unauthorized("Spotify is not connected. Click \"Connect Spotify\" and try again.");
   }
 
-  let accessToken = "";
-  let newRefreshToken: string | null = null;
-
+  let tokenResult: GetOrRefreshTokenResult;
   try {
-    const cfg = getSpotifyWebConfig(origin);
-    const refreshed = await refreshSpotifyAccessToken(cfg, refreshToken);
-    accessToken = refreshed.accessToken;
-    newRefreshToken = refreshed.refreshToken;
+    tokenResult = await getOrRefreshAccessToken({
+      refreshToken,
+      cachedRaw: request.cookies.get(SPOTIFY_COOKIE_ACCESS)?.value ?? null,
+      origin,
+    });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Failed to refresh Spotify token.";
-    return unauthorized(`${msg}\n\nTry clicking \"Connect Spotify\" again.`);
+    return unauthorized(`${msg}\n\nTry clicking "Connect Spotify" again.`);
   }
+
+  const { accessToken } = tokenResult;
 
   let payload: LiveCommandPayload;
   try {
@@ -156,24 +187,12 @@ export async function POST(request: NextRequest) {
       },
       { headers: { "Cache-Control": "no-store" } }
     );
-
-    if (newRefreshToken) {
-      response.cookies.set({
-        name: COOKIE_REFRESH,
-        value: newRefreshToken,
-        httpOnly: true,
-        sameSite: "lax",
-        secure,
-        path: "/",
-        maxAge: 60 * 60 * 24 * 30,
-      });
-    }
-
+    applyTokenCookies(response, tokenResult, secure);
     return response;
   } catch (err) {
     if (err instanceof SpotifyLiveError) {
       if (err.code === "TOKEN_INVALID") {
-        return unauthorized(`${err.message}\n\nTry clicking \"Connect Spotify\" again.`);
+        return unauthorized(`${err.message}\n\nTry clicking "Connect Spotify" again.`);
       }
 
       const state = await safePlaybackState(accessToken);
@@ -191,21 +210,12 @@ export async function POST(request: NextRequest) {
             message: err.message,
           },
         },
-        { status: err.code === "NO_ACTIVE_DEVICE" || err.code === "PREMIUM_REQUIRED" ? 409 : 400, headers: { "Cache-Control": "no-store" } }
+        {
+          status: err.code === "NO_ACTIVE_DEVICE" || err.code === "PREMIUM_REQUIRED" ? 409 : 400,
+          headers: { "Cache-Control": "no-store" },
+        }
       );
-
-      if (newRefreshToken) {
-        response.cookies.set({
-          name: COOKIE_REFRESH,
-          value: newRefreshToken,
-          httpOnly: true,
-          sameSite: "lax",
-          secure,
-          path: "/",
-          maxAge: 60 * 60 * 24 * 30,
-        });
-      }
-
+      applyTokenCookies(response, tokenResult, secure);
       return response;
     }
 

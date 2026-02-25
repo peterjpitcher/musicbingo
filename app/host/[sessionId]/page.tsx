@@ -89,6 +89,7 @@ export default function HostSessionControllerPage() {
 
   const tabIdRef = useRef<string>(makeTabId());
   const runtimeRef = useRef<LiveRuntimeState>(makeEmptyRuntimeState(sessionId || "pending"));
+  const pollAbortRef = useRef<AbortController | null>(null);
 
   const [session, setSession] = useState<LiveSessionV1 | null>(null);
   const [runtime, setRuntime] = useState<LiveRuntimeState>(makeEmptyRuntimeState(sessionId || "pending"));
@@ -226,8 +227,12 @@ export default function HostSessionControllerPage() {
   const pollStatus = useCallback(async () => {
     if (!session) return;
 
+    pollAbortRef.current?.abort();
+    const controller = new AbortController();
+    pollAbortRef.current = controller;
+
     try {
-      const res = await fetch("/api/spotify/live/status", { cache: "no-store" });
+      const res = await fetch("/api/spotify/live/status", { cache: "no-store", signal: controller.signal });
       if (res.status === 401) {
         commitRuntime((prev) => ({
           ...prev,
@@ -284,6 +289,7 @@ export default function HostSessionControllerPage() {
         setNotice("Manual host control mode active: control playback in Spotify app while this screen drives reveals.");
       }
     } catch (err: any) {
+      if ((err as Error)?.name === "AbortError") return;
       setError(err?.message ?? "Failed to poll live status.");
     }
   }, [applyStatusSnapshot, commitRuntime, isController, session]);
@@ -298,6 +304,7 @@ export default function HostSessionControllerPage() {
 
     return () => {
       window.clearInterval(id);
+      pollAbortRef.current?.abort();
     };
   }, [pollStatus, session]);
 

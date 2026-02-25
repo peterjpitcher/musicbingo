@@ -11,6 +11,7 @@ import {
   listLiveSessions,
 } from "@/lib/live/storage";
 import type { LiveSessionV1 } from "@/lib/live/types";
+import { sanitizeFilenamePart } from "@/lib/utils";
 
 function downloadJson(text: string, filename: string): void {
   const blob = new Blob([text], { type: "application/json;charset=utf-8" });
@@ -22,15 +23,6 @@ function downloadJson(text: string, filename: string): void {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
-}
-
-function sanitizeFilenamePart(s: string): string {
-  return s
-    .trim()
-    .replace(/[^a-zA-Z0-9 _-]+/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .slice(0, 80) || "session";
 }
 
 export default function HostDashboardPage() {
@@ -59,7 +51,7 @@ export default function HostDashboardPage() {
     try {
       setError("");
       const json = exportLiveSessionJson(session.id);
-      downloadJson(json, `music-bingo-live-session-${sanitizeFilenamePart(session.name)}.json`);
+      downloadJson(json, `music-bingo-live-session-${sanitizeFilenamePart(session.name, "session")}.json`);
       setNotice(`Exported session: ${session.name}`);
     } catch (err: any) {
       setNotice("");

@@ -17,6 +17,7 @@ import {
 } from "@/lib/live/types";
 import { parseSongListText } from "@/lib/parser";
 import type { Song } from "@/lib/types";
+import { sanitizeFilenamePart } from "@/lib/utils";
 
 function todayIso(): string {
   const d = new Date();
@@ -46,16 +47,6 @@ function makeSessionId(): string {
     return crypto.randomUUID();
   }
   return `session-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
-}
-
-function sanitizeFilenamePart(s: string): string {
-  const cleaned = s
-    .trim()
-    .replace(/[^a-zA-Z0-9 _-]+/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .slice(0, 80);
-  return cleaned || "session";
 }
 
 type SpotifyPlaylistResult = {
@@ -129,10 +120,8 @@ export default function HomePage() {
   useEffect(() => {
     const eventDateDisplay = formatEventDateDisplay(eventDate) || eventDate || todayIso();
     const defaultName = `Music Bingo - ${eventDateDisplay}`;
-    if (!liveSessionNameDirty || !liveSessionName.trim()) {
-      setLiveSessionName(defaultName);
-    }
-  }, [eventDate, liveSessionName, liveSessionNameDirty]);
+    setLiveSessionName((prev) => (!liveSessionNameDirty || !prev.trim() ? defaultName : prev));
+  }, [eventDate, liveSessionNameDirty]);
 
   const livePlaylistByGame = useMemo(() => {
     if (!spotifyResult?.length) return null;
@@ -236,7 +225,7 @@ export default function HomePage() {
       upsertLiveSession(session);
       const json = exportLiveSessionJson(session.id);
       const blob = new Blob([json], { type: "application/json;charset=utf-8" });
-      downloadBlob(blob, `music-bingo-live-session-${sanitizeFilenamePart(session.name)}.json`);
+      downloadBlob(blob, `music-bingo-live-session-${sanitizeFilenamePart(session.name, "session")}.json`);
       setLiveSessionNotice(`Exported live session: ${session.name}`);
       setError("");
     } catch (err: any) {
@@ -263,49 +252,54 @@ export default function HomePage() {
 
       const spotifyForm = buildBaseFormData();
 
+      let bundleError: string | null = null;
       const bundlePromise = (async () => {
-        const res = await fetch("/api/generate", { method: "POST", body: pdfForm });
-        if (!res.ok) {
-          const msg = await res.text();
-          throw new Error(msg || "Failed to generate output bundle.");
+        try {
+          const res = await fetch("/api/generate", { method: "POST", body: pdfForm });
+          if (!res.ok) {
+            const msg = await res.text();
+            throw new Error(msg || "Failed to generate output bundle.");
+          }
+
+          const qrStatus = res.headers.get("x-music-bingo-qr-status");
+          const requestedRaw = res.headers.get("x-music-bingo-events-requested");
+          const eventsCount = res.headers.get("x-music-bingo-events-count");
+          const eventsWithUrl = res.headers.get("x-music-bingo-events-with-url");
+          const qrError = res.headers.get("x-music-bingo-qr-error");
+
+          const expectedEvents = (() => {
+            const n = requestedRaw ? Number.parseInt(requestedRaw, 10) : 4;
+            return Number.isFinite(n) && n > 0 ? n : 4;
+          })();
+
+          if (qrStatus && qrStatus !== "ok") {
+            if (qrStatus === "missing_config") {
+              setQrNotice(
+                "Upcoming event QRs: management API not configured (set MANAGEMENT_API_BASE_URL + MANAGEMENT_API_TOKEN in .env.local, then restart npm run dev)."
+              );
+            } else if (qrStatus === "no_events") {
+              setQrNotice("Upcoming event QRs: no upcoming events found after this date (placeholders used).");
+            } else if (qrStatus === "error") {
+              setQrNotice(`Upcoming event QRs: ${qrError || "failed to fetch events"} (placeholders used).`);
+            }
+          } else if (eventsWithUrl && eventsWithUrl !== String(expectedEvents)) {
+            const resolvedCount = Number.parseInt(eventsWithUrl, 10);
+            if (Number.isFinite(resolvedCount) && resolvedCount >= 0 && resolvedCount < expectedEvents) {
+              setQrNotice(`Upcoming event QRs: only ${resolvedCount}/${expectedEvents} event URLs resolved (placeholders used).`);
+            }
+          } else if (eventsCount && eventsCount !== String(expectedEvents)) {
+            const foundCount = Number.parseInt(eventsCount, 10);
+            if (Number.isFinite(foundCount) && foundCount >= 0 && foundCount < expectedEvents) {
+              setQrNotice(`Upcoming event QRs: only ${foundCount}/${expectedEvents} upcoming events found (placeholders used).`);
+            }
+          }
+
+          const blob = await res.blob();
+          const filename = res.headers.get("content-disposition")?.match(/filename=\"(.+)\"/)?.[1] ?? "music-bingo-event-pack.zip";
+          downloadBlob(blob, filename);
+        } catch (err: any) {
+          bundleError = err?.message ?? "Failed to generate output bundle.";
         }
-
-        const qrStatus = res.headers.get("x-music-bingo-qr-status");
-        const requestedRaw = res.headers.get("x-music-bingo-events-requested");
-        const eventsCount = res.headers.get("x-music-bingo-events-count");
-        const eventsWithUrl = res.headers.get("x-music-bingo-events-with-url");
-        const qrError = res.headers.get("x-music-bingo-qr-error");
-
-        const expectedEvents = (() => {
-          const n = requestedRaw ? Number.parseInt(requestedRaw, 10) : 4;
-          return Number.isFinite(n) && n > 0 ? n : 4;
-        })();
-
-        if (qrStatus && qrStatus !== "ok") {
-          if (qrStatus === "missing_config") {
-            setQrNotice(
-              "Upcoming event QRs: management API not configured (set MANAGEMENT_API_BASE_URL + MANAGEMENT_API_TOKEN in .env.local, then restart npm run dev)."
-            );
-          } else if (qrStatus === "no_events") {
-            setQrNotice("Upcoming event QRs: no upcoming events found after this date (placeholders used).");
-          } else if (qrStatus === "error") {
-            setQrNotice(`Upcoming event QRs: ${qrError || "failed to fetch events"} (placeholders used).`);
-          }
-        } else if (eventsWithUrl && eventsWithUrl !== String(expectedEvents)) {
-          const resolvedCount = Number.parseInt(eventsWithUrl, 10);
-          if (Number.isFinite(resolvedCount) && resolvedCount >= 0 && resolvedCount < expectedEvents) {
-            setQrNotice(`Upcoming event QRs: only ${resolvedCount}/${expectedEvents} event URLs resolved (placeholders used).`);
-          }
-        } else if (eventsCount && eventsCount !== String(expectedEvents)) {
-          const foundCount = Number.parseInt(eventsCount, 10);
-          if (Number.isFinite(foundCount) && foundCount >= 0 && foundCount < expectedEvents) {
-            setQrNotice(`Upcoming event QRs: only ${foundCount}/${expectedEvents} upcoming events found (placeholders used).`);
-          }
-        }
-
-        const blob = await res.blob();
-        const filename = res.headers.get("content-disposition")?.match(/filename=\"(.+)\"/)?.[1] ?? "music-bingo-event-pack.zip";
-        downloadBlob(blob, filename);
       })();
 
       const spotifyPromise = (async () => {
@@ -317,6 +311,7 @@ export default function HomePage() {
       })();
 
       await Promise.all([bundlePromise, spotifyPromise]);
+      if (bundleError) setError(bundleError);
     } catch (err: any) {
       setError(err?.message ?? "Something went wrong.");
     } finally {

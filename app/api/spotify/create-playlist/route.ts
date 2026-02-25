@@ -224,64 +224,69 @@ async function createPlaylistForGame(params: {
   if (!playlistId) throw new Error("Spotify API error: missing playlist id");
 
   const results = await mapWithConcurrency(params.songs, 5, async (song) => {
-    const title = safeSearchTerm(song.title);
-    const artist = safeSearchTerm(song.artist);
+    try {
+      const title = safeSearchTerm(song.title);
+      const artist = safeSearchTerm(song.artist);
 
-    const queries: Array<{ q: string; limit: number }> = [
-      { q: `track:"${title}" artist:"${artist}"`, limit: 8 },
-      { q: `"${title}" "${artist}"`, limit: 12 },
-    ];
+      const queries: Array<{ q: string; limit: number }> = [
+        { q: `track:"${title}" artist:"${artist}"`, limit: 8 },
+        { q: `"${title}" "${artist}"`, limit: 12 },
+      ];
 
-    type Candidate = MatchedTrack & { score: number };
+      type Candidate = MatchedTrack & { score: number };
 
-    let best: Candidate | null = null;
-    for (const { q, limit } of queries) {
-      const queryParams = new URLSearchParams({ q, type: "track", limit: String(limit), market: "from_token" });
-      const url = `https://api.spotify.com/v1/search?${queryParams.toString()}`;
-      const json = await spotifyJson<SpotifySearchResponse>(params.accessToken, url);
-      const items = json.tracks?.items ?? [];
+      let best: Candidate | null = null;
+      for (const { q, limit } of queries) {
+        const queryParams = new URLSearchParams({ q, type: "track", limit: String(limit), market: "from_token" });
+        const url = `https://api.spotify.com/v1/search?${queryParams.toString()}`;
+        const json = await spotifyJson<SpotifySearchResponse>(params.accessToken, url);
+        const items = json.tracks?.items ?? [];
 
-      for (const item of items) {
-        const uri = getString(item?.uri);
-        const name = getString(item?.name);
-        const artists = (Array.isArray(item?.artists) ? item.artists : [])
-          .map((a) => getString(a?.name))
-          .filter((v): v is string => Boolean(v));
-        if (!uri || !name) continue;
+        for (const item of items) {
+          const uri = getString(item?.uri);
+          const name = getString(item?.name);
+          const artists = (Array.isArray(item?.artists) ? item.artists : [])
+            .map((a) => getString(a?.name))
+            .filter((v): v is string => Boolean(v));
+          if (!uri || !name) continue;
 
-        const normalScore = combinedScore(
-          titleSimilarity(song.title, name),
-          artistSimilarity(song.artist, artists)
-        );
-        const swappedScore = combinedScore(
-          titleSimilarity(song.artist, name),
-          artistSimilarity(song.title, artists)
-        );
+          const normalScore = combinedScore(
+            titleSimilarity(song.title, name),
+            artistSimilarity(song.artist, artists)
+          );
+          const swappedScore = combinedScore(
+            titleSimilarity(song.artist, name),
+            artistSimilarity(song.title, artists)
+          );
 
-        const score = Math.max(normalScore, swappedScore);
-        if (!best || score > best.score) {
-          best = {
-            uri,
-            score,
-            title: name,
-            artist: artists.join(", ") || song.artist,
-          };
+          const score = Math.max(normalScore, swappedScore);
+          if (!best || score > best.score) {
+            best = {
+              uri,
+              score,
+              title: name,
+              artist: artists.join(", ") || song.artist,
+            };
+          }
         }
+
+        if (best && best.score >= 0.85) break;
       }
 
-      if (best && best.score >= 0.85) break;
+      if (best && best.score >= 0.62) {
+        return {
+          match: {
+            uri: best.uri,
+            artist: best.artist,
+            title: best.title,
+          },
+        };
+      }
+      return { notFound: { artist: song.artist, title: song.title } };
+    } catch {
+      // A transient search error for one song should not abort the whole playlist.
+      return { notFound: { artist: song.artist, title: song.title } };
     }
-
-    if (best && best.score >= 0.62) {
-      return {
-        match: {
-          uri: best.uri,
-          artist: best.artist,
-          title: best.title,
-        },
-      };
-    }
-    return { notFound: { artist: song.artist, title: song.title } };
   });
 
   const matchedTracks = results.flatMap((r: any) => (r?.match ? [r.match as MatchedTrack] : []));

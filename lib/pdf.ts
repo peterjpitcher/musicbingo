@@ -6,6 +6,7 @@ import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import sharp from "sharp";
 
 import type { Card, FooterQrItem } from "@/lib/types";
+import { sanitizeFilenamePart } from "@/lib/utils";
 
 const A4_WIDTH = 595.28;
 const A4_HEIGHT = 841.89;
@@ -26,15 +27,6 @@ type PublicAssetLoadOptions = {
   origin?: string; // e.g. "https://your-app.vercel.app"
 };
 
-function sanitizeFilenamePart(s: string): string {
-  const cleaned = s
-    .trim()
-    .replace(/[^a-zA-Z0-9 _-]+/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .slice(0, 80);
-  return cleaned || "event";
-}
 
 async function qrPng(url: string): Promise<Uint8Array> {
   const buf = await QRCode.toBuffer(url, {
@@ -318,7 +310,9 @@ export async function renderCardsPdf(cards: Card[], opts: RenderOptions): Promis
       const label = `Card ${String(i + 1).padStart(3, "0")} • ${card.cardId}`;
       const size = 8;
       const w = font.widthOfTextAtSize(label, size);
-      page.drawText(label, { x: A4_WIDTH - marginX - w, y: marginY - 10, size, font, color: black });
+      // Place the card ID 4 pt above the absolute page bottom to stay inside
+      // the printable area on all common A4 laser printers (≥ 4 mm margin).
+      page.drawText(label, { x: A4_WIDTH - marginX - w, y: mmToPt(4), size, font, color: black });
     }
   }
 
@@ -351,7 +345,7 @@ export async function loadDefaultEventLogoPngBytes(opts: PublicAssetLoadOptions 
 }
 
 export function makeDefaultFilename(eventDate: string): string {
-  return `music-bingo-${sanitizeFilenamePart(eventDate)}.pdf`;
+  return `music-bingo-${sanitizeFilenamePart(eventDate, "event")}.pdf`;
 }
 
 async function loadFirstExistingPublicImageAsBwPngBytes(

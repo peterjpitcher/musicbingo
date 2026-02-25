@@ -15,6 +15,7 @@ import {
   renderCardsPdf,
 } from "@/lib/pdf";
 import type { Card, ParseResult, Song } from "@/lib/types";
+import { sanitizeFilenamePart } from "@/lib/utils";
 
 export const runtime = "nodejs";
 
@@ -24,26 +25,17 @@ function asString(value: FormDataEntryValue | null): string {
   return typeof value === "string" ? value : "";
 }
 
-function sanitizeFilenamePart(s: string): string {
-  const cleaned = s
-    .trim()
-    .replace(/[^a-zA-Z0-9 _-]+/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .slice(0, 80);
-  return cleaned || "event";
-}
 
 function makeBundleFilename(eventDate: string): string {
-  return `music-bingo-event-pack-${sanitizeFilenamePart(eventDate)}.zip`;
+  return `music-bingo-event-pack-${sanitizeFilenamePart(eventDate, "event")}.zip`;
 }
 
 function makeGamePdfFilename(eventDate: string, gameNumber: 1 | 2): string {
-  return `music-bingo-game-${gameNumber}-${sanitizeFilenamePart(eventDate)}.pdf`;
+  return `music-bingo-game-${gameNumber}-${sanitizeFilenamePart(eventDate, "event")}.pdf`;
 }
 
 function makeClipboardFilename(eventDate: string): string {
-  return `event-clipboard-${sanitizeFilenamePart(eventDate)}.docx`;
+  return `event-clipboard-${sanitizeFilenamePart(eventDate, "event")}.docx`;
 }
 
 export async function POST(request: Request) {

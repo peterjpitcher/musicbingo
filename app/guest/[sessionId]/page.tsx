@@ -28,7 +28,7 @@ export default function GuestDisplayPage() {
   );
   const error = useMemo(() => {
     if (!sessionId) return "Invalid guest session id.";
-    if (!session) return "Live session not found. Open /host and create or import a session first.";
+    if (!session) return "Live session not found. The guest display only works in the same browser as the host — it uses browser storage, not a network connection. Open /host on this device and create or import a session first.";
     return "";
   }, [session, sessionId]);
   const [runtime, setRuntime] = useState<LiveRuntimeState>(() => {
@@ -183,6 +183,9 @@ export default function GuestDisplayPage() {
           <p className="music-live-footer-line">Mode: {runtime.mode.toUpperCase()}</p>
           <p className="music-live-footer-line">
             Active: {runtime.activeGameNumber ? `Game ${runtime.activeGameNumber}${activeGame ? ` - ${activeGame.theme}` : ""}` : "Not started"}
+          </p>
+          <p className="music-live-footer-line" style={{ opacity: 0.5 }}>
+            Must be open in the same browser as the host
           </p>
         </div>
         <div style={{ textAlign: "right" }}>

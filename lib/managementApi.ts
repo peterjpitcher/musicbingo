@@ -310,7 +310,7 @@ async function fetchEvents(params: {
   if (params.offset) url.searchParams.set("offset", String(params.offset));
   if (params.status) url.searchParams.set("status", params.status);
 
-  const apiKeyValue = params.apiKey.replace(/^Bearer\\s+/i, "").trim();
+  const apiKeyValue = params.apiKey.replace(/^Bearer\s+/i, "").trim();
   const authHeader = `Bearer ${apiKeyValue}`;
   const json = (await fetchJsonWithTimeout(
     url.toString(),

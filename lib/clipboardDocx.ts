@@ -54,9 +54,9 @@ function numbered(text: string): Paragraph {
 
 function songsBlock(songs: Song[]): Paragraph[] {
   const out: Paragraph[] = [];
-  for (let i = 0; i < 50; i++) {
-    const song = songs[i];
-    out.push(numbered(`${i + 1}. ${song ? songLabel(song) : ""}`));
+  for (let i = 0; i < songs.length; i++) {
+    const song = songs[i] as Song;
+    out.push(numbered(`${i + 1}. ${songLabel(song)}`));
   }
   return out;
 }
@@ -111,10 +111,7 @@ export async function renderClipboardDocx(params: RenderClipboardDocxParams): Pr
     numbered("9. Sing Along/Out - end-of-night singalong"),
 
     heading("UPCOMING EVENTS"),
-    bullet("Sat 14 Feb (THIS SATURDAY) Live Music (Valentine's Special) Free entry, Toby Urquhart live 8-10pm, party tunes till midnight, Prosecco 19.99."),
-    bullet("Wed 18 Feb Cash Bingo 10 cash book, 10 games, Game 10 cash jackpot plus Snowball for eligible players."),
-    bullet("Fri 27 Feb Karaoke Free, hosted by Pete, laid-back community singalong, Prosecco 19.99."),
-    bullet("Wed 4 Mar Quiz Night 3pp cash, teams up to 6, fun phone mini-challenge, prizes inc 25 voucher."),
+    bullet("** Update this section before printing — add the next 3–4 upcoming events with dates, times, and short descriptions. **"),
 
     heading("BONUS FUN"),
     bullet("Dancing Challenge (20 pts) - placed in Game 1."),
