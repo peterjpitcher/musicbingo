@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { QRCodeSVG } from "qrcode.react";
 
 import { subscribeLiveChannel } from "@/lib/live/channel";
 import { getLiveSession } from "@/lib/live/sessionApi";
@@ -14,6 +15,7 @@ import {
   type LiveRuntimeState,
   type LiveSessionV1,
 } from "@/lib/live/types";
+import { useWakeLock } from "@/hooks/useWakeLock";
 
 function formatSeconds(ms: number): string {
   const safeMs = Number.isFinite(ms) ? Math.max(0, Math.floor(ms)) : 0;
@@ -27,9 +29,18 @@ export default function GuestDisplayPage() {
     [params?.sessionId]
   );
 
+  useWakeLock();
+
   const [session, setSession] = useState<LiveSessionV1 | null>(null);
   const [sessionLoading, setSessionLoading] = useState<boolean>(true);
   const sessionLoadedRef = useRef<boolean>(false);
+  const [guestUrl, setGuestUrl] = useState<string>("");
+
+  useEffect(() => {
+    if (sessionId && typeof window !== "undefined") {
+      setGuestUrl(`${window.location.origin}/guest/${sessionId}`);
+    }
+  }, [sessionId]);
 
   const error = useMemo(() => {
     if (!sessionId) return "Invalid guest session id.";
@@ -151,6 +162,25 @@ export default function GuestDisplayPage() {
             <p className="m-0 text-[clamp(1rem,2vw,1.6rem)] text-white/90">
               The host will start Game 1 or Game 2 shortly.
             </p>
+            {guestUrl ? (
+              <div className="mt-6 flex flex-col items-center gap-3">
+                <p className="text-white/70 uppercase tracking-widest text-[clamp(0.65rem,1.2vw,0.9rem)]">
+                  Follow along on your phone
+                </p>
+                <div className="bg-white p-3 rounded-2xl inline-block shadow-lg">
+                  <QRCodeSVG
+                    value={guestUrl}
+                    size={160}
+                    level="H"
+                    fgColor="#003f27"
+                    bgColor="#ffffff"
+                  />
+                </div>
+                <p className="text-white/50 text-[clamp(0.6rem,1vw,0.8rem)] break-all max-w-xs">
+                  {guestUrl}
+                </p>
+              </div>
+            ) : null}
           </div>
         ) : null}
 

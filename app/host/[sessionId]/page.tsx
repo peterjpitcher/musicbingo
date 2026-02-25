@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { useWakeLock } from "@/hooks/useWakeLock";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -127,6 +128,8 @@ export default function HostSessionControllerPage() {
     () => (typeof params?.sessionId === "string" ? params.sessionId : ""),
     [params?.sessionId]
   );
+
+  useWakeLock();
 
   const tabIdRef = useRef<string>(makeTabId());
   const runtimeRef = useRef<LiveRuntimeState>(makeEmptyRuntimeState(sessionId || "pending"));
