@@ -21,6 +21,7 @@ function makeValidSession(): LiveSessionV1 {
     eventDateInput: "2026-03-01",
     eventDateDisplay: "March 1st 2026",
     revealConfig: DEFAULT_REVEAL_CONFIG,
+    breakPlaylistId: "",
     games: [
       {
         gameNumber: 1,

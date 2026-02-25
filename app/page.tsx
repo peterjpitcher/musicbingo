@@ -74,6 +74,7 @@ export default function HomePage() {
   const [countInput, setCountInput] = useState<string>("40");
   const [liveSessionName, setLiveSessionName] = useState<string>("");
   const [liveSessionNameDirty, setLiveSessionNameDirty] = useState<boolean>(false);
+  const [breakPlaylistId, setBreakPlaylistId] = useState<string>("");
 
   // Step 1 fields
   const [game1Theme, setGame1Theme] = useState<string>(DEFAULT_GAME_THEME);
@@ -201,6 +202,7 @@ export default function HomePage() {
       eventDateInput: eventDate,
       eventDateDisplay,
       revealConfig: DEFAULT_REVEAL_CONFIG,
+      breakPlaylistId: breakPlaylistId.trim(),
       games: [
         {
           gameNumber: 1,
@@ -493,6 +495,8 @@ export default function HomePage() {
               setLiveSessionName(v);
               setLiveSessionNameDirty(true);
             }}
+            breakPlaylistId={breakPlaylistId}
+            onBreakPlaylistId={setBreakPlaylistId}
             onNext={() => goToStep(1)}
           />
         )}

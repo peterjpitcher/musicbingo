@@ -169,6 +169,15 @@ function validateRuntimeState(input: unknown): LiveRuntimeState | null {
         ? input.advanceTriggeredForTrackId.trim()
         : null,
     warningMessage,
+    isChallengeSong: Boolean(input.isChallengeSong),
+    preBreakTrackId:
+      typeof input.preBreakTrackId === "string" && input.preBreakTrackId.trim()
+        ? input.preBreakTrackId.trim()
+        : null,
+    preBreakPlaylistId:
+      typeof input.preBreakPlaylistId === "string" && input.preBreakPlaylistId.trim()
+        ? input.preBreakPlaylistId.trim()
+        : null,
     updatedAtMs,
   };
 }

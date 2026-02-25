@@ -102,5 +102,6 @@ export function validateLiveSession(input: unknown): LiveSessionV1 | null {
     eventDateDisplay,
     games: [game1, game2],
     revealConfig,
+    breakPlaylistId: asString(input.breakPlaylistId) ?? "",
   };
 }

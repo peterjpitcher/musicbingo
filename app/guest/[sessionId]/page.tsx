@@ -197,7 +197,19 @@ export default function GuestDisplayPage() {
         ) : null}
 
         {showRunning && runtime.currentTrack ? (
-          <div className="w-[min(1400px,96vw)] grid grid-cols-1 lg:[grid-template-columns:minmax(260px,560px)_minmax(0,1fr)] gap-7 items-center">
+          <div className="w-[min(1400px,96vw)] flex flex-col gap-5">
+            {/* Challenge banner */}
+            {runtime.isChallengeSong ? (
+              <div className="w-full bg-brand-gold/90 border-2 border-white/60 rounded-2xl py-4 px-6 text-center">
+                <p className="m-0 uppercase tracking-[0.2em] text-white/80 text-[clamp(0.65rem,1.2vw,0.9rem)]">
+                  {activeGame?.gameNumber === 1 ? "Dancing Challenge" : "Sing-Along Challenge"}
+                </p>
+                <h2 className="m-0 mt-1 uppercase font-black text-white text-[clamp(1.6rem,4vw,3.5rem)] leading-none tracking-wide">
+                  {activeGame?.gameNumber === 1 ? "Get Up and Dance!" : "Sing Along!"}
+                </h2>
+              </div>
+            ) : null}
+          <div className="grid grid-cols-1 lg:[grid-template-columns:minmax(260px,560px)_minmax(0,1fr)] gap-7 items-center">
             {/* Album art */}
             <div className="flex items-center justify-center">
               {runtime.revealState.showAlbum ? (
@@ -251,6 +263,7 @@ export default function GuestDisplayPage() {
                 </p>
               )}
             </div>
+          </div>
           </div>
         ) : null}
       </section>

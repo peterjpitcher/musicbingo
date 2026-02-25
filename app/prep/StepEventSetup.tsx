@@ -11,6 +11,8 @@ type StepEventSetupProps = {
   onCountInput: (v: string) => void;
   sessionName: string;
   onSessionName: (v: string) => void;
+  breakPlaylistId: string;
+  onBreakPlaylistId: (v: string) => void;
   onNext: () => void;
 };
 
@@ -21,6 +23,8 @@ export function StepEventSetup({
   onCountInput,
   sessionName,
   onSessionName,
+  breakPlaylistId,
+  onBreakPlaylistId,
   onNext,
 }: StepEventSetupProps) {
   const count = Number.parseInt(countInput, 10);
@@ -57,7 +61,7 @@ export function StepEventSetup({
           <p className={helpClass}>Default is 40</p>
         </div>
       </div>
-      <div className="mb-6">
+      <div className="mb-5">
         <label className={labelClass}>Session Name</label>
         <input
           type="text"
@@ -67,6 +71,17 @@ export function StepEventSetup({
           placeholder="Music Bingo - Event Date"
         />
         <p className={helpClass}>Used to identify this session in the live host console</p>
+      </div>
+      <div className="mb-6">
+        <label className={labelClass}>Break Playlist URL <span className="font-normal text-slate-400">(optional)</span></label>
+        <input
+          type="text"
+          className={inputClass}
+          value={breakPlaylistId}
+          onChange={(e) => onBreakPlaylistId(e.target.value)}
+          placeholder="https://open.spotify.com/playlist/..."
+        />
+        <p className={helpClass}>Spotify will switch to this playlist during breaks, then restart the last song when you resume</p>
       </div>
       <div className="flex justify-end">
         <Button variant="primary" onClick={onNext} disabled={!canNext}>

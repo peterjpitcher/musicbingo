@@ -252,6 +252,32 @@ export async function startPlaylistPlayback(params: {
   });
 }
 
+/** Resume a specific track from position 0 within its playlist context. */
+export async function startTrackInPlaylistPlayback(params: {
+  accessToken: string;
+  playlistId: string;
+  trackId: string;
+  deviceId?: string;
+}): Promise<void> {
+  const normalizedPlaylistId = normalizePlaylistId(params.playlistId);
+  if (!normalizedPlaylistId) {
+    throw new SpotifyLiveError("API_ERROR", "Invalid playlist id for resume.");
+  }
+
+  await runPlayerCommand({
+    accessToken: params.accessToken,
+    method: "PUT",
+    path: "/me/player/play",
+    query: { device_id: params.deviceId },
+    body: {
+      context_uri: `spotify:playlist:${normalizedPlaylistId}`,
+      offset: { uri: `spotify:track:${params.trackId}` },
+      position_ms: 0,
+    },
+    actionLabel: "Resume track from beginning",
+  });
+}
+
 export async function pausePlayback(params: { accessToken: string; deviceId?: string }): Promise<void> {
   await runPlayerCommand({
     accessToken: params.accessToken,

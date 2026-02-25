@@ -48,6 +48,8 @@ export type LiveSessionV1 = {
   eventDateDisplay: string;
   games: [LiveGameConfig, LiveGameConfig] | LiveGameConfig[];
   revealConfig: RevealConfig;
+  /** Spotify playlist URL/ID to play during breaks. Empty string = manual host control. */
+  breakPlaylistId: string;
 };
 
 export type LiveTrackSnapshot = {
@@ -77,6 +79,12 @@ export type LiveRuntimeState = {
   revealState: LiveRevealState;
   advanceTriggeredForTrackId: string | null;
   warningMessage: string | null;
+  /** True when the currently playing track is the challenge song for the active game. */
+  isChallengeSong: boolean;
+  /** Track ID stored before going to break, so resume can restart it from the beginning. */
+  preBreakTrackId: string | null;
+  /** Playlist ID stored before going to break, so resume can restart in the right context. */
+  preBreakPlaylistId: string | null;
   updatedAtMs: number;
 };
 
@@ -117,6 +125,9 @@ export function makeEmptyRuntimeState(sessionId: string): LiveRuntimeState {
     },
     advanceTriggeredForTrackId: null,
     warningMessage: null,
+    isChallengeSong: false,
+    preBreakTrackId: null,
+    preBreakPlaylistId: null,
     updatedAtMs: Date.now(),
   };
 }

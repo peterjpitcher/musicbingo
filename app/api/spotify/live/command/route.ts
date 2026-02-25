@@ -9,6 +9,7 @@ import {
   skipPrevious,
   SpotifyLiveError,
   startPlaylistPlayback,
+  startTrackInPlaylistPlayback,
   type SpotifyLiveState,
 } from "@/lib/spotifyLive";
 import {
@@ -21,11 +22,12 @@ export const runtime = "nodejs";
 
 const COOKIE_REFRESH = "spotify_refresh_token";
 
-type LiveCommandAction = "play_game" | "pause" | "resume" | "next" | "previous" | "seek";
+type LiveCommandAction = "play_game" | "pause" | "resume" | "next" | "previous" | "seek" | "play_break" | "resume_from_track";
 
 type LiveCommandPayload = {
   action?: unknown;
   playlistId?: unknown;
+  trackId?: unknown;
   positionMs?: unknown;
   deviceId?: unknown;
 };
@@ -49,6 +51,8 @@ function asAction(value: unknown): LiveCommandAction | null {
     || value === "next"
     || value === "previous"
     || value === "seek"
+    || value === "play_break"
+    || value === "resume_from_track"
     ? value
     : null;
 }
@@ -115,6 +119,28 @@ async function runCommand(params: {
 
   if (params.action === "previous") {
     await skipPrevious({ accessToken: params.accessToken, deviceId });
+    return;
+  }
+
+  if (params.action === "play_break") {
+    const playlistId = asString(params.payload.playlistId);
+    if (!playlistId) {
+      throw new SpotifyLiveError("API_ERROR", "`playlistId` is required for play_break.");
+    }
+    await startPlaylistPlayback({ accessToken: params.accessToken, playlistId, deviceId });
+    return;
+  }
+
+  if (params.action === "resume_from_track") {
+    const playlistId = asString(params.payload.playlistId);
+    const trackId = asString(params.payload.trackId);
+    if (playlistId && trackId) {
+      await startTrackInPlaylistPlayback({ accessToken: params.accessToken, playlistId, trackId, deviceId });
+    } else if (playlistId) {
+      await startPlaylistPlayback({ accessToken: params.accessToken, playlistId, deviceId });
+    } else {
+      await resumePlayback({ accessToken: params.accessToken, deviceId });
+    }
     return;
   }
 

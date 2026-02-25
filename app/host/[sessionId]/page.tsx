@@ -182,7 +182,11 @@ export default function HostSessionControllerPage() {
       const warnings = normalizeWarnings(payload.warnings);
       const track = normalizeTrackSnapshot(payload.playback);
       commitRuntime((prev) => {
-        const cfg = getRevealConfig(session, prev.activeGameNumber, track);
+        const game = prev.activeGameNumber
+          ? session.games.find((g) => g.gameNumber === prev.activeGameNumber) ?? null
+          : null;
+        const isChallengeSong = matchesChallengeSong(track, game);
+        const cfg = isChallengeSong ? CHALLENGE_REVEAL_CONFIG : session.revealConfig;
         const revealState = computeRevealState(track?.progressMs ?? 0, cfg);
         const marker = updateAdvanceTrackMarker({
           trackId: track?.trackId ?? null,
@@ -194,6 +198,7 @@ export default function HostSessionControllerPage() {
           spotifyControlAvailable: Boolean(payload.canControlPlayback),
           currentTrack: track,
           revealState,
+          isChallengeSong,
           advanceTriggeredForTrackId: marker,
           warningMessage: warnings[0] ?? (payload.error?.message ?? null),
         };
@@ -369,7 +374,7 @@ export default function HostSessionControllerPage() {
 
   const sendCommand = useCallback(
     async (
-      action: "play_game" | "pause" | "resume" | "next" | "previous" | "seek",
+      action: "play_game" | "pause" | "resume" | "next" | "previous" | "seek" | "play_break" | "resume_from_track",
       payload?: Record<string, unknown>,
       opts?: { modeOnSuccess?: LiveRuntimeState["mode"] }
     ): Promise<boolean> => {
@@ -445,6 +450,41 @@ export default function HostSessionControllerPage() {
         "Spotify control unavailable. Continue in manual host control mode."
       );
     }
+  }
+
+  function openBreakScreen() {
+    const trackId = runtimeRef.current.currentTrack?.trackId ?? null;
+    const gamePlaylistId = runtimeRef.current.activeGameNumber
+      ? session?.games.find((g) => g.gameNumber === runtimeRef.current.activeGameNumber)?.playlistId ?? null
+      : null;
+
+    commitRuntime((prev) => ({
+      ...prev,
+      mode: "break",
+      preBreakTrackId: trackId,
+      preBreakPlaylistId: gamePlaylistId,
+    }));
+
+    if (session?.breakPlaylistId && runtime.spotifyControlAvailable) {
+      void sendCommand("play_break", { playlistId: session.breakPlaylistId });
+    }
+  }
+
+  function resumeFromBreak() {
+    const trackId = runtimeRef.current.preBreakTrackId;
+    const playlistId = runtimeRef.current.preBreakPlaylistId;
+
+    commitRuntime((prev) => ({
+      ...prev,
+      mode: "running",
+      preBreakTrackId: null,
+      preBreakPlaylistId: null,
+    }));
+
+    void sendCommand("resume_from_track", {
+      ...(trackId ? { trackId } : {}),
+      ...(playlistId ? { playlistId } : {}),
+    });
   }
 
   function openGuestDisplay() {
@@ -609,18 +649,14 @@ export default function HostSessionControllerPage() {
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={() =>
-                  commitRuntime((prev) => ({ ...prev, mode: "break" }))
-                }
+                onClick={openBreakScreen}
               >
                 Show Break Screen
               </Button>
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={() =>
-                  commitRuntime((prev) => ({ ...prev, mode: "running" }))
-                }
+                onClick={resumeFromBreak}
               >
                 Resume Display
               </Button>
