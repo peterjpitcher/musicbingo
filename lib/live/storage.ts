@@ -178,6 +178,7 @@ function validateRuntimeState(input: unknown): LiveRuntimeState | null {
       typeof input.preBreakPlaylistId === "string" && input.preBreakPlaylistId.trim()
         ? input.preBreakPlaylistId.trim()
         : null,
+    extensionMs: asNumber(input.extensionMs) ?? 0,
     updatedAtMs,
   };
 }

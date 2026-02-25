@@ -85,6 +85,8 @@ export type LiveRuntimeState = {
   preBreakTrackId: string | null;
   /** Playlist ID stored before going to break, so resume can restart in the right context. */
   preBreakPlaylistId: string | null;
+  /** Extra ms added to the auto-advance threshold via the +30s button. Resets to 0 on track change. */
+  extensionMs: number;
   updatedAtMs: number;
 };
 
@@ -128,6 +130,7 @@ export function makeEmptyRuntimeState(sessionId: string): LiveRuntimeState {
     isChallengeSong: false,
     preBreakTrackId: null,
     preBreakPlaylistId: null,
+    extensionMs: 0,
     updatedAtMs: Date.now(),
   };
 }

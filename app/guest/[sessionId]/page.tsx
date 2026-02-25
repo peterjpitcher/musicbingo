@@ -259,7 +259,7 @@ export default function GuestDisplayPage() {
                 </p>
               ) : (
                 <p className="mt-1.5 text-white/90 text-[clamp(1rem,2vw,1.7rem)] uppercase tracking-[0.05em]">
-                  Next song at {runtime.isChallengeSong ? "90s" : "30s"}
+                  Next song at {Math.floor(((runtime.isChallengeSong ? 90_000 : 30_000) + runtime.extensionMs) / 1000)}s
                 </p>
               )}
             </div>
