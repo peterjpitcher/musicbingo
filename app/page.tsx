@@ -1,53 +1,27 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 
+import { AppHeader } from "@/components/layout/AppHeader";
+import { Button } from "@/components/ui/Button";
+import { StepIndicator } from "@/components/ui/StepIndicator";
 import { formatEventDateDisplay } from "@/lib/eventDate";
-import {
-  DEFAULT_GAME_THEME,
-  MAX_SONGS_PER_GAME,
-  makeSongSelectionValue,
-} from "@/lib/gameInput";
+import { DEFAULT_GAME_THEME, MAX_SONGS_PER_GAME, makeSongSelectionValue } from "@/lib/gameInput";
 import { exportLiveSessionJson, upsertLiveSession } from "@/lib/live/sessionApi";
-import {
-  DEFAULT_REVEAL_CONFIG,
-  LIVE_SESSION_VERSION,
-  type LiveSessionV1,
-} from "@/lib/live/types";
+import { DEFAULT_REVEAL_CONFIG, LIVE_SESSION_VERSION, type LiveSessionV1 } from "@/lib/live/types";
 import { parseSongListText } from "@/lib/parser";
 import type { Song } from "@/lib/types";
 import { sanitizeFilenamePart } from "@/lib/utils";
+import { StepEventSetup } from "./prep/StepEventSetup";
+import { StepGameConfig } from "./prep/StepGameConfig";
+import { StepGenerateConnect } from "./prep/StepGenerateConnect";
 
-function todayIso(): string {
-  const d = new Date();
-  const yyyy = String(d.getFullYear());
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
-
-function songLabel(song: Song): string {
-  return `${song.artist} - ${song.title}`;
-}
-
-function downloadBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
-
-function makeSessionId(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
-  return `session-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
-}
+const STEPS = [
+  { label: "Event Setup" },
+  { label: "Game 1" },
+  { label: "Game 2" },
+  { label: "Generate" },
+];
 
 type SpotifyPlaylistResult = {
   gameNumber: number;
@@ -61,17 +35,57 @@ type SpotifyPlaylistResult = {
   notFound: Array<{ artist: string; title: string }>;
 };
 
+function todayIso(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function parseChallengeSongSelection(selection: string): { artist: string; title: string } {
+  const delim = selection.indexOf("|||");
+  if (delim > 0 && delim < selection.length - 3) {
+    return { artist: selection.slice(0, delim).trim(), title: selection.slice(delim + 3).trim() };
+  }
+  return { artist: "", title: "" };
+}
+
+function makeSessionId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `session-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+}
+
 export default function HomePage() {
+  const [currentStep, setCurrentStep] = useState(0);
+
+  // Step 0 fields
   const [eventDate, setEventDate] = useState<string>(todayIso());
   const [countInput, setCountInput] = useState<string>("40");
+  const [liveSessionName, setLiveSessionName] = useState<string>("");
+  const [liveSessionNameDirty, setLiveSessionNameDirty] = useState<boolean>(false);
 
+  // Step 1 fields
   const [game1Theme, setGame1Theme] = useState<string>(DEFAULT_GAME_THEME);
-  const [game2Theme, setGame2Theme] = useState<string>(DEFAULT_GAME_THEME);
   const [game1SongsText, setGame1SongsText] = useState<string>("");
-  const [game2SongsText, setGame2SongsText] = useState<string>("");
   const [game1ChallengeSong, setGame1ChallengeSong] = useState<string>("");
+
+  // Step 2 fields
+  const [game2Theme, setGame2Theme] = useState<string>(DEFAULT_GAME_THEME);
+  const [game2SongsText, setGame2SongsText] = useState<string>("");
   const [game2ChallengeSong, setGame2ChallengeSong] = useState<string>("");
 
+  // Step 3 state
   const [error, setError] = useState<string>("");
   const [qrNotice, setQrNotice] = useState<string>("");
   const [busy, setBusy] = useState<boolean>(false);
@@ -80,8 +94,6 @@ export default function HomePage() {
   const [spotifyCreating, setSpotifyCreating] = useState<boolean>(false);
   const [spotifyResult, setSpotifyResult] = useState<SpotifyPlaylistResult[] | null>(null);
   const [spotifyCallbackUrl, setSpotifyCallbackUrl] = useState<string>("/api/spotify/callback");
-  const [liveSessionName, setLiveSessionName] = useState<string>("");
-  const [liveSessionNameDirty, setLiveSessionNameDirty] = useState<boolean>(false);
   const [liveSessionNotice, setLiveSessionNotice] = useState<string>("");
 
   const parsedGame1 = useMemo(() => parseSongListText(game1SongsText), [game1SongsText]);
@@ -100,7 +112,9 @@ export default function HomePage() {
       if (game1ChallengeSong) setGame1ChallengeSong("");
       return;
     }
-    const hasSelection = parsedGame1.songs.some((song) => makeSongSelectionValue(song) === game1ChallengeSong);
+    const hasSelection = parsedGame1.songs.some(
+      (song) => makeSongSelectionValue(song) === game1ChallengeSong
+    );
     if (!hasSelection) {
       setGame1ChallengeSong(makeSongSelectionValue(parsedGame1.songs[0] as Song));
     }
@@ -111,7 +125,9 @@ export default function HomePage() {
       if (game2ChallengeSong) setGame2ChallengeSong("");
       return;
     }
-    const hasSelection = parsedGame2.songs.some((song) => makeSongSelectionValue(song) === game2ChallengeSong);
+    const hasSelection = parsedGame2.songs.some(
+      (song) => makeSongSelectionValue(song) === game2ChallengeSong
+    );
     if (!hasSelection) {
       setGame2ChallengeSong(makeSongSelectionValue(parsedGame2.songs[0] as Song));
     }
@@ -136,7 +152,11 @@ export default function HomePage() {
     if (!eventDate.trim()) return false;
     if (!Number.isFinite(count) || count < 1 || count > 1000) return false;
     if (!parsedGame1.songs.length || !parsedGame2.songs.length) return false;
-    if (parsedGame1.songs.length > MAX_SONGS_PER_GAME || parsedGame2.songs.length > MAX_SONGS_PER_GAME) return false;
+    if (
+      parsedGame1.songs.length > MAX_SONGS_PER_GAME ||
+      parsedGame2.songs.length > MAX_SONGS_PER_GAME
+    )
+      return false;
     if (parsedGame1.uniqueArtists.length < 25 || parsedGame1.uniqueTitles.length < 25) return false;
     if (parsedGame2.uniqueArtists.length < 25 || parsedGame2.uniqueTitles.length < 25) return false;
     if (!game1ChallengeSong || !game2ChallengeSong) return false;
@@ -170,12 +190,9 @@ export default function HomePage() {
     if (!livePlaylistByGame) {
       throw new Error("Create both Spotify playlists first, then save the live session.");
     }
-
     const eventDateDisplay = formatEventDateDisplay(eventDate) || eventDate || todayIso();
     const sessionName = liveSessionName.trim() || `Music Bingo - ${eventDateDisplay}`;
-    const game1 = livePlaylistByGame.game1;
-    const game2 = livePlaylistByGame.game2;
-
+    const { game1, game2 } = livePlaylistByGame;
     return {
       version: LIVE_SESSION_VERSION,
       id: makeSessionId(),
@@ -193,6 +210,8 @@ export default function HomePage() {
           playlistUrl: game1.playlistUrl,
           totalSongs: game1.totalSongs,
           addedCount: game1.addedCount,
+          challengeSongArtist: parseChallengeSongSelection(game1ChallengeSong).artist,
+          challengeSongTitle: parseChallengeSongSelection(game1ChallengeSong).title,
         },
         {
           gameNumber: 2,
@@ -202,6 +221,8 @@ export default function HomePage() {
           playlistUrl: game2.playlistUrl,
           totalSongs: game2.totalSongs,
           addedCount: game2.addedCount,
+          challengeSongArtist: parseChallengeSongSelection(game2ChallengeSong).artist,
+          challengeSongTitle: parseChallengeSongSelection(game2ChallengeSong).title,
         },
       ],
     };
@@ -225,7 +246,10 @@ export default function HomePage() {
       await upsertLiveSession(session);
       const json = exportLiveSessionJson(session);
       const blob = new Blob([json], { type: "application/json;charset=utf-8" });
-      downloadBlob(blob, `music-bingo-live-session-${sanitizeFilenamePart(session.name, "session")}.json`);
+      downloadBlob(
+        blob,
+        `music-bingo-live-session-${sanitizeFilenamePart(session.name, "session")}.json`
+      );
       setLiveSessionNotice(`Exported live session: ${session.name}`);
       setError("");
     } catch (err: any) {
@@ -249,7 +273,6 @@ export default function HomePage() {
 
       const pdfForm = buildBaseFormData();
       pdfForm.set("count", String(count));
-
       const spotifyForm = buildBaseFormData();
 
       let bundleError: string | null = null;
@@ -266,7 +289,6 @@ export default function HomePage() {
           const eventsCount = res.headers.get("x-music-bingo-events-count");
           const eventsWithUrl = res.headers.get("x-music-bingo-events-with-url");
           const qrError = res.headers.get("x-music-bingo-qr-error");
-
           const expectedEvents = (() => {
             const n = requestedRaw ? Number.parseInt(requestedRaw, 10) : 4;
             return Number.isFinite(n) && n > 0 ? n : 4;
@@ -274,9 +296,7 @@ export default function HomePage() {
 
           if (qrStatus && qrStatus !== "ok") {
             if (qrStatus === "missing_config") {
-              setQrNotice(
-                "Upcoming event QRs: management API not configured (set MANAGEMENT_API_BASE_URL + MANAGEMENT_API_TOKEN in .env.local, then restart npm run dev)."
-              );
+              setQrNotice("Upcoming event QRs: management API not configured.");
             } else if (qrStatus === "no_events") {
               setQrNotice("Upcoming event QRs: no upcoming events found after this date (placeholders used).");
             } else if (qrStatus === "error") {
@@ -285,17 +305,23 @@ export default function HomePage() {
           } else if (eventsWithUrl && eventsWithUrl !== String(expectedEvents)) {
             const resolvedCount = Number.parseInt(eventsWithUrl, 10);
             if (Number.isFinite(resolvedCount) && resolvedCount >= 0 && resolvedCount < expectedEvents) {
-              setQrNotice(`Upcoming event QRs: only ${resolvedCount}/${expectedEvents} event URLs resolved (placeholders used).`);
+              setQrNotice(
+                `Upcoming event QRs: only ${resolvedCount}/${expectedEvents} event URLs resolved (placeholders used).`
+              );
             }
           } else if (eventsCount && eventsCount !== String(expectedEvents)) {
             const foundCount = Number.parseInt(eventsCount, 10);
             if (Number.isFinite(foundCount) && foundCount >= 0 && foundCount < expectedEvents) {
-              setQrNotice(`Upcoming event QRs: only ${foundCount}/${expectedEvents} upcoming events found (placeholders used).`);
+              setQrNotice(
+                `Upcoming event QRs: only ${foundCount}/${expectedEvents} upcoming events found (placeholders used).`
+              );
             }
           }
 
           const blob = await res.blob();
-          const filename = res.headers.get("content-disposition")?.match(/filename=\"(.+)\"/)?.[1] ?? "music-bingo-event-pack.zip";
+          const filename =
+            res.headers.get("content-disposition")?.match(/filename="(.+)"/)?.[1] ??
+            "music-bingo-event-pack.zip";
           downloadBlob(blob, filename);
         } catch (err: any) {
           bundleError = err?.message ?? "Failed to generate output bundle.";
@@ -321,27 +347,17 @@ export default function HomePage() {
 
   async function connectSpotify(opts: { clearError?: boolean } = {}): Promise<boolean> {
     const clearError = opts.clearError ?? true;
-    if (clearError) {
-      setError("");
-      setSpotifyResult(null);
-    }
+    if (clearError) { setError(""); setSpotifyResult(null); }
     setSpotifyConnecting(true);
     try {
-      const w = window.open(
-        "/api/spotify/authorize",
-        "spotify_auth",
-        "popup,width=520,height=720"
-      );
-      if (!w) {
-        throw new Error("Popup blocked. Please allow popups for this site and try again.");
-      }
+      const w = window.open("/api/spotify/authorize", "spotify_auth", "popup,width=520,height=720");
+      if (!w) throw new Error("Popup blocked. Please allow popups for this site and try again.");
 
       await new Promise<void>((resolve, reject) => {
         const cleanup = () => {
           window.removeEventListener("message", onMessage);
           window.clearInterval(timer);
         };
-
         const onMessage = (event: MessageEvent) => {
           if (event.origin !== window.location.origin) return;
           const data = event.data as any;
@@ -351,7 +367,6 @@ export default function HomePage() {
           if (data.ok) resolve();
           else reject(new Error(data.error || "Spotify auth failed."));
         };
-
         const timer = window.setInterval(() => {
           if (w.closed) {
             cleanup();
@@ -366,7 +381,6 @@ export default function HomePage() {
             );
           }
         }, 400);
-
         window.addEventListener("message", onMessage);
       });
 
@@ -400,10 +414,7 @@ export default function HomePage() {
 
   async function createSpotifyPlaylists(opts: { form?: FormData; clearError?: boolean } = {}) {
     const clearError = opts.clearError ?? true;
-    if (clearError) {
-      setError("");
-      setSpotifyResult(null);
-    }
+    if (clearError) { setError(""); setSpotifyResult(null); }
     setSpotifyCreating(true);
     try {
       const form = opts.form ?? buildBaseFormData();
@@ -413,31 +424,31 @@ export default function HomePage() {
         if (res.status === 401) setSpotifyConnected(false);
         throw new Error(msg || "Failed to create Spotify playlists.");
       }
-
       const data = await res.json();
       const playlists = Array.isArray(data?.playlists)
         ? data.playlists
-          .map((item: any) => ({
-            gameNumber: Number(item?.gameNumber ?? 0),
-            theme: typeof item?.theme === "string" ? item.theme : DEFAULT_GAME_THEME,
-            playlistId: typeof item?.playlistId === "string" ? item.playlistId : null,
-            playlistName: String(item?.playlistName ?? "Music Bingo"),
-            playlistUrl: typeof item?.playlistUrl === "string" ? item.playlistUrl : null,
-            totalSongs: Number(item?.totalSongs ?? 0),
-            addedCount: Number(item?.addedCount ?? 0),
-            notFoundCount: Number(item?.notFoundCount ?? 0),
-            notFound: Array.isArray(item?.notFound)
-              ? item.notFound
-                .map((s: any) => ({
-                  artist: typeof s?.artist === "string" ? s.artist : "",
-                  title: typeof s?.title === "string" ? s.title : "",
-                }))
-                .filter((s: any) => Boolean(s.artist && s.title))
-              : [],
-          }))
-          .filter((item: SpotifyPlaylistResult) => item.gameNumber === 1 || item.gameNumber === 2)
+            .map((item: any) => ({
+              gameNumber: Number(item?.gameNumber ?? 0),
+              theme: typeof item?.theme === "string" ? item.theme : DEFAULT_GAME_THEME,
+              playlistId: typeof item?.playlistId === "string" ? item.playlistId : null,
+              playlistName: String(item?.playlistName ?? "Music Bingo"),
+              playlistUrl: typeof item?.playlistUrl === "string" ? item.playlistUrl : null,
+              totalSongs: Number(item?.totalSongs ?? 0),
+              addedCount: Number(item?.addedCount ?? 0),
+              notFoundCount: Number(item?.notFoundCount ?? 0),
+              notFound: Array.isArray(item?.notFound)
+                ? item.notFound
+                    .map((s: any) => ({
+                      artist: typeof s?.artist === "string" ? s.artist : "",
+                      title: typeof s?.title === "string" ? s.title : "",
+                    }))
+                    .filter((s: any) => Boolean(s.artist && s.title))
+                : [],
+            }))
+            .filter(
+              (item: SpotifyPlaylistResult) => item.gameNumber === 1 || item.gameNumber === 2
+            )
         : [];
-
       setSpotifyResult(playlists);
     } catch (err: any) {
       setError(err?.message ?? "Failed to create Spotify playlists.");
@@ -446,272 +457,109 @@ export default function HomePage() {
     }
   }
 
+  function goToStep(step: number) {
+    setCurrentStep(step);
+    window.scrollTo(0, 0);
+  }
+
   return (
-    <main className="music-prep-page">
-      <header style={{ textAlign: "center", marginBottom: 60 }}>
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
-          <Link href="/host" className="secondary-btn" style={{ textDecoration: "none", width: "auto" }}>
+    <div className="min-h-screen bg-slate-50">
+      <AppHeader
+        title="Music Bingo"
+        subtitle="Event Prep"
+        variant="light"
+        actions={
+          <Button as="link" href="/host" variant="secondary" size="sm">
             Live Host Console
-          </Link>
-        </div>
-        <h1>Music Bingo</h1>
-        <p className="lead" style={{ margin: "0 auto" }}>
+          </Button>
+        }
+      />
+
+      <main className="max-w-2xl mx-auto px-4 py-8">
+        <p className="text-slate-500 text-sm mb-6">
           Generate a full event pack with two game card PDFs, an Event Clipboard DOCX, and two Spotify playlists.
         </p>
-      </header>
 
-      <form className="card" onSubmit={onSubmit}>
-        <div className="grid-2">
-          <div>
-            <label>Event Date</label>
-            <input
-              type="date"
-              value={eventDate}
-              onChange={(e) => setEventDate(e.target.value)}
-            />
-            <div className="small">Used in PDFs, DOCX clipboard, and playlist names</div>
-          </div>
-          <div>
-            <label>Cards Per Game</label>
-            <input
-              type="number"
-              min={1}
-              max={1000}
-              value={countInput}
-              onChange={(e) => setCountInput(e.target.value)}
-            />
-            <div className="small">Default is 40</div>
-          </div>
-        </div>
+        <StepIndicator steps={STEPS} currentStep={currentStep} />
 
-        <div className="mt-8 game-section">
-          <h2>Game 1</h2>
-          <label>Theme</label>
-          <input
-            value={game1Theme}
-            onChange={(e) => setGame1Theme(e.target.value)}
-            placeholder={DEFAULT_GAME_THEME}
+        {currentStep === 0 && (
+          <StepEventSetup
+            eventDate={eventDate}
+            onEventDate={setEventDate}
+            countInput={countInput}
+            onCountInput={setCountInput}
+            sessionName={liveSessionName}
+            onSessionName={(v) => {
+              setLiveSessionName(v);
+              setLiveSessionNameDirty(true);
+            }}
+            onNext={() => goToStep(1)}
           />
-          <div className="small">Default: {DEFAULT_GAME_THEME}</div>
+        )}
 
-          <label style={{ marginTop: 12 }}>Song List (max 50)</label>
-          <textarea
-            value={game1SongsText}
-            onChange={(e) => setGame1SongsText(e.target.value)}
-            placeholder={`Elvis Presley - Jailhouse Rock\nThe Beatles - Hey Jude\nQueen - Bohemian Rhapsody`}
+        {currentStep === 1 && (
+          <StepGameConfig
+            gameNumber={1}
+            gameLabel="Dancing Challenge"
+            challengeLabel="Dancing Challenge Song (Game 1)"
+            theme={game1Theme}
+            onTheme={setGame1Theme}
+            songsText={game1SongsText}
+            onSongsText={setGame1SongsText}
+            challengeSong={game1ChallengeSong}
+            onChallengeSong={setGame1ChallengeSong}
+            parsed={parsedGame1}
+            onBack={() => goToStep(0)}
+            onNext={() => goToStep(2)}
+            nextLabel="Next: Game 2 →"
           />
-          <div className="small">
-            Parsed songs: {parsedGame1.songs.length}/{MAX_SONGS_PER_GAME}
-            {parsedGame1.songs.length > MAX_SONGS_PER_GAME ? " (too many)" : ""}
-          </div>
-          <div className="small">
-            Unique artists/titles: {parsedGame1.uniqueArtists.length}/{parsedGame1.uniqueTitles.length} (need at least 25 each for card generation)
-          </div>
+        )}
 
-          <label style={{ marginTop: 12 }}>Dancing Challenge Song (Game 1)</label>
-          <select
-            value={game1ChallengeSong}
-            onChange={(e) => setGame1ChallengeSong(e.target.value)}
-            disabled={!parsedGame1.songs.length}
-          >
-            {!parsedGame1.songs.length ? <option value="">Add songs first</option> : null}
-            {parsedGame1.songs.map((song) => {
-              const value = makeSongSelectionValue(song);
-              return (
-                <option key={value} value={value}>
-                  {songLabel(song)}
-                </option>
-              );
-            })}
-          </select>
-        </div>
-
-        <div className="mt-8 game-section">
-          <h2>Game 2</h2>
-          <label>Theme</label>
-          <input
-            value={game2Theme}
-            onChange={(e) => setGame2Theme(e.target.value)}
-            placeholder={DEFAULT_GAME_THEME}
+        {currentStep === 2 && (
+          <StepGameConfig
+            gameNumber={2}
+            gameLabel="Sing-Along Challenge"
+            challengeLabel="Sing-Along Challenge Song (Game 2)"
+            theme={game2Theme}
+            onTheme={setGame2Theme}
+            songsText={game2SongsText}
+            onSongsText={setGame2SongsText}
+            challengeSong={game2ChallengeSong}
+            onChallengeSong={setGame2ChallengeSong}
+            parsed={parsedGame2}
+            onBack={() => goToStep(1)}
+            onNext={() => goToStep(3)}
+            nextLabel="Next: Generate →"
           />
-          <div className="small">Default: {DEFAULT_GAME_THEME}</div>
+        )}
 
-          <label style={{ marginTop: 12 }}>Song List (max 50, different list)</label>
-          <textarea
-            value={game2SongsText}
-            onChange={(e) => setGame2SongsText(e.target.value)}
-            placeholder={`ABBA - Dancing Queen\nBon Jovi - Livin on a Prayer\nMadonna - Like a Prayer`}
+        {currentStep === 3 && (
+          <StepGenerateConnect
+            canSubmit={canSubmit}
+            busy={busy}
+            spotifyConnected={spotifyConnected}
+            spotifyConnecting={spotifyConnecting}
+            spotifyCreating={spotifyCreating}
+            spotifyCallbackUrl={spotifyCallbackUrl}
+            spotifyResult={spotifyResult}
+            livePlaylistByGame={livePlaylistByGame}
+            liveSessionName={liveSessionName}
+            onLiveSessionName={(v) => {
+              setLiveSessionName(v);
+              setLiveSessionNameDirty(true);
+            }}
+            liveSessionNotice={liveSessionNotice}
+            error={error}
+            qrNotice={qrNotice}
+            onSubmit={onSubmit}
+            onConnectSpotify={() => void connectSpotify()}
+            onDisconnectSpotify={() => void disconnectSpotify()}
+            onSaveLiveSession={() => void saveLiveSession()}
+            onExportLiveSession={() => void exportLiveSession()}
+            onBack={() => goToStep(2)}
           />
-          <div className="small">
-            Parsed songs: {parsedGame2.songs.length}/{MAX_SONGS_PER_GAME}
-            {parsedGame2.songs.length > MAX_SONGS_PER_GAME ? " (too many)" : ""}
-          </div>
-          <div className="small">
-            Unique artists/titles: {parsedGame2.uniqueArtists.length}/{parsedGame2.uniqueTitles.length} (need at least 25 each for card generation)
-          </div>
-
-          <label style={{ marginTop: 12 }}>Sing-Along Challenge Song (Game 2)</label>
-          <select
-            value={game2ChallengeSong}
-            onChange={(e) => setGame2ChallengeSong(e.target.value)}
-            disabled={!parsedGame2.songs.length}
-          >
-            {!parsedGame2.songs.length ? <option value="">Add songs first</option> : null}
-            {parsedGame2.songs.map((song) => {
-              const value = makeSongSelectionValue(song);
-              return (
-                <option key={value} value={value}>
-                  {songLabel(song)}
-                </option>
-              );
-            })}
-          </select>
-        </div>
-
-        <button type="submit" className="primary-btn" disabled={!canSubmit || busy}>
-          <span>
-            {spotifyConnecting
-              ? "Connecting Spotify..."
-              : spotifyCreating
-                ? "Creating Spotify playlists..."
-                : busy
-                  ? "Generating event pack..."
-                  : "Generate Event Pack + Create 2 Spotify Playlists"}
-          </span>
-        </button>
-
-        <div className="small" style={{ textAlign: "center", marginTop: 16 }}>
-          Output download includes: Game 1 PDF, Game 2 PDF, and Event Clipboard DOCX.
-        </div>
-        <div className="small" style={{ textAlign: "center", marginTop: 8 }}>
-          Menu QR is always included. Event QR codes require `MANAGEMENT_API_BASE_URL` + `MANAGEMENT_API_TOKEN` on the server.
-        </div>
-        {qrNotice ? (
-          <div className="small" style={{ textAlign: "center", marginTop: 8 }}>
-            {qrNotice}
-          </div>
-        ) : null}
-        {error ? <div className="error-message">{error}</div> : null}
-      </form>
-
-      <div className="card helper-card">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 16 }}>
-          <div style={{ flex: 1, minWidth: 280 }}>
-            <h2>Spotify</h2>
-            <p style={{ color: "var(--text-secondary)", marginBottom: 16 }}>
-              Connect Spotify once, then use the main button above to create one private playlist for each game.
-            </p>
-            <div className="small" style={{ marginTop: 8 }}>
-              Add this exact Redirect URI in your Spotify app settings:
-              <div className="mono" style={{ display: "inline-block", marginLeft: 8 }}>{spotifyCallbackUrl || "/api/spotify/callback"}</div>
-            </div>
-            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
-              {!spotifyConnected ? (
-                <button
-                  type="button"
-                  onClick={() => connectSpotify()}
-                  className="primary-btn"
-                  disabled={spotifyConnecting}
-                  style={{ width: "auto", marginTop: 0 }}
-                >
-                  {spotifyConnecting ? "Connecting..." : "Connect Spotify"}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={disconnectSpotify}
-                  className="secondary-btn"
-                  disabled={spotifyConnecting || spotifyCreating}
-                  style={{ width: "auto", marginTop: 0 }}
-                >
-                  Disconnect
-                </button>
-              )}
-            </div>
-            {spotifyResult && spotifyResult.length ? (
-              <div className="small" style={{ marginTop: 12 }}>
-                {spotifyResult.map((playlist) => (
-                  <div key={`${playlist.gameNumber}-${playlist.playlistName}`} style={{ marginTop: 10 }}>
-                    Game {playlist.gameNumber} ({playlist.theme}): <strong>{playlist.playlistName}</strong> - added {playlist.addedCount}/{playlist.totalSongs}
-                    {playlist.notFoundCount ? ` (${playlist.notFoundCount} not found)` : ""}
-                    {playlist.playlistUrl ? (
-                      <>
-                        {" "}
-                        -{" "}
-                        <a href={playlist.playlistUrl} target="_blank" rel="noreferrer" style={{ color: "var(--text-accent)" }}>
-                          Open in Spotify
-                        </a>
-                      </>
-                    ) : null}
-                    {playlist.notFoundCount && playlist.notFound.length ? (
-                      <details style={{ marginTop: 8 }}>
-                        <summary style={{ cursor: "pointer" }}>
-                          Show songs not found ({playlist.notFound.length})
-                        </summary>
-                        <div className="mono" style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>
-                          {playlist.notFound.map((s) => `${s.artist} - ${s.title}`).join("\n")}
-                        </div>
-                      </details>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-            ) : null}
-            {livePlaylistByGame ? (
-              <div style={{ marginTop: 18, padding: 14, border: "1px solid var(--border-subtle)", borderRadius: 10 }}>
-                <h3 style={{ margin: "0 0 10px 0", fontSize: "1rem" }}>Live Session</h3>
-                <label style={{ marginBottom: 6 }}>Session Name</label>
-                <input
-                  value={liveSessionName}
-                  onChange={(e) => {
-                    setLiveSessionName(e.target.value);
-                    setLiveSessionNameDirty(true);
-                  }}
-                  placeholder="Music Bingo - Event Date"
-                />
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
-                  <button
-                    type="button"
-                    onClick={() => void saveLiveSession()}
-                    className="primary-btn"
-                    style={{ width: "auto", marginTop: 0 }}
-                  >
-                    Save Live Session
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void exportLiveSession()}
-                    className="secondary-btn"
-                    style={{ width: "auto" }}
-                  >
-                    Export Live Session JSON
-                  </button>
-                  <Link href="/host" className="secondary-btn" style={{ textDecoration: "none", width: "auto" }}>
-                    Open Live Host Console
-                  </Link>
-                </div>
-                {liveSessionNotice ? (
-                  <div className="small" style={{ marginTop: 8 }}>
-                    {liveSessionNotice}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
-          <div style={{ flex: 1, minWidth: 280, background: "rgba(0,0,0,0.2)", padding: 16, borderRadius: 8 }}>
-            <div className="small" style={{ marginTop: 0 }}>
-              Spotify settings checklist:
-              <div className="small" style={{ marginTop: 8 }}>
-                - In Spotify Dashboard - your app - Settings - Redirect URIs, add:
-                <div className="mono" style={{ display: "inline-block", marginLeft: 8 }}>{spotifyCallbackUrl || "/api/spotify/callback"}</div>
-              </div>
-              <div className="small" style={{ marginTop: 8 }}>
-                - In Vercel Environment Variables, set <span className="mono">SPOTIFY_CLIENT_ID</span> and <span className="mono">SPOTIFY_CLIENT_SECRET</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </main>
+        )}
+      </main>
+    </div>
   );
 }

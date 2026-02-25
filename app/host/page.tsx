@@ -1,9 +1,12 @@
 "use client";
 
-import Image from "next/image";
-import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { AppHeader } from "@/components/layout/AppHeader";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { Notice } from "@/components/ui/Notice";
 import {
   deleteLiveSession,
   exportLiveSessionJson,
@@ -42,7 +45,9 @@ export default function HostDashboardPage() {
       try {
         const { migrated } = await migrateLocalSessionsToSupabase();
         if (migrated.length > 0) {
-          setNotice(`Migrated ${migrated.length} session${migrated.length > 1 ? "s" : ""} from local storage to Supabase.`);
+          setNotice(
+            `Migrated ${migrated.length} session${migrated.length > 1 ? "s" : ""} from local storage to Supabase.`
+          );
         }
       } catch {
         // best-effort
@@ -54,7 +59,7 @@ export default function HostDashboardPage() {
       }
     }
     void init();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function onImportFile(file: File) {
@@ -74,7 +79,10 @@ export default function HostDashboardPage() {
     try {
       setError("");
       const json = exportLiveSessionJson(session);
-      downloadJson(json, `music-bingo-live-session-${sanitizeFilenamePart(session.name, "session")}.json`);
+      downloadJson(
+        json,
+        `music-bingo-live-session-${sanitizeFilenamePart(session.name, "session")}.json`
+      );
       setNotice(`Exported session: ${session.name}`);
     } catch (err: any) {
       setNotice("");
@@ -96,96 +104,95 @@ export default function HostDashboardPage() {
   }
 
   return (
-    <div className="music-live-shell">
-      <header className="music-live-header">
-        <div className="music-live-header-left">
-          <Image
-            src="/the-anchor-pub-logo-white-transparent.png"
-            alt="The Anchor"
-            className="music-live-logo"
-            width={160}
-            height={50}
-            priority
-          />
-          <div>
-            <h1 className="music-live-title">Music Bingo Host</h1>
-            <p className="music-live-subtitle">Live session dashboard</p>
-          </div>
-        </div>
-        <div className="music-live-header-actions">
-          <label className="music-live-secondary-btn" style={{ cursor: "pointer" }}>
-            Import Session JSON
-            <input
-              type="file"
-              accept="application/json,.json"
-              style={{ display: "none" }}
-              onChange={(e) => {
-                const file = e.currentTarget.files?.[0];
-                if (!file) return;
-                void onImportFile(file);
-                e.currentTarget.value = "";
-              }}
-            />
-          </label>
-          <Link href="/" className="music-live-secondary-btn">
-            Back to Prep
-          </Link>
-        </div>
-      </header>
+    <div className="min-h-screen bg-slate-50">
+      <AppHeader
+        title="Music Bingo Host"
+        subtitle="Live session dashboard"
+        variant="light"
+        actions={
+          <>
+            <label className="cursor-pointer">
+              <span className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-800 px-4 py-2.5 text-sm font-semibold tracking-wide transition-colors cursor-pointer">
+                Import Session JSON
+              </span>
+              <input
+                type="file"
+                accept="application/json,.json"
+                className="sr-only"
+                onChange={(e) => {
+                  const file = e.currentTarget.files?.[0];
+                  if (!file) return;
+                  void onImportFile(file);
+                  e.currentTarget.value = "";
+                }}
+              />
+            </label>
+            <Button as="link" href="/" variant="secondary" size="sm">
+              Back to Prep
+            </Button>
+          </>
+        }
+      />
 
-      <section className="music-live-content">
-        {notice ? <div className="music-live-notice">{notice}</div> : null}
-        {error ? <div className="music-live-error">{error}</div> : null}
+      <main className="max-w-5xl mx-auto px-4 py-8 space-y-4">
+        {notice ? <Notice variant="success">{notice}</Notice> : null}
+        {error ? <Notice variant="error">{error}</Notice> : null}
 
         {loading ? (
-          <div className="music-live-card music-live-empty-state">
-            <p className="music-live-muted">Loading sessions...</p>
-          </div>
+          <Card>
+            <p className="text-slate-500 text-sm">Loading sessions...</p>
+          </Card>
         ) : !sessions.length ? (
-          <div className="music-live-card music-live-empty-state">
-            <h2 className="music-live-card-title">No saved live sessions</h2>
-            <p className="music-live-muted">
+          <Card>
+            <h2 className="text-lg font-bold text-slate-800 mb-2">No saved live sessions</h2>
+            <p className="text-slate-500 text-sm mb-4">
               Generate playlists on the prep screen, then click &quot;Save Live Session&quot;.
             </p>
-            <div style={{ marginTop: 12 }}>
-              <Link href="/" className="music-live-primary-btn">
-                Open Prep Screen
-              </Link>
-            </div>
-          </div>
+            <Button as="link" href="/" variant="primary">
+              Open Prep Screen
+            </Button>
+          </Card>
         ) : (
-          <div className="music-live-grid">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {sessions.map((session) => (
-              <article key={session.id} className="music-live-card">
-                <h2 className="music-live-card-title">{session.name}</h2>
-                <p className="music-live-muted">Event Date: {session.eventDateDisplay}</p>
-                <p className="music-live-muted">Created: {new Date(session.createdAt).toLocaleString()}</p>
-                <div className="music-live-tag-row">
+              <Card as="article" key={session.id}>
+                <h2 className="text-base font-bold text-slate-800 mb-1">{session.name}</h2>
+                <p className="text-xs text-slate-500 mb-0.5">
+                  Event Date: {session.eventDateDisplay}
+                </p>
+                <p className="text-xs text-slate-500 mb-3">
+                  Created: {new Date(session.createdAt).toLocaleString()}
+                </p>
+                <div className="flex flex-wrap gap-2 mb-4">
                   {session.games
                     .slice()
                     .sort((a, b) => a.gameNumber - b.gameNumber)
                     .map((game) => (
-                      <span key={game.gameNumber} className="music-live-tag">
+                      <Badge key={game.gameNumber}>
                         Game {game.gameNumber}: {game.theme}
-                      </span>
+                      </Badge>
                     ))}
                 </div>
-                <div className="music-live-row-actions">
-                  <Link href={`/host/${session.id}`} className="music-live-primary-btn">
+                <div className="flex flex-wrap gap-2">
+                  <Button as="link" href={`/host/${session.id}`} variant="primary" size="sm">
                     Open Host Controller
-                  </Link>
-                  <button type="button" className="music-live-secondary-btn" onClick={() => onExport(session)}>
+                  </Button>
+                  <Button variant="secondary" size="sm" onClick={() => onExport(session)}>
                     Export
-                  </button>
-                  <button type="button" className="music-live-danger-btn" onClick={() => void onDelete(session)}>
+                  </Button>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={() => void onDelete(session)}
+                  >
                     Delete
-                  </button>
+                  </Button>
                 </div>
-              </article>
+              </Card>
             ))}
           </div>
         )}
-      </section>
+      </main>
     </div>
   );
 }

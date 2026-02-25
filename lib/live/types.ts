@@ -17,6 +17,14 @@ export const DEFAULT_REVEAL_CONFIG: RevealConfig = {
   nextMs: 30_000,
 };
 
+/** Challenge songs play for 60 seconds instead of 30. */
+export const CHALLENGE_REVEAL_CONFIG: RevealConfig = {
+  albumMs: 10_000,
+  titleMs: 20_000,
+  artistMs: 25_000,
+  nextMs: 60_000,
+};
+
 export type LiveGameConfig = {
   gameNumber: 1 | 2;
   theme: string;
@@ -25,6 +33,10 @@ export type LiveGameConfig = {
   playlistUrl: string | null;
   totalSongs: number;
   addedCount: number;
+  /** Artist of the challenge song for this game (user-entered, may be "" for legacy sessions). */
+  challengeSongArtist: string;
+  /** Title of the challenge song for this game (user-entered, may be "" for legacy sessions). */
+  challengeSongTitle: string;
 };
 
 export type LiveSessionV1 = {

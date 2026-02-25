@@ -30,6 +30,8 @@ function makeValidSession(): LiveSessionV1 {
         playlistUrl: "https://open.spotify.com/playlist/pl-game-1",
         totalSongs: 50,
         addedCount: 48,
+        challengeSongArtist: "Elvis Presley",
+        challengeSongTitle: "Jailhouse Rock",
       },
       {
         gameNumber: 2,
@@ -39,6 +41,8 @@ function makeValidSession(): LiveSessionV1 {
         playlistUrl: "https://open.spotify.com/playlist/pl-game-2",
         totalSongs: 50,
         addedCount: 47,
+        challengeSongArtist: "ABBA",
+        challengeSongTitle: "Dancing Queen",
       },
     ],
   };

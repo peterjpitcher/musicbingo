@@ -1,10 +1,14 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { AppHeader } from "@/components/layout/AppHeader";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { Notice } from "@/components/ui/Notice";
 import { publishLiveMessage } from "@/lib/live/channel";
 import { computeRevealState, shouldTriggerNextForTrack, updateAdvanceTrackMarker } from "@/lib/live/reveal";
 import { getLiveSession } from "@/lib/live/sessionApi";
@@ -18,12 +22,40 @@ import {
   writeRuntimeState,
 } from "@/lib/live/storage";
 import {
+  CHALLENGE_REVEAL_CONFIG,
   LIVE_RUNTIME_VERSION,
   makeEmptyRuntimeState,
+  type LiveGameConfig,
   type LiveRuntimeState,
   type LiveSessionV1,
   type LiveTrackSnapshot,
+  type RevealConfig,
 } from "@/lib/live/types";
+
+/** True if the Spotify track matches the stored challenge song (case-insensitive contains). */
+function matchesChallengeSong(
+  track: { title: string; artist: string } | null,
+  game: LiveGameConfig | null | undefined
+): boolean {
+  if (!track || !game?.challengeSongTitle || !game?.challengeSongArtist) return false;
+  const norm = (s: string) => s.trim().toLowerCase();
+  const t = norm(track.title);
+  const a = norm(track.artist);
+  const ct = norm(game.challengeSongTitle);
+  const ca = norm(game.challengeSongArtist);
+  return (t.includes(ct) || ct.includes(t)) && (a.includes(ca) || ca.includes(a));
+}
+
+function getRevealConfig(
+  session: LiveSessionV1,
+  activeGameNumber: 1 | 2 | null,
+  track: { title: string; artist: string } | null
+): RevealConfig {
+  const game = activeGameNumber
+    ? session.games.find((g) => g.gameNumber === activeGameNumber) ?? null
+    : null;
+  return matchesChallengeSong(track, game) ? CHALLENGE_REVEAL_CONFIG : session.revealConfig;
+}
 
 type LiveStatusResponse = {
   connected?: boolean;
@@ -67,15 +99,24 @@ function normalizeWarnings(input: unknown): string[] {
     .filter((value): value is string => Boolean(value));
 }
 
-function normalizeTrackSnapshot(playback: LiveStatusResponse["playback"]): LiveTrackSnapshot | null {
+function normalizeTrackSnapshot(
+  playback: LiveStatusResponse["playback"]
+): LiveTrackSnapshot | null {
   if (!playback || typeof playback !== "object") return null;
   return {
     trackId: typeof playback.trackId === "string" ? playback.trackId : null,
     title: typeof playback.title === "string" ? playback.title : "",
     artist: typeof playback.artist === "string" ? playback.artist : "",
-    albumImageUrl: typeof playback.albumImageUrl === "string" ? playback.albumImageUrl : null,
-    progressMs: typeof playback.progressMs === "number" && Number.isFinite(playback.progressMs) ? playback.progressMs : 0,
-    durationMs: typeof playback.durationMs === "number" && Number.isFinite(playback.durationMs) ? playback.durationMs : 0,
+    albumImageUrl:
+      typeof playback.albumImageUrl === "string" ? playback.albumImageUrl : null,
+    progressMs:
+      typeof playback.progressMs === "number" && Number.isFinite(playback.progressMs)
+        ? playback.progressMs
+        : 0,
+    durationMs:
+      typeof playback.durationMs === "number" && Number.isFinite(playback.durationMs)
+        ? playback.durationMs
+        : 0,
     isPlaying: Boolean(playback.isPlaying),
   };
 }
@@ -92,7 +133,9 @@ export default function HostSessionControllerPage() {
   const pollAbortRef = useRef<AbortController | null>(null);
 
   const [session, setSession] = useState<LiveSessionV1 | null>(null);
-  const [runtime, setRuntime] = useState<LiveRuntimeState>(makeEmptyRuntimeState(sessionId || "pending"));
+  const [runtime, setRuntime] = useState<LiveRuntimeState>(
+    makeEmptyRuntimeState(sessionId || "pending")
+  );
   const [notice, setNotice] = useState<string>("");
   const [error, setError] = useState<string>("");
   const [isController, setIsController] = useState<boolean>(false);
@@ -103,71 +146,85 @@ export default function HostSessionControllerPage() {
     runtimeRef.current = runtime;
   }, [runtime]);
 
-  const persistAndBroadcastRuntime = useCallback((next: LiveRuntimeState) => {
-    if (!sessionId) return;
-    writeRuntimeState(sessionId, next);
-    publishLiveMessage(sessionId, { type: "runtime_update", runtime: next });
-  }, [sessionId]);
+  const persistAndBroadcastRuntime = useCallback(
+    (next: LiveRuntimeState) => {
+      if (!sessionId) return;
+      writeRuntimeState(sessionId, next);
+      publishLiveMessage(sessionId, { type: "runtime_update", runtime: next });
+    },
+    [sessionId]
+  );
 
-  const commitRuntime = useCallback((updater: LiveRuntimeState | ((prev: LiveRuntimeState) => LiveRuntimeState)) => {
-    if (!sessionId) return;
-
-    setRuntime((prev) => {
-      const computed = typeof updater === "function" ? updater(prev) : updater;
-      const next: LiveRuntimeState = {
-        ...computed,
-        version: LIVE_RUNTIME_VERSION,
-        sessionId,
-        updatedAtMs: Date.now(),
-      };
-      persistAndBroadcastRuntime(next);
-      return next;
-    });
-  }, [persistAndBroadcastRuntime, sessionId]);
-
-  const applyStatusSnapshot = useCallback((payload: LiveStatusResponse, opts?: { mode?: LiveRuntimeState["mode"] }) => {
-    if (!session) return;
-
-    const warnings = normalizeWarnings(payload.warnings);
-    const track = normalizeTrackSnapshot(payload.playback);
-    const revealState = computeRevealState(track?.progressMs ?? 0, session.revealConfig);
-
-    commitRuntime((prev) => {
-      const marker = updateAdvanceTrackMarker({
-        trackId: track?.trackId ?? null,
-        advanceTriggeredForTrackId: prev.advanceTriggeredForTrackId,
+  const commitRuntime = useCallback(
+    (updater: LiveRuntimeState | ((prev: LiveRuntimeState) => LiveRuntimeState)) => {
+      if (!sessionId) return;
+      setRuntime((prev) => {
+        const computed = typeof updater === "function" ? updater(prev) : updater;
+        const next: LiveRuntimeState = {
+          ...computed,
+          version: LIVE_RUNTIME_VERSION,
+          sessionId,
+          updatedAtMs: Date.now(),
+        };
+        persistAndBroadcastRuntime(next);
+        return next;
       });
+    },
+    [persistAndBroadcastRuntime, sessionId]
+  );
 
-      return {
-        ...prev,
-        mode: opts?.mode ?? prev.mode,
-        spotifyControlAvailable: Boolean(payload.canControlPlayback),
-        currentTrack: track,
-        revealState,
-        advanceTriggeredForTrackId: marker,
-        warningMessage: warnings[0] ?? (payload.error?.message ?? null),
-      };
-    });
-  }, [commitRuntime, session]);
+  const applyStatusSnapshot = useCallback(
+    (
+      payload: LiveStatusResponse,
+      opts?: { mode?: LiveRuntimeState["mode"] }
+    ) => {
+      if (!session) return;
+      const warnings = normalizeWarnings(payload.warnings);
+      const track = normalizeTrackSnapshot(payload.playback);
+      commitRuntime((prev) => {
+        const cfg = getRevealConfig(session, prev.activeGameNumber, track);
+        const revealState = computeRevealState(track?.progressMs ?? 0, cfg);
+        const marker = updateAdvanceTrackMarker({
+          trackId: track?.trackId ?? null,
+          advanceTriggeredForTrackId: prev.advanceTriggeredForTrackId,
+        });
+        return {
+          ...prev,
+          mode: opts?.mode ?? prev.mode,
+          spotifyControlAvailable: Boolean(payload.canControlPlayback),
+          currentTrack: track,
+          revealState,
+          advanceTriggeredForTrackId: marker,
+          warningMessage: warnings[0] ?? (payload.error?.message ?? null),
+        };
+      });
+    },
+    [commitRuntime, session]
+  );
 
-  const acquireLock = useCallback((force = false) => {
-    if (!sessionId) return false;
-    const attempt = acquireControlLock({
-      sessionId,
-      tabId: tabIdRef.current,
-      force,
-    });
-
-    setIsController(attempt.acquired);
-    if (!attempt.acquired && attempt.lock) {
-      const stale = isControlLockStale(attempt.lock);
-      setLockOwnerLabel(stale ? "Another tab may have stale control." : "Another host tab controls this session.");
-    } else {
-      setLockOwnerLabel("");
-    }
-
-    return attempt.acquired;
-  }, [sessionId]);
+  const acquireLock = useCallback(
+    (force = false) => {
+      if (!sessionId) return false;
+      const attempt = acquireControlLock({
+        sessionId,
+        tabId: tabIdRef.current,
+        force,
+      });
+      setIsController(attempt.acquired);
+      if (!attempt.acquired && attempt.lock) {
+        const stale = isControlLockStale(attempt.lock);
+        setLockOwnerLabel(
+          stale
+            ? "Another tab may have stale control."
+            : "Another host tab controls this session."
+        );
+      } else {
+        setLockOwnerLabel("");
+      }
+      return attempt.acquired;
+    },
+    [sessionId]
+  );
 
   useEffect(() => {
     const tabId = tabIdRef.current;
@@ -175,31 +232,28 @@ export default function HostSessionControllerPage() {
       setError("Invalid session id.");
       return;
     }
-
     let cancelled = false;
     (async () => {
       try {
         const loaded = await getLiveSession(sessionId);
         if (cancelled) return;
         if (!loaded) {
-          setError("Live session not found. Open /host and create/import a session first.");
+          setError(
+            "Live session not found. Open /host and create/import a session first."
+          );
           return;
         }
-
         setSession(loaded);
         setError("");
-
         const persistedRuntime = readRuntimeState(sessionId);
         const initial = persistedRuntime ?? makeEmptyRuntimeState(sessionId);
         setRuntime(initial);
         runtimeRef.current = initial;
-
         acquireLock(false);
       } catch (err: any) {
         if (!cancelled) setError(err?.message ?? "Failed to load session.");
       }
     })();
-
     return () => {
       cancelled = true;
       releaseControlLock(sessionId, tabId);
@@ -209,7 +263,6 @@ export default function HostSessionControllerPage() {
   useEffect(() => {
     if (!sessionId) return;
     const tabId = tabIdRef.current;
-
     const interval = window.setInterval(() => {
       if (isController) {
         updateControlHeartbeat(sessionId, tabId);
@@ -227,48 +280,47 @@ export default function HostSessionControllerPage() {
         }
       }
     }, 10_000);
-
-    return () => {
-      window.clearInterval(interval);
-    };
+    return () => window.clearInterval(interval);
   }, [isController, sessionId]);
 
   const pollStatus = useCallback(async () => {
     if (!session) return;
-
     pollAbortRef.current?.abort();
     const controller = new AbortController();
     pollAbortRef.current = controller;
-
     try {
-      const res = await fetch("/api/spotify/live/status", { cache: "no-store", signal: controller.signal });
+      const res = await fetch("/api/spotify/live/status", {
+        cache: "no-store",
+        signal: controller.signal,
+      });
       if (res.status === 401) {
         commitRuntime((prev) => ({
           ...prev,
           spotifyControlAvailable: false,
-          warningMessage: "Spotify is disconnected. Reconnect Spotify on the prep page.",
+          warningMessage:
+            "Spotify is disconnected. Reconnect Spotify on the prep page.",
         }));
         return;
       }
-
       if (!res.ok) {
-        const msg = await res.text().catch(() => "Failed to fetch live Spotify status.");
+        const msg = await res
+          .text()
+          .catch(() => "Failed to fetch live Spotify status.");
         setError(msg || "Failed to fetch live Spotify status.");
         return;
       }
-
       const data = (await res.json()) as LiveStatusResponse;
       applyStatusSnapshot(data);
 
       if (runtimeRef.current.mode !== "running") return;
-
       const track = normalizeTrackSnapshot(data.playback);
-      const revealState = computeRevealState(track?.progressMs ?? 0, session.revealConfig);
+      const cfg = getRevealConfig(session, runtimeRef.current.activeGameNumber, track);
+      const revealState = computeRevealState(track?.progressMs ?? 0, cfg);
 
       if (
-        isController
-        && Boolean(data.canControlPlayback)
-        && shouldTriggerNextForTrack({
+        isController &&
+        Boolean(data.canControlPlayback) &&
+        shouldTriggerNextForTrack({
           trackId: track?.trackId ?? null,
           revealState,
           advanceTriggeredForTrackId: runtimeRef.current.advanceTriggeredForTrackId,
@@ -281,21 +333,23 @@ export default function HostSessionControllerPage() {
             advanceTriggeredForTrackId: trackId,
           }));
         }
-
         const nextRes = await fetch("/api/spotify/live/command", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "next" }),
         });
-
         if (!nextRes.ok) {
-          const nextError = await nextRes.text().catch(() => "Failed to advance to next song.");
+          const nextError = await nextRes
+            .text()
+            .catch(() => "Failed to advance to next song.");
           setError(nextError || "Failed to advance to next song.");
         }
       }
 
       if (!data.canControlPlayback && !runtimeRef.current.warningMessage) {
-        setNotice("Manual host control mode active: control playback in Spotify app while this screen drives reveals.");
+        setNotice(
+          "Manual host control mode active: control playback in Spotify app while this screen drives reveals."
+        );
       }
     } catch (err: any) {
       if ((err as Error)?.name === "AbortError") return;
@@ -305,70 +359,72 @@ export default function HostSessionControllerPage() {
 
   useEffect(() => {
     if (!session) return;
-
     void pollStatus();
-    const id = window.setInterval(() => {
-      void pollStatus();
-    }, 1_000);
-
+    const id = window.setInterval(() => void pollStatus(), 1_000);
     return () => {
       window.clearInterval(id);
       pollAbortRef.current?.abort();
     };
   }, [pollStatus, session]);
 
-  const sendCommand = useCallback(async (
-    action: "play_game" | "pause" | "resume" | "next" | "previous" | "seek",
-    payload?: Record<string, unknown>,
-    opts?: { modeOnSuccess?: LiveRuntimeState["mode"] }
-  ): Promise<boolean> => {
-    setCommandBusy(true);
-    setError("");
-    try {
-      const res = await fetch("/api/spotify/live/command", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, ...(payload ?? {}) }),
-      });
-
-      if (res.status === 401) {
-        commitRuntime((prev) => ({
-          ...prev,
-          spotifyControlAvailable: false,
-          warningMessage: "Spotify is disconnected. Reconnect Spotify on the prep page.",
-        }));
+  const sendCommand = useCallback(
+    async (
+      action: "play_game" | "pause" | "resume" | "next" | "previous" | "seek",
+      payload?: Record<string, unknown>,
+      opts?: { modeOnSuccess?: LiveRuntimeState["mode"] }
+    ): Promise<boolean> => {
+      setCommandBusy(true);
+      setError("");
+      try {
+        const res = await fetch("/api/spotify/live/command", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action, ...(payload ?? {}) }),
+        });
+        if (res.status === 401) {
+          commitRuntime((prev) => ({
+            ...prev,
+            spotifyControlAvailable: false,
+            warningMessage:
+              "Spotify is disconnected. Reconnect Spotify on the prep page.",
+          }));
+          return false;
+        }
+        const data = (await res.json().catch(() => null)) as LiveCommandResponse | null;
+        if (!res.ok || !data) {
+          const msg =
+            typeof data?.error?.message === "string"
+              ? data.error.message
+              : "Live command failed.";
+          setError(msg);
+          if (data) applyStatusSnapshot(data);
+          return false;
+        }
+        applyStatusSnapshot(data, { mode: opts?.modeOnSuccess });
+        return data.ok !== false;
+      } catch (err: any) {
+        setError(err?.message ?? "Live command failed.");
         return false;
+      } finally {
+        setCommandBusy(false);
       }
-
-      const data = (await res.json().catch(() => null)) as LiveCommandResponse | null;
-      if (!res.ok || !data) {
-        const msg = typeof data?.error?.message === "string" ? data.error.message : "Live command failed.";
-        setError(msg);
-        if (data) applyStatusSnapshot(data);
-        return false;
-      }
-
-      applyStatusSnapshot(data, { mode: opts?.modeOnSuccess });
-      return data.ok !== false;
-    } catch (err: any) {
-      setError(err?.message ?? "Live command failed.");
-      return false;
-    } finally {
-      setCommandBusy(false);
-    }
-  }, [applyStatusSnapshot, commitRuntime]);
+    },
+    [applyStatusSnapshot, commitRuntime]
+  );
 
   async function startGame(gameNumber: 1 | 2) {
     if (!session || !isController) return;
-
     const game = session.games.find((item) => item.gameNumber === gameNumber);
     if (!game) {
       setError(`Game ${gameNumber} playlist not found in this session.`);
       return;
     }
-
     setNotice("");
-    const ok = await sendCommand("play_game", { playlistId: game.playlistId }, { modeOnSuccess: "running" });
+    const ok = await sendCommand(
+      "play_game",
+      { playlistId: game.playlistId },
+      { modeOnSuccess: "running" }
+    );
     if (ok) {
       commitRuntime((prev) => ({
         ...prev,
@@ -385,7 +441,9 @@ export default function HostSessionControllerPage() {
         spotifyControlAvailable: false,
         warningMessage: prev.warningMessage || "Manual host control mode active.",
       }));
-      setNotice("Spotify control unavailable. Continue in manual host control mode.");
+      setNotice(
+        "Spotify control unavailable. Continue in manual host control mode."
+      );
     }
   }
 
@@ -396,159 +454,251 @@ export default function HostSessionControllerPage() {
 
   if (error && !session) {
     return (
-      <div className="music-live-shell">
-        <section className="music-live-content">
-          <div className="music-live-card">
-            <h1 className="music-live-card-title">Live Host Controller</h1>
-            <p className="music-live-error">{error}</p>
-            <div className="music-live-row-actions">
-              <Link href="/host" className="music-live-primary-btn">Back to Host Dashboard</Link>
-            </div>
-          </div>
-        </section>
+      <div className="min-h-screen bg-slate-50">
+        <AppHeader title="Live Host Controller" variant="light" />
+        <main className="max-w-2xl mx-auto px-4 py-8">
+          <Card>
+            <Notice variant="error" className="mb-4">{error}</Notice>
+            <Button as="link" href="/host" variant="secondary">
+              Back to Host Dashboard
+            </Button>
+          </Card>
+        </main>
       </div>
     );
   }
 
   const activeGameTheme = runtime.activeGameNumber
-    ? session?.games.find((game) => game.gameNumber === runtime.activeGameNumber)?.theme ?? ""
+    ? session?.games.find((g) => g.gameNumber === runtime.activeGameNumber)?.theme ?? ""
     : "";
 
+  const activeGame = runtime.activeGameNumber
+    ? session?.games.find((g) => g.gameNumber === runtime.activeGameNumber) ?? null
+    : null;
+
+  const isChallenge = matchesChallengeSong(runtime.currentTrack, activeGame);
+
   return (
-    <div className="music-live-shell">
-      <header className="music-live-header">
-        <div className="music-live-header-left">
-          <Image
-            src="/the-anchor-pub-logo-white-transparent.png"
-            alt="The Anchor"
-            className="music-live-logo"
-            width={160}
-            height={50}
-            priority
-          />
-          <div>
-            <h1 className="music-live-title">{session?.name ?? "Live Host"}</h1>
-            <p className="music-live-subtitle">Host Controller</p>
-          </div>
-        </div>
-        <div className="music-live-header-actions">
-          <button type="button" className="music-live-secondary-btn" onClick={openGuestDisplay}>
-            Open Guest Screen
-          </button>
-          <Link href="/host" className="music-live-secondary-btn">Back to Sessions</Link>
-        </div>
-      </header>
+    <div className="min-h-screen bg-slate-50">
+      <AppHeader
+        title={session?.name ?? "Live Host"}
+        subtitle="Host Controller"
+        variant="light"
+        actions={
+          <>
+            <Button variant="secondary" size="sm" onClick={openGuestDisplay}>
+              Open Guest Screen
+            </Button>
+            <Button as="link" href="/host" variant="secondary" size="sm">
+              Back to Sessions
+            </Button>
+          </>
+        }
+      />
 
-      <section className="music-live-content">
-        {notice ? <div className="music-live-notice">{notice}</div> : null}
-        {error ? <div className="music-live-error">{error}</div> : null}
-        {runtime.warningMessage ? <div className="music-live-warning">{runtime.warningMessage}</div> : null}
-
-        {!isController ? (
-          <div className="music-live-card" style={{ marginBottom: 16 }}>
-            <h2 className="music-live-card-title">Read-only mode</h2>
-            <p className="music-live-muted">{lockOwnerLabel || "Another host tab may be in control."}</p>
-            <div className="music-live-row-actions">
-              <button
-                type="button"
-                className="music-live-primary-btn"
-                onClick={() => {
-                  const ok = acquireLock(true);
-                  if (!ok) {
-                    setError("Unable to take control right now.");
-                    return;
-                  }
-                  setNotice("Controller lock transferred to this tab.");
-                }}
-              >
-                Take Control
-              </button>
-            </div>
-          </div>
+      <main className="max-w-5xl mx-auto px-4 py-6 space-y-4">
+        {notice ? <Notice variant="success">{notice}</Notice> : null}
+        {error ? <Notice variant="error">{error}</Notice> : null}
+        {runtime.warningMessage ? (
+          <Notice variant="warning">{runtime.warningMessage}</Notice>
         ) : null}
 
-        <div className="music-live-grid">
-          <article className="music-live-card">
-            <h2 className="music-live-card-title">Game Control</h2>
-            <p className="music-live-muted">Mode: <strong>{runtime.mode.toUpperCase()}</strong></p>
-            <p className="music-live-muted">Active game: {runtime.activeGameNumber ? `Game ${runtime.activeGameNumber} (${activeGameTheme})` : "None"}</p>
-            <div className="music-live-row-actions">
-              <button type="button" className="music-live-primary-btn" disabled={!isController || commandBusy} onClick={() => void startGame(1)}>
-                Start Game 1
-              </button>
-              <button type="button" className="music-live-primary-btn" disabled={!isController || commandBusy} onClick={() => void startGame(2)}>
-                Start Game 2
-              </button>
-            </div>
-            <div className="music-live-row-actions">
-              <button
-                type="button"
-                className="music-live-secondary-btn"
+        {!isController ? (
+          <Card className="border-amber-300 bg-amber-50">
+            <h2 className="text-base font-bold text-amber-800 mb-1">Read-only mode</h2>
+            <p className="text-sm text-amber-700 mb-3">
+              {lockOwnerLabel || "Another host tab may be in control."}
+            </p>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => {
+                const ok = acquireLock(true);
+                if (!ok) {
+                  setError("Unable to take control right now.");
+                  return;
+                }
+                setNotice("Controller lock transferred to this tab.");
+              }}
+            >
+              Take Control
+            </Button>
+          </Card>
+        ) : null}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Card as="article">
+            <h2 className="text-base font-bold text-slate-800 mb-3 uppercase tracking-wide">
+              Game Control
+            </h2>
+            <p className="text-sm text-slate-500 mb-1">
+              Mode: <strong className="text-slate-700">{runtime.mode.toUpperCase()}</strong>
+            </p>
+            <p className="text-sm text-slate-500 mb-4">
+              Active game:{" "}
+              {runtime.activeGameNumber
+                ? `Game ${runtime.activeGameNumber}${activeGameTheme ? ` (${activeGameTheme})` : ""}`
+                : "None"}
+            </p>
+
+            <div className="flex flex-wrap gap-2.5 mb-3">
+              <Button
+                variant="primary"
+                size="sm"
                 disabled={!isController || commandBusy}
-                onClick={() => void sendCommand(runtime.currentTrack?.isPlaying ? "pause" : "resume", undefined, {
-                  modeOnSuccess: runtime.currentTrack?.isPlaying ? "paused" : "running",
-                })}
+                onClick={() => void startGame(1)}
+              >
+                Start Game 1
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                disabled={!isController || commandBusy}
+                onClick={() => void startGame(2)}
+              >
+                Start Game 2
+              </Button>
+            </div>
+
+            <div className="flex flex-wrap gap-2.5 mb-3">
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={!isController || commandBusy}
+                onClick={() =>
+                  void sendCommand(
+                    runtime.currentTrack?.isPlaying ? "pause" : "resume",
+                    undefined,
+                    {
+                      modeOnSuccess: runtime.currentTrack?.isPlaying
+                        ? "paused"
+                        : "running",
+                    }
+                  )
+                }
               >
                 {runtime.currentTrack?.isPlaying ? "Pause" : "Resume"}
-              </button>
-              <button type="button" className="music-live-secondary-btn" disabled={!isController || commandBusy} onClick={() => void sendCommand("previous")}>
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={!isController || commandBusy}
+                onClick={() => void sendCommand("previous")}
+              >
                 Previous
-              </button>
-              <button type="button" className="music-live-secondary-btn" disabled={!isController || commandBusy} onClick={() => void sendCommand("next")}>
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={!isController || commandBusy}
+                onClick={() => void sendCommand("next")}
+              >
                 Next
-              </button>
-              <button type="button" className="music-live-secondary-btn" disabled={commandBusy} onClick={() => void pollStatus()}>
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={commandBusy}
+                onClick={() => void pollStatus()}
+              >
                 Resync State
-              </button>
+              </Button>
             </div>
-            <div className="music-live-row-actions">
-              <button
-                type="button"
-                className="music-live-secondary-btn"
-                onClick={() => commitRuntime((prev) => ({ ...prev, mode: "break" }))}
+
+            <div className="flex flex-wrap gap-2.5">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() =>
+                  commitRuntime((prev) => ({ ...prev, mode: "break" }))
+                }
               >
                 Show Break Screen
-              </button>
-              <button
-                type="button"
-                className="music-live-secondary-btn"
-                onClick={() => commitRuntime((prev) => ({ ...prev, mode: "running" }))}
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() =>
+                  commitRuntime((prev) => ({ ...prev, mode: "running" }))
+                }
               >
                 Resume Display
-              </button>
-              <button
-                type="button"
-                className="music-live-danger-btn"
-                onClick={() => commitRuntime((prev) => ({ ...prev, mode: "ended" }))}
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() =>
+                  commitRuntime((prev) => ({ ...prev, mode: "ended" }))
+                }
               >
-                End Session Screen
-              </button>
+                End Session
+              </Button>
             </div>
-          </article>
+          </Card>
 
-          <article className="music-live-card">
-            <h2 className="music-live-card-title">Track + Reveal</h2>
-            <p className="music-live-muted">
-              Spotify API control: {runtime.spotifyControlAvailable ? "Available" : "Manual host control mode"}
+          <Card as="article">
+            <h2 className="text-base font-bold text-slate-800 mb-3 uppercase tracking-wide">
+              Track + Reveal
+            </h2>
+            <p className="text-sm text-slate-500 mb-1">
+              Spotify API:{" "}
+              <strong className="text-slate-700">
+                {runtime.spotifyControlAvailable
+                  ? "Available"
+                  : "Manual host control mode"}
+              </strong>
             </p>
-            <p className="music-live-muted">
-              Current track: {runtime.currentTrack?.title ? `${runtime.currentTrack.title} - ${runtime.currentTrack.artist}` : "No track detected"}
+            <p className="text-sm text-slate-500 mb-1">
+              Current track:{" "}
+              <strong className="text-slate-700">
+                {runtime.currentTrack?.title
+                  ? `${runtime.currentTrack.title} — ${runtime.currentTrack.artist}`
+                  : "No track detected"}
+              </strong>
+              {isChallenge && (
+                <span className="ml-2 inline-flex items-center rounded-full bg-amber-100 border border-brand-gold px-2 py-0.5 text-xs font-bold text-amber-800">
+                  CHALLENGE SONG — 60s
+                </span>
+              )}
             </p>
-            <p className="music-live-muted">
-              Progress: {Math.floor((runtime.currentTrack?.progressMs ?? 0) / 1000)}s
+            <p className="text-sm text-slate-500 mb-4">
+              Progress:{" "}
+              <strong className="text-slate-700">
+                {Math.floor((runtime.currentTrack?.progressMs ?? 0) / 1000)}s
+              </strong>
             </p>
-            <div className="music-live-tag-row">
-              <span className={`music-live-tag ${runtime.revealState.showAlbum ? "music-live-tag-active" : ""}`}>Album @10s</span>
-              <span className={`music-live-tag ${runtime.revealState.showTitle ? "music-live-tag-active" : ""}`}>Title @20s</span>
-              <span className={`music-live-tag ${runtime.revealState.showArtist ? "music-live-tag-active" : ""}`}>Artist @25s</span>
-              <span className={`music-live-tag ${runtime.revealState.shouldAdvance ? "music-live-tag-active" : ""}`}>Next @30s</span>
+            <div className="flex flex-wrap gap-2 mb-4">
+              <Badge active={runtime.revealState.showAlbum}>Album @10s</Badge>
+              <Badge active={runtime.revealState.showTitle}>Title @20s</Badge>
+              <Badge active={runtime.revealState.showArtist}>Artist @25s</Badge>
+              <Badge active={runtime.revealState.shouldAdvance}>
+                {isChallenge ? "Next @60s" : "Next @30s"}
+              </Badge>
             </div>
-            <p className="music-live-muted" style={{ marginTop: 12 }}>
-              Guest screen: <code>/guest/{sessionId}</code>
+            {activeGame?.challengeSongTitle ? (
+              <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 mb-3">
+                <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-0.5">
+                  Challenge Song — Game {activeGame.gameNumber}
+                </p>
+                <p className="text-sm font-semibold text-amber-900">
+                  {activeGame.challengeSongArtist} — {activeGame.challengeSongTitle}
+                </p>
+                <p className="text-xs text-amber-600 mt-0.5">Plays for 60s instead of 30s</p>
+              </div>
+            ) : null}
+            <p className="text-xs text-slate-400">
+              Guest screen:{" "}
+              <Link
+                href={`/guest/${sessionId}`}
+                target="_blank"
+                className="underline underline-offset-2"
+              >
+                /guest/{sessionId}
+              </Link>
             </p>
-          </article>
+          </Card>
         </div>
-      </section>
+      </main>
     </div>
   );
 }

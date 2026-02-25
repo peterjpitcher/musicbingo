@@ -66,6 +66,8 @@ function validateGameConfig(input: unknown): LiveGameConfig | null {
     playlistUrl,
     totalSongs,
     addedCount,
+    challengeSongArtist: asString(input.challengeSongArtist) ?? "",
+    challengeSongTitle: asString(input.challengeSongTitle) ?? "",
   };
 }
 
