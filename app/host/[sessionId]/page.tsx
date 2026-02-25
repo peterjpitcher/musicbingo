@@ -7,9 +7,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { publishLiveMessage } from "@/lib/live/channel";
 import { computeRevealState, shouldTriggerNextForTrack, updateAdvanceTrackMarker } from "@/lib/live/reveal";
+import { getLiveSession } from "@/lib/live/sessionApi";
 import {
   acquireControlLock,
-  getLiveSession,
   isControlLockStale,
   readControlLock,
   readRuntimeState,
@@ -176,23 +176,32 @@ export default function HostSessionControllerPage() {
       return;
     }
 
-    const loaded = getLiveSession(sessionId);
-    if (!loaded) {
-      setError("Live session not found. Open /host and create/import a session first.");
-      return;
-    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const loaded = await getLiveSession(sessionId);
+        if (cancelled) return;
+        if (!loaded) {
+          setError("Live session not found. Open /host and create/import a session first.");
+          return;
+        }
 
-    setSession(loaded);
-    setError("");
+        setSession(loaded);
+        setError("");
 
-    const persistedRuntime = readRuntimeState(sessionId);
-    const initial = persistedRuntime ?? makeEmptyRuntimeState(sessionId);
-    setRuntime(initial);
-    runtimeRef.current = initial;
+        const persistedRuntime = readRuntimeState(sessionId);
+        const initial = persistedRuntime ?? makeEmptyRuntimeState(sessionId);
+        setRuntime(initial);
+        runtimeRef.current = initial;
 
-    acquireLock(false);
+        acquireLock(false);
+      } catch (err: any) {
+        if (!cancelled) setError(err?.message ?? "Failed to load session.");
+      }
+    })();
 
     return () => {
+      cancelled = true;
       releaseControlLock(sessionId, tabId);
     };
   }, [acquireLock, sessionId]);

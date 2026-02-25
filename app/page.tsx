@@ -9,7 +9,7 @@ import {
   MAX_SONGS_PER_GAME,
   makeSongSelectionValue,
 } from "@/lib/gameInput";
-import { exportLiveSessionJson, upsertLiveSession } from "@/lib/live/storage";
+import { exportLiveSessionJson, upsertLiveSession } from "@/lib/live/sessionApi";
 import {
   DEFAULT_REVEAL_CONFIG,
   LIVE_SESSION_VERSION,
@@ -207,10 +207,10 @@ export default function HomePage() {
     };
   }
 
-  function saveLiveSession() {
+  async function saveLiveSession() {
     try {
       const session = buildLiveSessionPayload();
-      upsertLiveSession(session);
+      await upsertLiveSession(session);
       setLiveSessionNotice(`Saved live session: ${session.name}`);
       setError("");
     } catch (err: any) {
@@ -219,11 +219,11 @@ export default function HomePage() {
     }
   }
 
-  function exportLiveSession() {
+  async function exportLiveSession() {
     try {
       const session = buildLiveSessionPayload();
-      upsertLiveSession(session);
-      const json = exportLiveSessionJson(session.id);
+      await upsertLiveSession(session);
+      const json = exportLiveSessionJson(session);
       const blob = new Blob([json], { type: "application/json;charset=utf-8" });
       downloadBlob(blob, `music-bingo-live-session-${sanitizeFilenamePart(session.name, "session")}.json`);
       setLiveSessionNotice(`Exported live session: ${session.name}`);
@@ -672,7 +672,7 @@ export default function HomePage() {
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
                   <button
                     type="button"
-                    onClick={saveLiveSession}
+                    onClick={() => void saveLiveSession()}
                     className="primary-btn"
                     style={{ width: "auto", marginTop: 0 }}
                   >
@@ -680,7 +680,7 @@ export default function HomePage() {
                   </button>
                   <button
                     type="button"
-                    onClick={exportLiveSession}
+                    onClick={() => void exportLiveSession()}
                     className="secondary-btn"
                     style={{ width: "auto" }}
                   >

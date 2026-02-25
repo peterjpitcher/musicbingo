@@ -4,10 +4,11 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { subscribeLiveChannel } from "@/lib/live/channel";
-import { getLiveSession, readRuntimeState } from "@/lib/live/storage";
+import { getLiveSession } from "@/lib/live/sessionApi";
+import { readRuntimeState } from "@/lib/live/storage";
 import { makeEmptyRuntimeState, type LiveRuntimeState, type LiveSessionV1 } from "@/lib/live/types";
 
 function formatSeconds(ms: number): string {
@@ -22,19 +23,35 @@ export default function GuestDisplayPage() {
     [params?.sessionId]
   );
 
-  const session: LiveSessionV1 | null = useMemo(
-    () => (sessionId ? getLiveSession(sessionId) : null),
-    [sessionId]
-  );
+  const [session, setSession] = useState<LiveSessionV1 | null>(null);
+  const [sessionLoading, setSessionLoading] = useState<boolean>(true);
+  const sessionLoadedRef = useRef<boolean>(false);
   const error = useMemo(() => {
     if (!sessionId) return "Invalid guest session id.";
-    if (!session) return "Live session not found. The guest display only works in the same browser as the host — it uses browser storage, not a network connection. Open /host on this device and create or import a session first.";
+    if (!sessionLoading && !session) return "Live session not found. Open /host on this device and create or import a session first.";
     return "";
-  }, [session, sessionId]);
+  }, [session, sessionId, sessionLoading]);
   const [runtime, setRuntime] = useState<LiveRuntimeState>(() => {
     if (!sessionId) return makeEmptyRuntimeState("pending");
     return readRuntimeState(sessionId) ?? makeEmptyRuntimeState(sessionId);
   });
+
+  useEffect(() => {
+    if (!sessionId || sessionLoadedRef.current) return;
+    sessionLoadedRef.current = true;
+    let cancelled = false;
+    getLiveSession(sessionId)
+      .then((loaded) => {
+        if (!cancelled) {
+          setSession(loaded);
+          setSessionLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setSessionLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [sessionId]);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -185,7 +202,7 @@ export default function GuestDisplayPage() {
             Active: {runtime.activeGameNumber ? `Game ${runtime.activeGameNumber}${activeGame ? ` - ${activeGame.theme}` : ""}` : "Not started"}
           </p>
           <p className="music-live-footer-line" style={{ opacity: 0.5 }}>
-            Must be open in the same browser as the host
+            Runtime updates via BroadcastChannel (same browser as host)
           </p>
         </div>
         <div style={{ textAlign: "right" }}>

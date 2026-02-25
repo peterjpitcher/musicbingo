@@ -2,14 +2,15 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   deleteLiveSession,
   exportLiveSessionJson,
   importLiveSessionJson,
   listLiveSessions,
-} from "@/lib/live/storage";
+} from "@/lib/live/sessionApi";
+import { migrateLocalSessionsToSupabase } from "@/lib/live/migrateToSupabase";
 import type { LiveSessionV1 } from "@/lib/live/types";
 import { sanitizeFilenamePart } from "@/lib/utils";
 
@@ -26,20 +27,42 @@ function downloadJson(text: string, filename: string): void {
 }
 
 export default function HostDashboardPage() {
-  const [sessions, setSessions] = useState<LiveSessionV1[]>(() => listLiveSessions());
+  const [sessions, setSessions] = useState<LiveSessionV1[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
   const [notice, setNotice] = useState<string>("");
   const [error, setError] = useState<string>("");
 
-  function refreshSessions() {
-    setSessions(listLiveSessions());
+  async function refreshSessions() {
+    const loaded = await listLiveSessions();
+    setSessions(loaded);
   }
+
+  useEffect(() => {
+    async function init() {
+      try {
+        const { migrated } = await migrateLocalSessionsToSupabase();
+        if (migrated.length > 0) {
+          setNotice(`Migrated ${migrated.length} session${migrated.length > 1 ? "s" : ""} from local storage to Supabase.`);
+        }
+      } catch {
+        // best-effort
+      }
+      try {
+        await refreshSessions();
+      } finally {
+        setLoading(false);
+      }
+    }
+    void init();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function onImportFile(file: File) {
     try {
       setError("");
       const text = await file.text();
-      const imported = importLiveSessionJson(text);
-      refreshSessions();
+      const imported = await importLiveSessionJson(text);
+      await refreshSessions();
       setNotice(`Imported session: ${imported.name}`);
     } catch (err: any) {
       setNotice("");
@@ -50,7 +73,7 @@ export default function HostDashboardPage() {
   function onExport(session: LiveSessionV1) {
     try {
       setError("");
-      const json = exportLiveSessionJson(session.id);
+      const json = exportLiveSessionJson(session);
       downloadJson(json, `music-bingo-live-session-${sanitizeFilenamePart(session.name, "session")}.json`);
       setNotice(`Exported session: ${session.name}`);
     } catch (err: any) {
@@ -59,12 +82,17 @@ export default function HostDashboardPage() {
     }
   }
 
-  function onDelete(session: LiveSessionV1) {
-    if (!window.confirm(`Delete live session \"${session.name}\"?`)) return;
-    deleteLiveSession(session.id);
-    refreshSessions();
-    setNotice(`Deleted session: ${session.name}`);
-    setError("");
+  async function onDelete(session: LiveSessionV1) {
+    if (!window.confirm(`Delete live session "${session.name}"?`)) return;
+    try {
+      await deleteLiveSession(session.id);
+      await refreshSessions();
+      setNotice(`Deleted session: ${session.name}`);
+      setError("");
+    } catch (err: any) {
+      setNotice("");
+      setError(err?.message ?? "Failed to delete session.");
+    }
   }
 
   return (
@@ -109,7 +137,11 @@ export default function HostDashboardPage() {
         {notice ? <div className="music-live-notice">{notice}</div> : null}
         {error ? <div className="music-live-error">{error}</div> : null}
 
-        {!sessions.length ? (
+        {loading ? (
+          <div className="music-live-card music-live-empty-state">
+            <p className="music-live-muted">Loading sessions...</p>
+          </div>
+        ) : !sessions.length ? (
           <div className="music-live-card music-live-empty-state">
             <h2 className="music-live-card-title">No saved live sessions</h2>
             <p className="music-live-muted">
@@ -145,7 +177,7 @@ export default function HostDashboardPage() {
                   <button type="button" className="music-live-secondary-btn" onClick={() => onExport(session)}>
                     Export
                   </button>
-                  <button type="button" className="music-live-danger-btn" onClick={() => onDelete(session)}>
+                  <button type="button" className="music-live-danger-btn" onClick={() => void onDelete(session)}>
                     Delete
                   </button>
                 </div>
