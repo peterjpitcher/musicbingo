@@ -35,8 +35,13 @@ function writeRaw(key: string, value: string): void {
   if (!canUseStorage()) return;
   try {
     window.localStorage.setItem(key, value);
-  } catch {
-    // ignore storage write failures in private/restricted environments
+  } catch (err) {
+    // QuotaExceededError means the device storage is full — log a warning so
+    // the host knows their state isn't being saved.
+    if (err instanceof DOMException && err.name === "QuotaExceededError") {
+      console.warn("[music-bingo] localStorage quota exceeded — runtime state was not saved. Clear browser storage to resolve.", key);
+    }
+    // Ignore other errors (e.g. SecurityError in private/restricted environments)
   }
 }
 

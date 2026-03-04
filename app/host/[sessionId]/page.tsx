@@ -142,6 +142,8 @@ export default function HostSessionControllerPage() {
     makeEmptyRuntimeState(sessionId || "pending")
   );
   const [notice, setNotice] = useState<string>("");
+  const [noticeVariant, setNoticeVariant] = useState<"success" | "warning">("success");
+  const pollFailCountRef = useRef<number>(0);
   const [error, setError] = useState<string>("");
   const [isController, setIsController] = useState<boolean>(false);
   const [spotifyDisconnected, setSpotifyDisconnected] = useState<boolean>(false);
@@ -316,6 +318,7 @@ export default function HostSessionControllerPage() {
         const msg = bodyText.trim() || "Spotify auth expired. Use the Reconnect button below.";
         spotifyDisconnectedRef.current = true;
         setSpotifyDisconnected(true);
+        pollFailCountRef.current = 0;
         commitRuntime((prev) => ({
           ...prev,
           spotifyControlAvailable: false,
@@ -324,12 +327,16 @@ export default function HostSessionControllerPage() {
         return;
       }
       if (!res.ok) {
-        const msg = await res
-          .text()
-          .catch(() => "Failed to fetch live Spotify status.");
-        setError(msg || "Failed to fetch live Spotify status.");
+        pollFailCountRef.current += 1;
+        if (pollFailCountRef.current >= 3) {
+          const msg = await res
+            .text()
+            .catch(() => "Failed to fetch live Spotify status.");
+          setError(msg || "Failed to fetch live Spotify status.");
+        }
         return;
       }
+      pollFailCountRef.current = 0;
       const data = (await res.json()) as LiveStatusResponse;
       applyStatusSnapshot(data);
 
@@ -370,20 +377,26 @@ export default function HostSessionControllerPage() {
       }
 
       if (!data.canControlPlayback && !runtimeRef.current.warningMessage) {
+        setNoticeVariant("warning");
         setNotice(
           "Manual host control mode active: control playback in Spotify app while this screen drives reveals."
         );
       }
+      pollFailCountRef.current = 0;
     } catch (err: any) {
       if ((err as Error)?.name === "AbortError") return;
-      setError(err?.message ?? "Failed to poll live status.");
+      pollFailCountRef.current += 1;
+      // Only surface network errors after 3 consecutive failures to avoid transient noise
+      if (pollFailCountRef.current >= 3) {
+        setError(err?.message ?? "Failed to poll live status.");
+      }
     }
   }, [applyStatusSnapshot, commitRuntime, isController, session]);
 
   useEffect(() => {
     if (!session) return;
     void pollStatus();
-    const id = window.setInterval(() => void pollStatus(), 1_000);
+    const id = window.setInterval(() => void pollStatus(), 2_000);
     return () => {
       window.clearInterval(id);
       pollAbortRef.current?.abort();
@@ -458,6 +471,7 @@ export default function HostSessionControllerPage() {
         activeGameNumber: gameNumber,
         advanceTriggeredForTrackId: null,
       }));
+      setNoticeVariant("success");
       setNotice(`Started Game ${gameNumber}: ${game.theme}`);
     } else {
       commitRuntime((prev) => ({
@@ -467,6 +481,7 @@ export default function HostSessionControllerPage() {
         spotifyControlAvailable: false,
         warningMessage: prev.warningMessage || "Manual host control mode active.",
       }));
+      setNoticeVariant("warning");
       setNotice(
         "Spotify control unavailable. Continue in manual host control mode."
       );
@@ -622,7 +637,7 @@ export default function HostSessionControllerPage() {
       />
 
       <main className="max-w-5xl mx-auto px-4 py-6 space-y-4">
-        {notice ? <Notice variant="success">{notice}</Notice> : null}
+        {notice ? <Notice variant={noticeVariant}>{notice}</Notice> : null}
         {error ? <Notice variant="error">{error}</Notice> : null}
         {spotifyDisconnected ? (
           <Card className="border-red-300 bg-red-50">
@@ -653,6 +668,7 @@ export default function HostSessionControllerPage() {
                   setError("Unable to take control right now.");
                   return;
                 }
+                setNoticeVariant("success");
                 setNotice("Controller lock transferred to this tab.");
               }}
             >
@@ -734,6 +750,7 @@ export default function HostSessionControllerPage() {
                 variant="secondary"
                 size="sm"
                 disabled={commandBusy}
+                title="Click if guest display stops updating"
                 onClick={() => void pollStatus()}
               >
                 Resync State
@@ -839,8 +856,9 @@ export default function HostSessionControllerPage() {
               <Button
                 variant="secondary"
                 size="sm"
-                disabled={!isController || commandBusy || runtime.mode !== "running"}
-                onClick={() => commitRuntime((prev) => ({ ...prev, extensionMs: prev.extensionMs + 30_000 }))}
+                disabled={!isController || commandBusy || runtime.mode !== "running" || runtime.extensionMs >= 300_000}
+                title="Extend current song by 30 seconds (max 5 minutes total)"
+                onClick={() => commitRuntime((prev) => ({ ...prev, extensionMs: Math.min(prev.extensionMs + 30_000, 300_000) }))}
               >
                 +30s
               </Button>

@@ -27,6 +27,7 @@ function buildClassName(
   return [
     "inline-flex items-center justify-center rounded-xl border",
     "font-semibold tracking-wide transition-colors cursor-pointer",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold focus-visible:ring-offset-2",
     "disabled:opacity-50 disabled:cursor-not-allowed",
     variantClasses[variant],
     sizeClasses[size],

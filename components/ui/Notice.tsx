@@ -21,5 +21,6 @@ export function Notice({ variant, children, className = "" }: NoticeProps) {
   ]
     .filter(Boolean)
     .join(" ");
-  return <div className={cls}>{children}</div>;
+  const role = variant === "error" || variant === "warning" ? "alert" : "status";
+  return <div className={cls} role={role}>{children}</div>;
 }

@@ -238,12 +238,15 @@ export function makeSpotifyPopupHtml(params: {
 }): string {
   const message = { type: "spotify-auth", ok: params.ok, error: params.error ?? null };
   const safeJson = JSON.stringify(message).replace(/</g, "\\u003c");
-  const safeText = (
+  const rawText =
     params.error ??
-    (params.ok ? "Connected to Spotify. You can close this window." : "Spotify auth failed.")
-  )
+    (params.ok ? "Connected to Spotify. You can close this window." : "Spotify auth failed.");
+  const safeText = rawText
+    .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
   const closeScript = params.closeWindow ? "\n        try { window.close(); } catch (e) {}" : "";
 
   return `<!doctype html>

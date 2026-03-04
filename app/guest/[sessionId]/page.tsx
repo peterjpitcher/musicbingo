@@ -90,6 +90,16 @@ export default function GuestDisplayPage() {
     };
   }, [sessionId]);
 
+  if (sessionLoading) {
+    return (
+      <div className="guest-projection-shell min-h-screen w-screen text-white flex flex-col items-center justify-center p-8">
+        <div className="bg-brand-green/80 border border-brand-gold/60 rounded-3xl p-8 max-w-lg text-center">
+          <p className="text-white/80 text-lg animate-pulse">Loading session…</p>
+        </div>
+      </div>
+    );
+  }
+
   if (error) {
     return (
       <div className="guest-projection-shell min-h-screen w-screen text-white flex flex-col items-center justify-center p-8">
@@ -174,9 +184,10 @@ export default function GuestDisplayPage() {
                     level="H"
                     fgColor="#003f27"
                     bgColor="#ffffff"
+                    aria-label={`QR code to join Music Bingo session at ${guestUrl}`}
                   />
                 </div>
-                <p className="text-white/50 text-[clamp(0.6rem,1vw,0.8rem)] break-all max-w-xs">
+                <p className="text-white/65 text-[clamp(0.6rem,1vw,0.8rem)] break-all max-w-xs">
                   {guestUrl}
                 </p>
               </div>
@@ -268,7 +279,7 @@ export default function GuestDisplayPage() {
                   {runtime.currentTrack.title || "Unknown Title"}
                 </h2>
               ) : (
-                <h2 className="m-0 text-[clamp(1.6rem,4.5vw,4.2rem)] uppercase font-black tracking-wide text-white/50">
+                <h2 className="m-0 text-[clamp(1.6rem,4.5vw,4.2rem)] uppercase font-black tracking-wide text-white/75">
                   Title reveals at 20s
                 </h2>
               )}
@@ -278,7 +289,7 @@ export default function GuestDisplayPage() {
                   {runtime.currentTrack.artist || "Unknown Artist"}
                 </p>
               ) : (
-                <p className="m-0 text-[clamp(1.3rem,3vw,2.8rem)] font-bold text-white/50">
+                <p className="m-0 text-[clamp(1.3rem,3vw,2.8rem)] font-bold text-white/75">
                   Artist reveals at 25s
                 </p>
               )}

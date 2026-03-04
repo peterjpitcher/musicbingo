@@ -200,16 +200,16 @@ export async function POST(request: NextRequest) {
   try {
     await runCommand({ action, payload, accessToken });
 
-    const state = await getPlaybackState(accessToken);
+    const state = await safePlaybackState(accessToken);
     const response = NextResponse.json(
       {
         ok: true,
         action,
         connected: true,
-        canControlPlayback: state.canControlPlayback,
-        activeDevice: state.activeDevice,
-        playback: state.playback,
-        warnings: state.warnings,
+        canControlPlayback: state?.canControlPlayback ?? true,
+        activeDevice: state?.activeDevice ?? null,
+        playback: state?.playback ?? null,
+        warnings: state?.warnings ?? [],
       },
       { headers: { "Cache-Control": "no-store" } }
     );

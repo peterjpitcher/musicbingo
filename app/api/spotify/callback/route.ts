@@ -38,8 +38,21 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const expectedState = request.cookies.get(COOKIE_STATE)?.value ?? "";
-  if (!expectedState || expectedState !== state) {
+  const expectedState = request.cookies.get(COOKIE_STATE)?.value;
+  if (!expectedState) {
+    return new Response(
+      makeSpotifyPopupHtml({
+        ok: false,
+        error: "Spotify auth failed: missing CSRF token. Please try again.",
+        closeWindow: false,
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
+      }
+    );
+  }
+  if (expectedState !== state) {
     return new Response(
       makeSpotifyPopupHtml({
         ok: false,
