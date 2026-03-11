@@ -136,6 +136,8 @@ export default function HostSessionControllerPage() {
   const pollAbortRef = useRef<AbortController | null>(null);
   // Circuit-breaker: stop polling after a 401 until the user reconnects Spotify.
   const spotifyDisconnectedRef = useRef<boolean>(false);
+  // Throttle for cross-device runtime sync: push at most once per 2s.
+  const lastRuntimePushMsRef = useRef<number>(0);
 
   const [session, setSession] = useState<LiveSessionV1 | null>(null);
   const [runtime, setRuntime] = useState<LiveRuntimeState>(
@@ -149,10 +151,76 @@ export default function HostSessionControllerPage() {
   const [spotifyDisconnected, setSpotifyDisconnected] = useState<boolean>(false);
   const [lockOwnerLabel, setLockOwnerLabel] = useState<string>("");
   const [commandBusy, setCommandBusy] = useState<boolean>(false);
+  const [playedTrackIds, setPlayedTrackIds] = useState<Set<string>>(new Set());
+  const lastPlayedTrackIdRef = useRef<string | null>(null);
+  const [playlistTracks, setPlaylistTracks] = useState<{ trackId: string; title: string; artist: string }[]>([]);
+  const playlistTracksRef = useRef<{ trackId: string; title: string; artist: string }[]>([]);
+  const loadedPlaylistIdRef = useRef<string | null>(null);
+  // Resolved Spotify track ID for the challenge song of the active game (exact match, no text guessing).
+  const challengeTrackIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     runtimeRef.current = runtime;
   }, [runtime]);
+
+  useEffect(() => {
+    playlistTracksRef.current = playlistTracks;
+  }, [playlistTracks]);
+
+  // Track which song IDs have been played so far.
+  useEffect(() => {
+    const track = runtime.currentTrack;
+    if (!track?.trackId || track.trackId === lastPlayedTrackIdRef.current) return;
+    lastPlayedTrackIdRef.current = track.trackId;
+    setPlayedTrackIds((prev) => new Set([...prev, track.trackId!]));
+  }, [runtime.currentTrack]);
+
+  // Fetch the full playlist track listing when the active game changes.
+  // Once loaded, resolve the challenge song to its exact Spotify track ID.
+  useEffect(() => {
+    const game = runtime.activeGameNumber
+      ? session?.games.find((g) => g.gameNumber === runtime.activeGameNumber) ?? null
+      : null;
+    const playlistId = game?.playlistId ?? null;
+    if (!playlistId || playlistId === loadedPlaylistIdRef.current) return;
+    loadedPlaylistIdRef.current = playlistId;
+    challengeTrackIdRef.current = null;
+    void fetch(`/api/spotify/playlist/${encodeURIComponent(playlistId)}/tracks`, { cache: "no-store" })
+      .then(async (res) => {
+        if (!res.ok) return;
+        const data = (await res.json()) as { tracks?: { trackId: string; title: string; artist: string }[] };
+        if (!data.tracks) return;
+        setPlaylistTracks(data.tracks);
+        // Resolve the challenge song track ID by fuzzy-matching stored title/artist against
+        // actual Spotify metadata. This is done once so runtime detection uses exact track IDs.
+        if (game?.challengeSongTitle && game?.challengeSongArtist) {
+          const norm = (s: string) => s.trim().toLowerCase();
+          const ct = norm(game.challengeSongTitle);
+          const ca = norm(game.challengeSongArtist);
+          const match = data.tracks.find((t) => {
+            const tt = norm(t.title);
+            const ta = norm(t.artist);
+            return (tt.includes(ct) || ct.includes(tt)) && (ta.includes(ca) || ca.includes(ta));
+          });
+          challengeTrackIdRef.current = match?.trackId ?? null;
+        }
+      })
+      .catch(() => {});
+  }, [runtime.activeGameNumber, session]);
+
+  // Push runtime state to the server so guests on other devices can poll it.
+  // Leading throttle: fires immediately, then blocks for 2s.
+  useEffect(() => {
+    if (!sessionId || !isController) return;
+    const now = Date.now();
+    if (now - lastRuntimePushMsRef.current < 2_000) return;
+    lastRuntimePushMsRef.current = now;
+    void fetch(`/api/sessions/${encodeURIComponent(sessionId)}/runtime`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(runtime),
+    }).catch(() => {}); // best-effort: cross-device sync, not critical path
+  }, [runtime, sessionId, isController]);
 
   const persistAndBroadcastRuntime = useCallback(
     (next: LiveRuntimeState) => {
@@ -193,12 +261,20 @@ export default function HostSessionControllerPage() {
         const game = prev.activeGameNumber
           ? session.games.find((g) => g.gameNumber === prev.activeGameNumber) ?? null
           : null;
-        const isChallengeSong = matchesChallengeSong(track, game);
-        const baseCfg = isChallengeSong ? CHALLENGE_REVEAL_CONFIG : session.revealConfig;
-        // Reset extension when the track changes (new song started).
         const trackChanged = track?.trackId != null && track.trackId !== prev.currentTrack?.trackId;
+        // Use resolved Spotify track ID for exact detection; fall back to text matching if not yet resolved.
+        const isChallengeSong = trackChanged
+          ? (challengeTrackIdRef.current
+              ? track?.trackId === challengeTrackIdRef.current
+              : matchesChallengeSong(track, game))
+          : (prev.isChallengeSong ||
+              (challengeTrackIdRef.current
+                ? track?.trackId === challengeTrackIdRef.current
+                : matchesChallengeSong(track, game)));
+        const baseCfg = isChallengeSong ? CHALLENGE_REVEAL_CONFIG : session.revealConfig;
         const extensionMs = trackChanged ? 0 : prev.extensionMs;
         const cfg = extensionMs > 0 ? { ...baseCfg, nextMs: baseCfg.nextMs + extensionMs } : baseCfg;
+
         const revealState = computeRevealState(track?.progressMs ?? 0, cfg);
         const marker = updateAdvanceTrackMarker({
           trackId: track?.trackId ?? null,
@@ -272,8 +348,12 @@ export default function HostSessionControllerPage() {
         if (!cancelled) setError(err?.message ?? "Failed to load session.");
       }
     })();
+    // Release lock on tab close/refresh so another tab can take over immediately.
+    const handleUnload = () => releaseControlLock(sessionId, tabId);
+    window.addEventListener("beforeunload", handleUnload);
     return () => {
       cancelled = true;
+      window.removeEventListener("beforeunload", handleUnload);
       releaseControlLock(sessionId, tabId);
     };
   }, [acquireLock, sessionId]);
@@ -297,7 +377,7 @@ export default function HostSessionControllerPage() {
           setLockOwnerLabel("Another host tab controls this session.");
         }
       }
-    }, 10_000);
+    }, 5_000);
     return () => window.clearInterval(interval);
   }, [isController, sessionId]);
 
@@ -350,6 +430,7 @@ export default function HostSessionControllerPage() {
       if (
         isController &&
         Boolean(data.canControlPlayback) &&
+        !runtimeRef.current.freePlay &&
         shouldTriggerNextForTrack({
           trackId: track?.trackId ?? null,
           revealState,
@@ -357,6 +438,21 @@ export default function HostSessionControllerPage() {
         })
       ) {
         const trackId = track?.trackId ?? null;
+        // If this is the last track in the playlist, end the session instead of advancing.
+        const tracks = playlistTracksRef.current;
+        const isLastTrack =
+          tracks.length > 0 &&
+          trackId != null &&
+          tracks[tracks.length - 1].trackId === trackId;
+        if (isLastTrack) {
+          commitRuntime((prev) => ({ ...prev, mode: "ended" }));
+          await fetch("/api/spotify/live/command", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "pause" }),
+          }).catch(() => {});
+          return;
+        }
         if (trackId) {
           commitRuntime((prev) => ({
             ...prev,
@@ -539,7 +635,6 @@ export default function HostSessionControllerPage() {
     const gamePlaylistId = runtimeRef.current.activeGameNumber
       ? session?.games.find((g) => g.gameNumber === runtimeRef.current.activeGameNumber)?.playlistId ?? null
       : null;
-    // Reset any extension so the restarted song plays from its normal threshold.
     commitRuntime((prev) => ({ ...prev, extensionMs: 0 }));
     void sendCommand(
       "resume_from_track",
@@ -775,6 +870,37 @@ export default function HostSessionControllerPage() {
                 Resume Display
               </Button>
               <Button
+                variant={runtime.freePlay ? "primary" : "secondary"}
+                size="sm"
+                disabled={!isController}
+                title="Songs play in full with no auto-advance — useful after bingo is called"
+                onClick={() => commitRuntime((prev) => ({ ...prev, freePlay: !prev.freePlay }))}
+              >
+                {runtime.freePlay ? "Free Play ON" : "Free Play"}
+              </Button>
+              {runtime.mode === "ended" && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={!isController}
+                  onClick={() =>
+                    commitRuntime((prev) => ({
+                      ...prev,
+                      mode: "idle",
+                      activeGameNumber: null,
+                      currentTrack: null,
+                      revealState: { showAlbum: false, showTitle: false, showArtist: false, shouldAdvance: false },
+                      advanceTriggeredForTrackId: null,
+                      isChallengeSong: false,
+                      extensionMs: 0,
+                      freePlay: false,
+                    }))
+                  }
+                >
+                  Reset to Lobby
+                </Button>
+              )}
+              <Button
                 variant="danger"
                 size="sm"
                 onClick={() =>
@@ -870,6 +996,7 @@ export default function HostSessionControllerPage() {
               >
                 Restart Song
               </Button>
+
             </div>
 
             {activeGame?.challengeSongTitle ? (
@@ -895,6 +1022,62 @@ export default function HostSessionControllerPage() {
             </p>
           </Card>
         </div>
+
+        {/* Playlist track listing */}
+        <Card as="article">
+          <div className="flex items-baseline justify-between mb-1">
+            <h2 className="text-base font-bold text-slate-800 uppercase tracking-wide">
+              {activeGame ? `Game ${activeGame.gameNumber} — ${activeGame.theme}` : "Playlist"}
+            </h2>
+            {playlistTracks.length > 0 && (
+              <span className="text-xs text-slate-400 tabular-nums">
+                {playedTrackIds.size} / {playlistTracks.length} played
+              </span>
+            )}
+          </div>
+
+          {playlistTracks.length === 0 ? (
+            <p className="text-sm text-slate-400 italic mt-3">
+              {runtime.activeGameNumber
+                ? "Loading playlist…"
+                : "Start a game to see the full track listing here."}
+            </p>
+          ) : (
+            <ol className="mt-3 space-y-0.5 max-h-[480px] overflow-y-auto pr-1">
+              {playlistTracks.map((track, index) => {
+                const isCurrent = track.trackId === runtime.currentTrack?.trackId;
+                const hasPlayed = playedTrackIds.has(track.trackId) && !isCurrent;
+                return (
+                  <li
+                    key={track.trackId}
+                    className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm ${
+                      isCurrent
+                        ? "bg-brand-green text-white font-semibold"
+                        : hasPlayed
+                        ? "bg-slate-50 text-slate-400"
+                        : "text-slate-700"
+                    }`}
+                  >
+                    <span className={`w-6 text-center text-xs font-bold tabular-nums shrink-0 ${isCurrent ? "text-white/80" : "text-slate-400"}`}>
+                      {index + 1}
+                    </span>
+                    <span className={`truncate ${hasPlayed ? "line-through" : ""}`}>
+                      {track.title || "Unknown"}
+                      <span className={`font-normal ${isCurrent ? "text-white/80" : "text-slate-400"}`}>
+                        {" "}— {track.artist || "Unknown"}
+                      </span>
+                    </span>
+                    {isCurrent && (
+                      <span className="ml-auto shrink-0 text-xs bg-white/20 rounded-full px-2 py-0.5">
+                        Now playing
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+        </Card>
       </main>
     </div>
   );
