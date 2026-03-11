@@ -120,7 +120,7 @@ export function importLiveSessionJson(rawJson: string): LiveSessionV1 {
   return session;
 }
 
-function validateRuntimeState(input: unknown): LiveRuntimeState | null {
+export function validateRuntimeState(input: unknown): LiveRuntimeState | null {
   if (!isObject(input)) return null;
   const version = asString(input.version);
   if (version !== LIVE_RUNTIME_VERSION) return null;
@@ -184,6 +184,7 @@ function validateRuntimeState(input: unknown): LiveRuntimeState | null {
         ? input.preBreakPlaylistId.trim()
         : null,
     extensionMs: asNumber(input.extensionMs) ?? 0,
+    freePlay: Boolean(input.freePlay),
     updatedAtMs,
   };
 }
@@ -226,7 +227,7 @@ export function readControlLock(sessionId: string): LiveControlLock | null {
   }
 }
 
-export function isControlLockStale(lock: LiveControlLock | null, nowMs = Date.now(), staleMs = 30_000): boolean {
+export function isControlLockStale(lock: LiveControlLock | null, nowMs = Date.now(), staleMs = 15_000): boolean {
   if (!lock) return true;
   return nowMs - lock.lastSeenMs > staleMs;
 }
@@ -239,7 +240,7 @@ export function acquireControlLock(params: {
   staleMs?: number;
 }): { acquired: boolean; lock: LiveControlLock | null } {
   const nowMs = params.nowMs ?? Date.now();
-  const staleMs = params.staleMs ?? 30_000;
+  const staleMs = params.staleMs ?? 15_000;
 
   const current = readControlLock(params.sessionId);
   const ownsLock = current?.tabId === params.tabId;

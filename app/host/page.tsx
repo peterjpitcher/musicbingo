@@ -59,7 +59,6 @@ export default function HostDashboardPage() {
       }
     }
     void init();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function onImportFile(file: File) {

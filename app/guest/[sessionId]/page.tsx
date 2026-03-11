@@ -9,7 +9,7 @@ import { QRCodeSVG } from "qrcode.react";
 
 import { subscribeLiveChannel } from "@/lib/live/channel";
 import { getLiveSession } from "@/lib/live/sessionApi";
-import { readRuntimeState } from "@/lib/live/storage";
+import { readRuntimeState, validateRuntimeState } from "@/lib/live/storage";
 import {
   makeEmptyRuntimeState,
   type LiveRuntimeState,
@@ -34,13 +34,11 @@ export default function GuestDisplayPage() {
   const [session, setSession] = useState<LiveSessionV1 | null>(null);
   const [sessionLoading, setSessionLoading] = useState<boolean>(true);
   const sessionLoadedRef = useRef<boolean>(false);
-  const [guestUrl, setGuestUrl] = useState<string>("");
-
-  useEffect(() => {
-    if (sessionId && typeof window !== "undefined") {
-      setGuestUrl(`${window.location.origin}/guest/${sessionId}`);
-    }
-  }, [sessionId]);
+  // Derive the guest URL once on mount (window is always available in client components).
+  const guestUrl = useMemo(
+    () => (sessionId && typeof window !== "undefined" ? `${window.location.origin}/guest/${sessionId}` : ""),
+    [sessionId]
+  );
 
   const error = useMemo(() => {
     if (!sessionId) return "Invalid guest session id.";
@@ -82,12 +80,33 @@ export default function GuestDisplayPage() {
     });
     const id = window.setInterval(() => {
       const persisted = readRuntimeState(sessionId);
-      if (persisted) setRuntime(persisted);
+      if (persisted) setRuntime((prev) => persisted.updatedAtMs > prev.updatedAtMs ? persisted : prev);
     }, 2_000);
     return () => {
       unsubscribe();
       window.clearInterval(id);
     };
+  }, [sessionId]);
+
+  // Cross-device sync: poll server-side runtime state every 2s so guests on
+  // a different device (e.g. laptop) receive updates from the host's phone.
+  useEffect(() => {
+    if (!sessionId) return;
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/runtime`, { cache: "no-store" });
+        if (res.ok) {
+          const data: unknown = await res.json();
+          const validated = validateRuntimeState(data);
+          if (validated) setRuntime((prev) => validated.updatedAtMs > prev.updatedAtMs ? validated : prev);
+        }
+      } catch {
+        // best-effort — local state remains until next successful poll
+      }
+    };
+    void poll();
+    const id = window.setInterval(() => void poll(), 2_000);
+    return () => window.clearInterval(id);
   }, [sessionId]);
 
   if (sessionLoading) {
@@ -204,7 +223,10 @@ export default function GuestDisplayPage() {
               Interval In Progress
             </h2>
             <p className="m-0 text-[clamp(1rem,2vw,1.6rem)] text-white/90">
-              Keep your cards ready. We&apos;ll resume shortly.
+              Keep your cards ready — we&apos;ll resume shortly.
+            </p>
+            <p className="mt-4 text-[clamp(1rem,2vw,1.5rem)] text-brand-gold font-semibold">
+              🍺 Head to the bar! Kitchen is open until 9pm.
             </p>
           </div>
         ) : null}
@@ -226,14 +248,22 @@ export default function GuestDisplayPage() {
         {showEnded ? (
           <div className="w-[min(980px,95vw)] bg-brand-green/88 border border-brand-gold/70 rounded-3xl p-8 text-center">
             <p className="uppercase tracking-[0.18em] text-white/84 text-[clamp(0.7rem,1.4vw,1.1rem)] m-0">
-              Thanks For Playing
+              That&apos;s A Wrap!
             </p>
             <h2 className="mt-2.5 mb-2 uppercase text-[clamp(2rem,6vw,5rem)] font-black text-white">
-              Session Complete
+              Thanks For Playing
             </h2>
             <p className="m-0 text-[clamp(1rem,2vw,1.6rem)] text-white/90">
-              Ask the bar team about the next Music Bingo date.
+              We hope you had a great time!
             </p>
+            <div className="mt-6 space-y-3">
+              <p className="text-[clamp(1rem,2vw,1.5rem)] text-brand-gold font-semibold">
+                🍺 Drinks &amp; food orders at the bar — kitchen open until 9pm.
+              </p>
+              <p className="text-[clamp(0.9rem,1.6vw,1.3rem)] text-white/75">
+                Ask the bar team about the next Music Bingo date.
+              </p>
+            </div>
           </div>
         ) : null}
 
@@ -253,7 +283,7 @@ export default function GuestDisplayPage() {
           <div className="grid grid-cols-1 lg:[grid-template-columns:minmax(260px,560px)_minmax(0,1fr)] gap-7 items-center">
             {/* Album art */}
             <div className="flex items-center justify-center">
-              {runtime.revealState.showAlbum ? (
+              {(runtime.freePlay || runtime.revealState.showAlbum) ? (
                 runtime.currentTrack.albumImageUrl ? (
                   <img
                     src={runtime.currentTrack.albumImageUrl}
@@ -274,7 +304,7 @@ export default function GuestDisplayPage() {
 
             {/* Track metadata */}
             <div className="grid gap-3.5 lg:text-left text-center">
-              {runtime.revealState.showTitle ? (
+              {(runtime.freePlay || runtime.revealState.showTitle) ? (
                 <h2 className="m-0 text-[clamp(1.6rem,4.5vw,4.2rem)] uppercase font-black tracking-wide text-white">
                   {runtime.currentTrack.title || "Unknown Title"}
                 </h2>
@@ -284,7 +314,7 @@ export default function GuestDisplayPage() {
                 </h2>
               )}
 
-              {runtime.revealState.showArtist ? (
+              {(runtime.freePlay || runtime.revealState.showArtist) ? (
                 <p className="m-0 text-[clamp(1.3rem,3vw,2.8rem)] font-bold text-white">
                   {runtime.currentTrack.artist || "Unknown Artist"}
                 </p>
@@ -294,7 +324,11 @@ export default function GuestDisplayPage() {
                 </p>
               )}
 
-              {runtime.revealState.shouldAdvance ? (
+              {runtime.freePlay ? (
+                <p className="mt-1.5 text-white/70 text-[clamp(1rem,2vw,1.7rem)] uppercase tracking-[0.05em]">
+                  Free Play
+                </p>
+              ) : runtime.revealState.shouldAdvance ? (
                 <p className="mt-1.5 text-white/90 text-[clamp(1rem,2vw,1.7rem)] uppercase tracking-[0.05em]">
                   Advancing to next song...
                 </p>

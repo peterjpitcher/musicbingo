@@ -87,6 +87,8 @@ export type LiveRuntimeState = {
   preBreakPlaylistId: string | null;
   /** Extra ms added to the auto-advance threshold via the +30s button. Resets to 0 on track change. */
   extensionMs: number;
+  /** When true, auto-advance is disabled and songs play in full (free play / post-round mode). */
+  freePlay: boolean;
   updatedAtMs: number;
 };
 
@@ -131,6 +133,7 @@ export function makeEmptyRuntimeState(sessionId: string): LiveRuntimeState {
     preBreakTrackId: null,
     preBreakPlaylistId: null,
     extensionMs: 0,
+    freePlay: false,
     updatedAtMs: Date.now(),
   };
 }
