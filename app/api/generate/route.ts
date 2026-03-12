@@ -195,10 +195,10 @@ export async function POST(request: Request) {
     // auth is unavailable or playlist IDs were not provided (e.g. pre-Spotify generate).
     const game1PlaylistId = asString(form.get("game1_playlist_id")).trim();
     const game2PlaylistId = asString(form.get("game2_playlist_id")).trim();
-    const requestOrigin = new URL(request.url).origin;
+    const origin = new URL(request.url).origin;
     const [spotifyTracksGame1, spotifyTracksGame2] = await Promise.all([
-      fetchSpotifyPlaylistTracks(game1PlaylistId, requestOrigin),
-      fetchSpotifyPlaylistTracks(game2PlaylistId, requestOrigin),
+      fetchSpotifyPlaylistTracks(game1PlaylistId, origin),
+      fetchSpotifyPlaylistTracks(game2PlaylistId, origin),
     ]);
     const sortedGame1Songs = sortSongsBySpotifyOrder(parsedGame1.songs, spotifyTracksGame1);
     const sortedGame2Songs = sortSongsBySpotifyOrder(parsedGame2.songs, spotifyTracksGame2);
@@ -230,7 +230,6 @@ export async function POST(request: Request) {
     }
     const footerItems = eventItems.slice(0, EVENT_QR_COUNT);
 
-    const origin = new URL(request.url).origin;
     const logoRightPngBytes = await loadDefaultLogoPngBytes({ origin });
     const logoLeftPngBytes = await loadDefaultEventLogoPngBytes({ origin });
 
