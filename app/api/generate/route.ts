@@ -14,6 +14,12 @@ import {
   loadDefaultLogoPngBytes,
   renderCardsPdf,
 } from "@/lib/pdf";
+import { cookies } from "next/headers";
+import {
+  getOrRefreshAccessToken,
+  spotifyApiRequest,
+  SPOTIFY_COOKIE_ACCESS,
+} from "@/lib/spotifyWeb";
 import type { Card, ParseResult, Song } from "@/lib/types";
 import { sanitizeFilenamePart } from "@/lib/utils";
 
@@ -25,6 +31,90 @@ function asString(value: FormDataEntryValue | null): string {
   return typeof value === "string" ? value : "";
 }
 
+
+const COOKIE_REFRESH = "spotify_refresh_token";
+
+type SpotifyTrack = { trackId: string; title: string; artist: string };
+
+/**
+ * Fetch playlist tracks from Spotify and return them in playlist order.
+ * Returns null on any failure so callers can degrade gracefully to user-input order.
+ *
+ * Token handling: cookies() returns ReadonlyRequestCookies in Route Handlers so
+ * token write-back is not possible here without threading results through to a
+ * NextResponse. The generate route is not the primary auth surface — the dedicated
+ * /api/spotify/playlist/[id]/tracks route handles rotation. Token rotation here is
+ * therefore best-effort: reads use the current cached token, rotated values are
+ * discarded. In practice this is rare and the user will re-authenticate naturally
+ * on the next interactive Spotify request.
+ */
+async function fetchSpotifyPlaylistTracks(
+  playlistId: string,
+  origin: string
+): Promise<SpotifyTrack[] | null> {
+  if (!playlistId.trim()) return null;
+
+  const cookieStore = await cookies();
+  const refreshToken = cookieStore.get(COOKIE_REFRESH)?.value ?? "";
+  if (!refreshToken.trim()) return null;
+
+  let accessToken: string;
+  try {
+    const result = await getOrRefreshAccessToken({
+      refreshToken,
+      cachedRaw: cookieStore.get(SPOTIFY_COOKIE_ACCESS)?.value ?? null,
+      origin,
+    });
+    accessToken = result.accessToken;
+  } catch {
+    console.warn("[music-bingo] Could not refresh Spotify token for clipboard ordering — using input order.");
+    return null;
+  }
+
+  try {
+    const url = `https://api.spotify.com/v1/playlists/${encodeURIComponent(playlistId)}/tracks?fields=items(track(id,name,artists(name)))&limit=100`;
+    const res = await spotifyApiRequest({ accessToken, url });
+    if (!res.ok) {
+      console.warn(`[music-bingo] Spotify playlist fetch failed (HTTP ${res.status}) — using input order.`);
+      return null;
+    }
+    const json = (await res.json()) as { items?: unknown[] };
+    return (json.items ?? [])
+      .map((item: unknown) => {
+        const t = (item as { track?: { id?: string; name?: string; artists?: { name?: string }[] } })?.track;
+        if (!t || typeof t.id !== "string") return null;
+        // Only the first listed artist is used — matching the behaviour of the host page
+        // playlist fetch. Songs with multiple artists may not match if entered differently.
+        const artist = Array.isArray(t.artists) && t.artists.length > 0
+          ? String(t.artists[0]?.name ?? "")
+          : "";
+        return { trackId: t.id, title: String(t.name ?? ""), artist };
+      })
+      .filter((t): t is SpotifyTrack => t !== null);
+  } catch {
+    console.warn("[music-bingo] Error fetching Spotify playlist for clipboard ordering — using input order.");
+    return null;
+  }
+}
+
+/**
+ * Sort songs to match Spotify playlist order using normalised artist+title key matching.
+ * Songs with no Spotify match are appended at the end in their original relative order.
+ * The returned array always contains all input songs — count is always preserved.
+ */
+function sortSongsBySpotifyOrder(songs: Song[], spotifyTracks: SpotifyTrack[] | null): Song[] {
+  if (!spotifyTracks || spotifyTracks.length === 0) return songs;
+  const norm = (s: string) => s.trim().toLowerCase();
+  const spotifyIndex = new Map<string, number>();
+  spotifyTracks.forEach((t, i) => {
+    spotifyIndex.set(`${norm(t.artist)}|${norm(t.title)}`, i);
+  });
+  return [...songs].sort((a, b) => {
+    const ia = spotifyIndex.get(`${norm(a.artist)}|${norm(a.title)}`) ?? Infinity;
+    const ib = spotifyIndex.get(`${norm(b.artist)}|${norm(b.title)}`) ?? Infinity;
+    return ia - ib;
+  });
+}
 
 function makeBundleFilename(eventDate: string): string {
   return `music-bingo-event-pack-${sanitizeFilenamePart(eventDate, "event")}.zip`;
@@ -100,6 +190,19 @@ export async function POST(request: Request) {
       return new Response(err?.message ? String(err.message) : "Failed to generate cards.", { status: 400 });
     }
 
+    // Fetch Spotify playlist order for both games in parallel so the clipboard DOCX
+    // lists songs in the same order they will play. Degrades gracefully if Spotify
+    // auth is unavailable or playlist IDs were not provided (e.g. pre-Spotify generate).
+    const game1PlaylistId = asString(form.get("game1_playlist_id")).trim();
+    const game2PlaylistId = asString(form.get("game2_playlist_id")).trim();
+    const requestOrigin = new URL(request.url).origin;
+    const [spotifyTracksGame1, spotifyTracksGame2] = await Promise.all([
+      fetchSpotifyPlaylistTracks(game1PlaylistId, requestOrigin),
+      fetchSpotifyPlaylistTracks(game2PlaylistId, requestOrigin),
+    ]);
+    const sortedGame1Songs = sortSongsBySpotifyOrder(parsedGame1.songs, spotifyTracksGame1);
+    const sortedGame2Songs = sortSongsBySpotifyOrder(parsedGame2.songs, spotifyTracksGame2);
+
     let eventItems: Array<{ label: string; url: string | null }> = [];
     let qrStatus: "ok" | "missing_config" | "no_events" | "error" = "missing_config";
     let qrError: string | null = null;
@@ -150,12 +253,12 @@ export async function POST(request: Request) {
         eventDateInput,
         game1: {
           theme: game1Theme,
-          songs: parsedGame1.songs,
+          songs: sortedGame1Songs,
           challengeSong: game1ChallengeSong,
         },
         game2: {
           theme: game2Theme,
-          songs: parsedGame2.songs,
+          songs: sortedGame2Songs,
           challengeSong: game2ChallengeSong,
         },
       }),

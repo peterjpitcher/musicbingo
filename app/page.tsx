@@ -184,6 +184,14 @@ export default function HomePage() {
     form.set("game2_songs", game2SongsText);
     form.set("game1_challenge_song", game1ChallengeSong);
     form.set("game2_challenge_song", game2ChallengeSong);
+    // Include playlist IDs when Spotify playlists have been created so the generate
+    // route can sort the clipboard DOCX songs to match the Spotify playlist order.
+    if (livePlaylistByGame?.game1.playlistId) {
+      form.set("game1_playlist_id", livePlaylistByGame.game1.playlistId);
+    }
+    if (livePlaylistByGame?.game2.playlistId) {
+      form.set("game2_playlist_id", livePlaylistByGame.game2.playlistId);
+    }
     return form;
   }
 
