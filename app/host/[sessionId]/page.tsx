@@ -156,6 +156,10 @@ export default function HostSessionControllerPage() {
   const [playlistTracks, setPlaylistTracks] = useState<{ trackId: string; title: string; artist: string }[]>([]);
   const playlistTracksRef = useRef<{ trackId: string; title: string; artist: string }[]>([]);
   const loadedPlaylistIdRef = useRef<string | null>(null);
+  // Guards against concurrent in-flight fetches for the same playlist.
+  const fetchingPlaylistIdRef = useRef<string | null>(null);
+  const [playlistLoadError, setPlaylistLoadError] = useState<boolean>(false);
+  const [playlistRetryCount, setPlaylistRetryCount] = useState<number>(0);
   // Resolved Spotify track ID for the challenge song of the active game (exact match, no text guessing).
   const challengeTrackIdRef = useRef<string | null>(null);
 
@@ -177,19 +181,34 @@ export default function HostSessionControllerPage() {
 
   // Fetch the full playlist track listing when the active game changes.
   // Once loaded, resolve the challenge song to its exact Spotify track ID.
+  // playlistRetryCount is incremented by the Retry button to force a re-fetch after failure.
   useEffect(() => {
     const game = runtime.activeGameNumber
       ? session?.games.find((g) => g.gameNumber === runtime.activeGameNumber) ?? null
       : null;
     const playlistId = game?.playlistId ?? null;
-    if (!playlistId || playlistId === loadedPlaylistIdRef.current) return;
-    loadedPlaylistIdRef.current = playlistId;
+    // Skip if no playlist, already successfully loaded, or a fetch is already in flight.
+    if (!playlistId || playlistId === loadedPlaylistIdRef.current || playlistId === fetchingPlaylistIdRef.current) return;
+    fetchingPlaylistIdRef.current = playlistId;
+    setPlaylistLoadError(false);
+    setPlaylistTracks([]);
     challengeTrackIdRef.current = null;
     void fetch(`/api/spotify/playlist/${encodeURIComponent(playlistId)}/tracks`, { cache: "no-store" })
       .then(async (res) => {
-        if (!res.ok) return;
+        if (!res.ok) {
+          fetchingPlaylistIdRef.current = null;
+          setPlaylistLoadError(true);
+          return;
+        }
         const data = (await res.json()) as { tracks?: { trackId: string; title: string; artist: string }[] };
-        if (!data.tracks) return;
+        if (!data.tracks) {
+          fetchingPlaylistIdRef.current = null;
+          setPlaylistLoadError(true);
+          return;
+        }
+        // Lock the success ref only after a successful response so failures stay retryable.
+        loadedPlaylistIdRef.current = playlistId;
+        fetchingPlaylistIdRef.current = null;
         setPlaylistTracks(data.tracks);
         // Resolve the challenge song track ID by fuzzy-matching stored title/artist against
         // actual Spotify metadata. This is done once so runtime detection uses exact track IDs.
@@ -205,8 +224,11 @@ export default function HostSessionControllerPage() {
           challengeTrackIdRef.current = match?.trackId ?? null;
         }
       })
-      .catch(() => {});
-  }, [runtime.activeGameNumber, session]);
+      .catch(() => {
+        fetchingPlaylistIdRef.current = null;
+        setPlaylistLoadError(true);
+      });
+  }, [runtime.activeGameNumber, session, playlistRetryCount]);
 
   // Push runtime state to the server so guests on other devices can poll it.
   // Leading throttle: fires immediately, then blocks for 2s.
@@ -1037,11 +1059,28 @@ export default function HostSessionControllerPage() {
           </div>
 
           {playlistTracks.length === 0 ? (
-            <p className="text-sm text-slate-400 italic mt-3">
-              {runtime.activeGameNumber
-                ? "Loading playlist…"
-                : "Start a game to see the full track listing here."}
-            </p>
+            <div className="mt-3">
+              {!runtime.activeGameNumber ? (
+                <p className="text-sm text-slate-400 italic">Start a game to see the full track listing here.</p>
+              ) : playlistLoadError ? (
+                <div className="flex items-center gap-3">
+                  <p className="text-sm text-red-500">Failed to load playlist.</p>
+                  <button
+                    type="button"
+                    className="text-sm text-brand-gold underline hover:no-underline"
+                    onClick={() => {
+                      loadedPlaylistIdRef.current = null;
+                      fetchingPlaylistIdRef.current = null;
+                      setPlaylistRetryCount((n) => n + 1);
+                    }}
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : (
+                <p className="text-sm text-slate-400 italic">Loading playlist…</p>
+              )}
+            </div>
           ) : (
             <ol className="mt-3 space-y-0.5 max-h-[480px] overflow-y-auto pr-1">
               {playlistTracks.map((track, index) => {
