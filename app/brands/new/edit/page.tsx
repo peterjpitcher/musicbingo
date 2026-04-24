@@ -2,6 +2,7 @@
 
 import { AppHeader } from "@/components/layout/AppHeader";
 import { BrandForm } from "@/components/brand/BrandForm";
+import { Button } from "@/components/ui/Button";
 
 export default function NewBrandPage(): React.ReactElement {
   return (
@@ -10,6 +11,11 @@ export default function NewBrandPage(): React.ReactElement {
         title="New Brand"
         subtitle="Create a new venue brand"
         variant="light"
+        actions={
+          <Button as="link" href="/brands" variant="secondary" size="sm">
+            Back to Brands
+          </Button>
+        }
       />
 
       <main className="max-w-5xl mx-auto px-4 py-8">

@@ -65,8 +65,12 @@ export function BrandForm({ brand, onSaved }: BrandFormProps): React.ReactElemen
   // Logo upload state
   const [logoDarkFile, setLogoDarkFile] = useState<File | null>(null);
   const [logoLightFile, setLogoLightFile] = useState<File | null>(null);
-  const [logoDarkPreview, setLogoDarkPreview] = useState(brand?.logo_dark_url ?? "");
-  const [logoLightPreview, setLogoLightPreview] = useState(brand?.logo_light_url ?? "");
+  const [logoDarkPreview, setLogoDarkPreview] = useState(
+    (brand as Brand & { logo_dark_public_url?: string })?.logo_dark_public_url ?? brand?.logo_dark_url ?? ""
+  );
+  const [logoLightPreview, setLogoLightPreview] = useState(
+    (brand as Brand & { logo_light_public_url?: string })?.logo_light_public_url ?? brand?.logo_light_url ?? ""
+  );
 
   // UI state
   const [saving, setSaving] = useState(false);
@@ -177,6 +181,19 @@ export function BrandForm({ brand, onSaved }: BrandFormProps): React.ReactElemen
       }
       if (logoLightFile) {
         await uploadLogo(savedBrand.id, "light", logoLightFile);
+      }
+
+      // Re-fetch the brand to get updated logo URLs after upload
+      if (logoDarkFile || logoLightFile) {
+        const refreshRes = await fetch(`/api/brands/${savedBrand.id}`);
+        if (refreshRes.ok) {
+          savedBrand = await refreshRes.json();
+          const refreshed = savedBrand as Brand & { logo_dark_public_url?: string; logo_light_public_url?: string };
+          setLogoDarkPreview(refreshed.logo_dark_public_url ?? refreshed.logo_dark_url);
+          setLogoLightPreview(refreshed.logo_light_public_url ?? refreshed.logo_light_url);
+          setLogoDarkFile(null);
+          setLogoLightFile(null);
+        }
       }
 
       if (isNew) {

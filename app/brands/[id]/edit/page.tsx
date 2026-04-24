@@ -3,6 +3,7 @@
 import { useEffect, useState, use } from "react";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { BrandForm } from "@/components/brand/BrandForm";
+import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Notice } from "@/components/ui/Notice";
 import type { Brand } from "@/lib/brands/types";
@@ -43,6 +44,11 @@ export default function EditBrandPage({ params }: PageProps): React.ReactElement
         title={brand ? `Edit: ${brand.name}` : "Edit Brand"}
         subtitle="Update brand settings"
         variant="light"
+        actions={
+          <Button as="link" href="/brands" variant="secondary" size="sm">
+            Back to Brands
+          </Button>
+        }
       />
 
       <main className="max-w-5xl mx-auto px-4 py-8">
