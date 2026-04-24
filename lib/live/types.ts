@@ -63,6 +63,8 @@ export type LiveSessionV1 = {
   breakPlaylistId: string;
   /** Raw prep inputs for re-generating the event pack ZIP without revisiting the prep screen. */
   prepData?: PrepData;
+  /** Brand ID for venue theming. Null = use default brand. */
+  brandId?: string;
 };
 
 export type LiveTrackSnapshot = {
@@ -124,6 +126,10 @@ export type LiveChannelMessage =
     type: "warning";
     message: string;
     timestampMs: number;
+  }
+  | {
+    type: "brand_update";
+    brand: import("@/lib/brands/types").BrandConfig;
   };
 
 export function makeEmptyRuntimeState(sessionId: string): LiveRuntimeState {

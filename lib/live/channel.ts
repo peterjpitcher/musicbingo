@@ -11,7 +11,7 @@ export function getLiveChannelName(sessionId: string): string {
 function isValidMessage(value: unknown): value is LiveChannelMessage {
   if (!value || typeof value !== "object") return false;
   const maybe = value as { type?: unknown };
-  return maybe.type === "runtime_update" || maybe.type === "host_heartbeat" || maybe.type === "warning";
+  return maybe.type === "runtime_update" || maybe.type === "host_heartbeat" || maybe.type === "warning" || maybe.type === "brand_update";
 }
 
 export function publishLiveMessage(sessionId: string, message: LiveChannelMessage): void {
