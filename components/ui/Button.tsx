@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ComponentPropsWithoutRef } from "react";
 
-type Variant = "primary" | "secondary" | "danger";
+type Variant = "primary" | "secondary" | "danger" | "success";
 type Size = "sm" | "md";
 
 const variantClasses: Record<Variant, string> = {
@@ -11,6 +11,8 @@ const variantClasses: Record<Variant, string> = {
     "bg-white hover:bg-slate-50 text-slate-800 border-slate-300 hover:border-slate-400",
   danger:
     "bg-red-600 hover:bg-red-700 text-white border-transparent shadow-sm",
+  success:
+    "bg-emerald-600 hover:bg-emerald-700 text-white border-transparent shadow-sm",
 };
 
 const sizeClasses: Record<Size, string> = {

@@ -828,110 +828,137 @@ export default function HostSessionControllerPage() {
               </Button>
             </div>
 
-            <div className="flex flex-wrap gap-2.5 mb-3">
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={!isController || commandBusy}
-                onClick={() =>
-                  void sendCommand(
-                    runtime.currentTrack?.isPlaying ? "pause" : "resume",
-                    undefined,
-                    {
-                      modeOnSuccess: runtime.currentTrack?.isPlaying
-                        ? "paused"
-                        : "running",
-                    }
-                  )
-                }
-              >
-                {runtime.currentTrack?.isPlaying ? "Pause" : "Resume"}
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={!isController || commandBusy}
-                onClick={() => void sendCommand("previous")}
-              >
-                Previous
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={!isController || commandBusy}
-                onClick={() => void sendCommand("next")}
-              >
-                Next
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={commandBusy}
-                title="Click if guest display stops updating"
-                onClick={() => void pollStatus()}
-              >
-                Resync State
-              </Button>
-            </div>
-
-            <div className="flex flex-wrap gap-2.5">
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={!isController || commandBusy}
-                onClick={openBreakScreen}
-              >
-                Show Break Screen
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={!isController || commandBusy}
-                onClick={resumeFromBreak}
-              >
-                Resume Display
-              </Button>
-              <Button
-                variant={runtime.freePlay ? "primary" : "secondary"}
-                size="sm"
-                disabled={!isController}
-                title="Songs play in full with no auto-advance — useful after bingo is called"
-                onClick={() => commitRuntime((prev) => ({ ...prev, freePlay: !prev.freePlay }))}
-              >
-                {runtime.freePlay ? "Free Play ON" : "Free Play"}
-              </Button>
-              {runtime.mode === "ended" && (
+            {runtime.mode === "break" ? (
+              /* Break mode — prominent resume button, hide irrelevant game controls */
+              <div className="flex flex-wrap gap-2.5 mb-3">
+                <Button
+                  variant="success"
+                  size="sm"
+                  disabled={!isController || commandBusy}
+                  onClick={resumeFromBreak}
+                >
+                  ▶ Resume Game
+                </Button>
                 <Button
                   variant="secondary"
                   size="sm"
-                  disabled={!isController}
+                  disabled={commandBusy}
+                  title="Click if guest display stops updating"
+                  onClick={() => void pollStatus()}
+                >
+                  Resync State
+                </Button>
+                <Button
+                  variant="danger"
+                  size="sm"
                   onClick={() =>
-                    commitRuntime((prev) => ({
-                      ...prev,
-                      mode: "idle",
-                      activeGameNumber: null,
-                      currentTrack: null,
-                      revealState: { showAlbum: false, showTitle: false, showArtist: false, shouldAdvance: false },
-                      advanceTriggeredForTrackId: null,
-                      isChallengeSong: false,
-                      extensionMs: 0,
-                      freePlay: false,
-                    }))
+                    commitRuntime((prev) => ({ ...prev, mode: "ended" }))
                   }
                 >
-                  Reset to Lobby
+                  End Session
                 </Button>
-              )}
-              <Button
-                variant="danger"
-                size="sm"
-                onClick={() =>
-                  commitRuntime((prev) => ({ ...prev, mode: "ended" }))
-                }
-              >
-                End Session
-              </Button>
-            </div>
+              </div>
+            ) : (
+              /* Normal mode — full game controls */
+              <>
+                <div className="flex flex-wrap gap-2.5 mb-3">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={!isController || commandBusy}
+                    onClick={() =>
+                      void sendCommand(
+                        runtime.currentTrack?.isPlaying ? "pause" : "resume",
+                        undefined,
+                        {
+                          modeOnSuccess: runtime.currentTrack?.isPlaying
+                            ? "paused"
+                            : "running",
+                        }
+                      )
+                    }
+                  >
+                    {runtime.currentTrack?.isPlaying ? "Pause" : "Resume"}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={!isController || commandBusy}
+                    onClick={() => void sendCommand("previous")}
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={!isController || commandBusy}
+                    onClick={() => void sendCommand("next")}
+                  >
+                    Next
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={commandBusy}
+                    title="Click if guest display stops updating"
+                    onClick={() => void pollStatus()}
+                  >
+                    Resync State
+                  </Button>
+                </div>
+
+                <div className="flex flex-wrap gap-2.5">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={!isController || commandBusy}
+                    onClick={openBreakScreen}
+                  >
+                    Show Break Screen
+                  </Button>
+                  <Button
+                    variant={runtime.freePlay ? "primary" : "secondary"}
+                    size="sm"
+                    disabled={!isController}
+                    title="Songs play in full with no auto-advance — useful after bingo is called"
+                    onClick={() => commitRuntime((prev) => ({ ...prev, freePlay: !prev.freePlay }))}
+                  >
+                    {runtime.freePlay ? "Free Play ON" : "Free Play"}
+                  </Button>
+                  {runtime.mode === "ended" && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      disabled={!isController}
+                      onClick={() =>
+                        commitRuntime((prev) => ({
+                          ...prev,
+                          mode: "idle",
+                          activeGameNumber: null,
+                          currentTrack: null,
+                          revealState: { showAlbum: false, showTitle: false, showArtist: false, shouldAdvance: false },
+                          advanceTriggeredForTrackId: null,
+                          isChallengeSong: false,
+                          extensionMs: 0,
+                          freePlay: false,
+                        }))
+                      }
+                    >
+                      Reset to Lobby
+                    </Button>
+                  )}
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={() =>
+                      commitRuntime((prev) => ({ ...prev, mode: "ended" }))
+                    }
+                  >
+                    End Session
+                  </Button>
+                </div>
+              </>
+            )}
           </Card>
 
           <Card as="article">
@@ -961,7 +988,7 @@ export default function HostSessionControllerPage() {
             </p>
 
             {runtime.mode === "break" ? (
-              /* Break mode — simple playback indicator, no game timing */
+              /* Break mode — context-rich indicator showing what we'll resume to */
               <div className="rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-2 mb-3">
                 <div className="flex items-baseline gap-3 flex-wrap">
                   <span className="text-sm font-semibold text-emerald-700">Break playlist playing</span>
@@ -971,6 +998,13 @@ export default function HostSessionControllerPage() {
                     </span>
                   )}
                 </div>
+                {runtime.activeGameNumber && (
+                  <p className="text-xs text-emerald-600 mt-1">
+                    Will resume: Game {runtime.activeGameNumber}
+                    {activeGameTheme ? ` (${activeGameTheme})` : ""}
+                    {playlistTracks.length > 0 && ` — track ${playedTrackIds.size} of ${playlistTracks.length}`}
+                  </p>
+                )}
               </div>
             ) : (
               /* Game mode — countdown, reveal badges, and controls */
