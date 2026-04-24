@@ -953,75 +953,91 @@ export default function HostSessionControllerPage() {
                   ? `${runtime.currentTrack.title} — ${runtime.currentTrack.artist}`
                   : "No track detected"}
               </strong>
-              {isChallenge && (
+              {isChallenge && runtime.mode !== "break" && (
                 <span className="ml-2 inline-flex items-center rounded-full bg-amber-100 border border-brand-gold px-2 py-0.5 text-xs font-bold text-amber-800">
                   CHALLENGE SONG
                 </span>
               )}
             </p>
 
-            {/* Countdown display */}
-            {(() => {
-              const baseCfg = isChallenge ? CHALLENGE_REVEAL_CONFIG : (session?.revealConfig ?? { nextMs: 30_000 });
-              const effectiveNextMs = baseCfg.nextMs + runtime.extensionMs;
-              const progressMs = runtime.currentTrack?.progressMs ?? 0;
-              const timeUntilNextSec = Math.max(0, Math.ceil((effectiveNextMs - progressMs) / 1000));
-              const progressSec = Math.floor(progressMs / 1000);
-              const nextSec = Math.floor(effectiveNextMs / 1000);
-              return (
-                <div className="rounded-xl bg-slate-100 border border-slate-200 px-3 py-2 mb-3">
-                  <div className="flex items-baseline gap-3 flex-wrap">
-                    <span className="text-2xl font-black text-slate-800 tabular-nums">{progressSec}s</span>
-                    <span className="text-sm text-slate-500">of {nextSec}s</span>
-                    {runtime.revealState.shouldAdvance ? (
-                      <span className="text-sm font-bold text-brand-gold">Advancing...</span>
-                    ) : (
-                      <span className="text-sm text-slate-500">
-                        Next song in <strong className="text-slate-700">{timeUntilNextSec}s</strong>
-                      </span>
-                    )}
-                    {runtime.extensionMs > 0 && (
-                      <span className="text-xs text-brand-gold font-semibold">+{Math.floor(runtime.extensionMs / 1000)}s extended</span>
-                    )}
-                  </div>
+            {runtime.mode === "break" ? (
+              /* Break mode — simple playback indicator, no game timing */
+              <div className="rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-2 mb-3">
+                <div className="flex items-baseline gap-3 flex-wrap">
+                  <span className="text-sm font-semibold text-emerald-700">Break playlist playing</span>
+                  {runtime.currentTrack?.progressMs != null && (
+                    <span className="text-2xl font-black text-emerald-800 tabular-nums">
+                      {Math.floor(runtime.currentTrack.progressMs / 1000)}s
+                    </span>
+                  )}
                 </div>
-              );
-            })()}
-
-            <div className="flex flex-wrap gap-2 mb-3">
-              <Badge active={runtime.revealState.showAlbum}>Album @10s</Badge>
-              <Badge active={runtime.revealState.showTitle}>Title @20s</Badge>
-              <Badge active={runtime.revealState.showArtist}>Artist @25s</Badge>
-              <Badge active={runtime.revealState.shouldAdvance}>
+              </div>
+            ) : (
+              /* Game mode — countdown, reveal badges, and controls */
+              <>
+                {/* Countdown display */}
                 {(() => {
                   const baseCfg = isChallenge ? CHALLENGE_REVEAL_CONFIG : (session?.revealConfig ?? { nextMs: 30_000 });
-                  return `Next @${Math.floor((baseCfg.nextMs + runtime.extensionMs) / 1000)}s`;
+                  const effectiveNextMs = baseCfg.nextMs + runtime.extensionMs;
+                  const progressMs = runtime.currentTrack?.progressMs ?? 0;
+                  const timeUntilNextSec = Math.max(0, Math.ceil((effectiveNextMs - progressMs) / 1000));
+                  const progressSec = Math.floor(progressMs / 1000);
+                  const nextSec = Math.floor(effectiveNextMs / 1000);
+                  return (
+                    <div className="rounded-xl bg-slate-100 border border-slate-200 px-3 py-2 mb-3">
+                      <div className="flex items-baseline gap-3 flex-wrap">
+                        <span className="text-2xl font-black text-slate-800 tabular-nums">{progressSec}s</span>
+                        <span className="text-sm text-slate-500">of {nextSec}s</span>
+                        {runtime.revealState.shouldAdvance ? (
+                          <span className="text-sm font-bold text-brand-gold">Advancing...</span>
+                        ) : (
+                          <span className="text-sm text-slate-500">
+                            Next song in <strong className="text-slate-700">{timeUntilNextSec}s</strong>
+                          </span>
+                        )}
+                        {runtime.extensionMs > 0 && (
+                          <span className="text-xs text-brand-gold font-semibold">+{Math.floor(runtime.extensionMs / 1000)}s extended</span>
+                        )}
+                      </div>
+                    </div>
+                  );
                 })()}
-              </Badge>
-            </div>
 
-            <div className="flex flex-wrap gap-2 mb-4">
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={!isController || commandBusy || runtime.mode !== "running" || runtime.extensionMs >= 300_000}
-                title="Extend current song by 30 seconds (max 5 minutes total)"
-                onClick={() => commitRuntime((prev) => ({ ...prev, extensionMs: Math.min(prev.extensionMs + 30_000, 300_000) }))}
-              >
-                +30s
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={!isController || commandBusy || !runtime.currentTrack}
-                onClick={restartSong}
-              >
-                Restart Song
-              </Button>
+                <div className="flex flex-wrap gap-2 mb-3">
+                  <Badge active={runtime.revealState.showAlbum}>Album @10s</Badge>
+                  <Badge active={runtime.revealState.showTitle}>Title @20s</Badge>
+                  <Badge active={runtime.revealState.showArtist}>Artist @25s</Badge>
+                  <Badge active={runtime.revealState.shouldAdvance}>
+                    {(() => {
+                      const baseCfg = isChallenge ? CHALLENGE_REVEAL_CONFIG : (session?.revealConfig ?? { nextMs: 30_000 });
+                      return `Next @${Math.floor((baseCfg.nextMs + runtime.extensionMs) / 1000)}s`;
+                    })()}
+                  </Badge>
+                </div>
 
-            </div>
+                <div className="flex flex-wrap gap-2 mb-4">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={!isController || commandBusy || runtime.mode !== "running" || runtime.extensionMs >= 300_000}
+                    title="Extend current song by 30 seconds (max 5 minutes total)"
+                    onClick={() => commitRuntime((prev) => ({ ...prev, extensionMs: Math.min(prev.extensionMs + 30_000, 300_000) }))}
+                  >
+                    +30s
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={!isController || commandBusy || !runtime.currentTrack}
+                    onClick={restartSong}
+                  >
+                    Restart Song
+                  </Button>
+                </div>
+              </>
+            )}
 
-            {activeGame?.challengeSongTitle ? (
+            {activeGame?.challengeSongTitle && runtime.mode !== "break" ? (
               <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 mb-3">
                 <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-0.5">
                   Challenge Song — Game {activeGame.gameNumber}
