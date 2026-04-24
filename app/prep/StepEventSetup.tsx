@@ -1,5 +1,6 @@
 "use client";
 
+import { BrandSelector } from "@/components/brand/BrandSelector";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { helpClass, inputClass, labelClass } from "@/components/ui/formStyles";
@@ -13,6 +14,8 @@ type StepEventSetupProps = {
   onSessionName: (v: string) => void;
   breakPlaylistId: string;
   onBreakPlaylistId: (v: string) => void;
+  selectedBrandId: string | null;
+  onSelectedBrandId: (v: string) => void;
   onNext: () => void;
 };
 
@@ -25,6 +28,8 @@ export function StepEventSetup({
   onSessionName,
   breakPlaylistId,
   onBreakPlaylistId,
+  selectedBrandId,
+  onSelectedBrandId,
   onNext,
 }: StepEventSetupProps) {
   const count = Number.parseInt(countInput, 10);
@@ -71,6 +76,15 @@ export function StepEventSetup({
           placeholder="Music Bingo - Event Date"
         />
         <p className={helpClass}>Used to identify this session in the live host console</p>
+      </div>
+      <div className="mb-5">
+        <label className={labelClass}>Brand</label>
+        <BrandSelector
+          value={selectedBrandId}
+          onChange={onSelectedBrandId}
+          className={inputClass}
+        />
+        <p className={helpClass}>Venue brand applied to PDFs, guest screens, and host theming</p>
       </div>
       <div className="mb-6">
         <label className={labelClass}>Break Playlist URL <span className="font-normal text-slate-400">(optional)</span></label>

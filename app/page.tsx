@@ -75,6 +75,7 @@ export default function HomePage() {
   const [liveSessionName, setLiveSessionName] = useState<string>("");
   const [liveSessionNameDirty, setLiveSessionNameDirty] = useState<boolean>(false);
   const [breakPlaylistId, setBreakPlaylistId] = useState<string>("");
+  const [selectedBrandId, setSelectedBrandId] = useState<string | null>(null);
 
   // Step 1 fields
   const [game1Theme, setGame1Theme] = useState<string>(DEFAULT_GAME_THEME);
@@ -192,6 +193,9 @@ export default function HomePage() {
     if (livePlaylistByGame?.game2.playlistId) {
       form.set("game2_playlist_id", livePlaylistByGame.game2.playlistId);
     }
+    if (selectedBrandId) {
+      form.set("brand_id", selectedBrandId);
+    }
     return form;
   }
 
@@ -245,6 +249,7 @@ export default function HomePage() {
         game2ChallengeSong,
         cardCount: Number.isFinite(count) ? count : 40,
       },
+      brandId: selectedBrandId ?? undefined,
     };
   }
 
@@ -580,6 +585,8 @@ export default function HomePage() {
             }}
             breakPlaylistId={breakPlaylistId}
             onBreakPlaylistId={setBreakPlaylistId}
+            selectedBrandId={selectedBrandId}
+            onSelectedBrandId={setSelectedBrandId}
             onNext={() => goToStep(1)}
           />
         )}
