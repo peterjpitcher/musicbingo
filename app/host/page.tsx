@@ -241,6 +241,9 @@ export default function HostDashboardPage() {
                 }}
               />
             </label>
+            <Button as="link" href="/brands" variant="secondary" size="sm">
+              Manage Brands
+            </Button>
             <Button as="link" href="/" variant="secondary" size="sm">
               Back to Prep
             </Button>

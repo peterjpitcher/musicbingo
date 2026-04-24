@@ -51,13 +51,18 @@ export default function BrandsPage(): React.ReactElement {
         subtitle="Create and manage venue brands"
         variant="light"
         actions={
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => router.push("/brands/new/edit")}
-          >
-            + New Brand
-          </Button>
+          <>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => router.push("/brands/new/edit")}
+            >
+              + New Brand
+            </Button>
+            <Button as="link" href="/host" variant="secondary" size="sm">
+              Back to Host
+            </Button>
+          </>
         }
       />
 
