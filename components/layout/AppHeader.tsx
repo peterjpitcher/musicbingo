@@ -8,6 +8,9 @@ type AppHeaderProps = {
   subtitle?: string;
   actions?: ReactNode;
   variant?: Variant;
+  logoDarkUrl?: string;
+  logoLightUrl?: string;
+  logoAlt?: string;
 };
 
 export function AppHeader({
@@ -15,6 +18,9 @@ export function AppHeader({
   subtitle,
   actions,
   variant = "light",
+  logoDarkUrl,
+  logoLightUrl,
+  logoAlt,
 }: AppHeaderProps) {
   const isDark = variant === "dark";
 
@@ -31,10 +37,10 @@ export function AppHeader({
         <Image
           src={
             isDark
-              ? "/the-anchor-pub-logo-white-transparent.png"
-              : "/the-anchor-pub-logo-black-transparent.png"
+              ? (logoDarkUrl ?? "/the-anchor-pub-logo-white-transparent.png")
+              : (logoLightUrl ?? "/the-anchor-pub-logo-black-transparent.png")
           }
-          alt="The Anchor"
+          alt={logoAlt ?? "Logo"}
           width={140}
           height={44}
           priority
