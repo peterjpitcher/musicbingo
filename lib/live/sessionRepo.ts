@@ -10,6 +10,7 @@ type SessionRow = {
   event_date: string;
   data: unknown;
   updated_at: string;
+  brand_id: string | null;
 };
 
 export async function listSessions(): Promise<LiveSessionV1[]> {
@@ -45,6 +46,9 @@ export async function upsertSession(session: LiveSessionV1): Promise<void> {
   const validated = validateLiveSession(session);
   if (!validated) throw new Error("Invalid live session payload.");
 
+  // Preserve brandId from the input (validateLiveSession doesn't round-trip it yet)
+  const dataWithBrand = { ...validated, ...(session.brandId ? { brandId: session.brandId } : {}) };
+
   const supabase = getSupabaseClient();
   const { error } = await supabase.from("live_sessions").upsert(
     {
@@ -52,7 +56,8 @@ export async function upsertSession(session: LiveSessionV1): Promise<void> {
       name: validated.name,
       created_at: validated.createdAt,
       event_date: validated.eventDateInput,
-      data: validated,
+      data: dataWithBrand,
+      brand_id: session.brandId ?? null,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "id" }
@@ -92,4 +97,24 @@ export async function upsertRuntimeState(id: string, runtime: LiveRuntimeState):
     .eq("id", id);
 
   if (error) throw new Error(`Failed to upsert runtime state: ${error.message}`);
+}
+
+export async function updateSessionBrand(sessionId: string, brandId: string): Promise<void> {
+  const supabase = getSupabaseClient();
+
+  // Also update brandId inside the JSONB data field for consistency
+  const session = await getSession(sessionId);
+  if (!session) throw new Error("Session not found");
+  session.brandId = brandId;
+
+  const { error } = await supabase
+    .from("live_sessions")
+    .update({
+      brand_id: brandId,
+      data: session,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", sessionId);
+
+  if (error) throw new Error(`Failed to update session brand: ${error.message}`);
 }
