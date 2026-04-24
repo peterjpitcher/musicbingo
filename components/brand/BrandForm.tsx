@@ -134,8 +134,8 @@ export function BrandForm({ brand, onSaved }: BrandFormProps): React.ReactElemen
       const payload: BrandInput = {
         name: name.trim(),
         is_default: isDefault,
-        logo_dark_url: brand?.logo_dark_url ?? "/placeholder.png",
-        logo_light_url: brand?.logo_light_url ?? "/placeholder.png",
+        logo_dark_url: brand?.logo_dark_url ?? "pending-upload",
+        logo_light_url: brand?.logo_light_url ?? "pending-upload",
         color_primary: colorPrimary,
         color_primary_light: colorPrimaryLight,
         color_accent: colorAccent,
@@ -330,7 +330,7 @@ export function BrandForm({ brand, onSaved }: BrandFormProps): React.ReactElemen
                     }
                   }}
                 >
-                  {logoDarkPreview && logoDarkPreview !== "/placeholder.png" ? (
+                  {logoDarkPreview && logoDarkPreview !== "pending-upload" ? (
                     /* eslint-disable-next-line @next/next/no-img-element */
                     <img
                       src={logoDarkPreview}
@@ -344,7 +344,7 @@ export function BrandForm({ brand, onSaved }: BrandFormProps): React.ReactElemen
                 <input
                   id="logo-dark-input"
                   type="file"
-                  accept="image/png,image/svg+xml,image/webp"
+                  accept="image/png,image/jpeg,image/webp"
                   className="hidden"
                   onChange={(e) => handleLogoSelect("dark", e.target.files?.[0] ?? null)}
                 />
@@ -368,7 +368,7 @@ export function BrandForm({ brand, onSaved }: BrandFormProps): React.ReactElemen
                     }
                   }}
                 >
-                  {logoLightPreview && logoLightPreview !== "/placeholder.png" ? (
+                  {logoLightPreview && logoLightPreview !== "pending-upload" ? (
                     /* eslint-disable-next-line @next/next/no-img-element */
                     <img
                       src={logoLightPreview}
@@ -382,7 +382,7 @@ export function BrandForm({ brand, onSaved }: BrandFormProps): React.ReactElemen
                 <input
                   id="logo-light-input"
                   type="file"
-                  accept="image/png,image/svg+xml,image/webp"
+                  accept="image/png,image/jpeg,image/webp"
                   className="hidden"
                   onChange={(e) => handleLogoSelect("light", e.target.files?.[0] ?? null)}
                 />

@@ -12,12 +12,13 @@ type BrandSelectorProps = {
 export function BrandSelector({ value, onChange, className }: BrandSelectorProps): React.ReactNode {
   const [brands, setBrands] = useState<Brand[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     fetch("/api/brands")
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => setBrands(data))
-      .catch(() => {})
+      .catch(() => setLoadError(true))
       .finally(() => setLoading(false));
   }, []);
 
@@ -29,7 +30,13 @@ export function BrandSelector({ value, onChange, className }: BrandSelectorProps
     );
   }
 
-  if (brands.length === 0) return null;
+  if (loadError || brands.length === 0) {
+    return (
+      <select disabled className={className}>
+        <option>{loadError ? "Failed to load brands" : "No brands available"}</option>
+      </select>
+    );
+  }
 
   const defaultBrand = brands.find((b) => b.is_default);
   const selectedId = value ?? defaultBrand?.id ?? "";

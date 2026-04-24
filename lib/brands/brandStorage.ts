@@ -3,7 +3,7 @@ import { getSupabaseClient } from "@/lib/supabase";
 
 const BUCKET_NAME = "brand-assets";
 const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
-const ALLOWED_MIME_TYPES = ["image/png", "image/jpeg"];
+const ALLOWED_MIME_TYPES = ["image/png", "image/jpeg", "image/webp"];
 
 type LogoSlot = "logo-dark" | "logo-light";
 

@@ -96,7 +96,7 @@ export default function BrandsPage(): React.ReactElement {
                   style={{ backgroundColor: brand.color_primary }}
                 >
                   {brand.logo_dark_public_url &&
-                  brand.logo_dark_url !== "/placeholder.png" ? (
+                  brand.logo_dark_url !== "pending-upload" ? (
                     /* eslint-disable-next-line @next/next/no-img-element */
                     <img
                       src={brand.logo_dark_public_url}
