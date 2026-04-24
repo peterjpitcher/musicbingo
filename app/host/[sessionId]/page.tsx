@@ -1077,6 +1077,9 @@ export default function HostSessionControllerPage() {
                     title="Skip forward 30 seconds in the current song"
                     onClick={() => {
                       const newPos = (runtime.currentTrack?.progressMs ?? 0) + 30_000;
+                      // Also extend the auto-advance threshold so seeking past the
+                      // original nextMs doesn't immediately trigger the next song.
+                      commitRuntime((prev) => ({ ...prev, extensionMs: Math.min(prev.extensionMs + 30_000, 300_000) }));
                       void sendCommand("seek", { positionMs: newPos });
                     }}
                   >
