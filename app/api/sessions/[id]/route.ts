@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { deleteSession, getSession } from "@/lib/live/sessionRepo";
+import { resolveBrandConfig } from "@/lib/brands/brandRepo";
 
 export const runtime = "nodejs";
 
@@ -14,7 +15,8 @@ export async function GET(
     if (!session) {
       return NextResponse.json({ error: "Session not found." }, { status: 404 });
     }
-    return NextResponse.json(session, { headers: { "Cache-Control": "no-store" } });
+    const brand = await resolveBrandConfig(session.brandId ?? null);
+    return NextResponse.json({ ...session, brand }, { headers: { "Cache-Control": "no-store" } });
   } catch (err: any) {
     return NextResponse.json({ error: err?.message ?? "Failed to get session." }, { status: 500 });
   }
