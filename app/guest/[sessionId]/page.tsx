@@ -1,7 +1,6 @@
 "use client";
 /* eslint-disable @next/next/no-img-element */
 
-import Image from "next/image";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -16,6 +15,8 @@ import {
   type LiveSessionV1,
 } from "@/lib/live/types";
 import { useWakeLock } from "@/hooks/useWakeLock";
+import { BrandProvider } from "@/components/brand/BrandProvider";
+import type { BrandConfig } from "@/lib/brands/types";
 
 function formatSeconds(ms: number): string {
   const safeMs = Number.isFinite(ms) ? Math.max(0, Math.floor(ms)) : 0;
@@ -34,6 +35,7 @@ export default function GuestDisplayPage() {
   const [session, setSession] = useState<LiveSessionV1 | null>(null);
   const [sessionLoading, setSessionLoading] = useState<boolean>(true);
   const sessionLoadedRef = useRef<boolean>(false);
+  const [brand, setBrand] = useState<BrandConfig | null>(null);
   // Derive the guest URL once on mount (window is always available in client components).
   const guestUrl = useMemo(
     () => (sessionId && typeof window !== "undefined" ? `${window.location.origin}/guest/${sessionId}` : ""),
@@ -61,6 +63,13 @@ export default function GuestDisplayPage() {
         if (!cancelled) {
           setSession(loaded);
           setSessionLoading(false);
+          // Fetch the brand config from the full session API response
+          if (loaded) {
+            fetch(`/api/sessions/${encodeURIComponent(sessionId)}`)
+              .then((res) => res.ok ? res.json() : null)
+              .then((data) => { if (data?.brand && !cancelled) setBrand(data.brand); })
+              .catch(() => {});
+          }
         }
       })
       .catch(() => {
@@ -76,6 +85,9 @@ export default function GuestDisplayPage() {
     const unsubscribe = subscribeLiveChannel(sessionId, (message) => {
       if (message.type === "runtime_update") {
         setRuntime(message.runtime);
+      }
+      if (message.type === "brand_update") {
+        setBrand(message.brand);
       }
     });
     const id = window.setInterval(() => {
@@ -111,30 +123,34 @@ export default function GuestDisplayPage() {
 
   if (sessionLoading) {
     return (
-      <div className="guest-projection-shell min-h-screen w-screen text-white flex flex-col items-center justify-center p-8">
-        <div className="bg-brand-green/80 border border-brand-gold/60 rounded-3xl p-8 max-w-lg text-center">
-          <p className="text-white/80 text-lg animate-pulse">Loading session…</p>
+      <BrandProvider brand={brand}>
+        <div className="guest-projection-shell min-h-screen w-screen text-white flex flex-col items-center justify-center p-8">
+          <div className="bg-brand-green/80 border border-brand-gold/60 rounded-3xl p-8 max-w-lg text-center">
+            <p className="text-white/80 text-lg animate-pulse">Loading session…</p>
+          </div>
         </div>
-      </div>
+      </BrandProvider>
     );
   }
 
   if (error) {
     return (
-      <div className="guest-projection-shell min-h-screen w-screen text-white flex flex-col items-center justify-center p-8">
-        <div className="bg-brand-green/80 border border-brand-gold/60 rounded-3xl p-8 max-w-lg text-center">
-          <h1 className="text-2xl font-extrabold uppercase tracking-wide mb-4">
-            Guest Display
-          </h1>
-          <p className="text-red-300 mb-6">{error}</p>
-          <Link
-            href="/host"
-            className="inline-flex items-center justify-center bg-brand-gold text-white rounded-xl px-5 py-2.5 font-bold text-sm"
-          >
-            Open Host Dashboard
-          </Link>
+      <BrandProvider brand={brand}>
+        <div className="guest-projection-shell min-h-screen w-screen text-white flex flex-col items-center justify-center p-8">
+          <div className="bg-brand-green/80 border border-brand-gold/60 rounded-3xl p-8 max-w-lg text-center">
+            <h1 className="text-2xl font-extrabold uppercase tracking-wide mb-4">
+              Guest Display
+            </h1>
+            <p className="text-red-300 mb-6">{error}</p>
+            <Link
+              href="/host"
+              className="inline-flex items-center justify-center bg-brand-gold text-white rounded-xl px-5 py-2.5 font-bold text-sm"
+            >
+              Open Host Dashboard
+            </Link>
+          </div>
         </div>
-      </div>
+      </BrandProvider>
     );
   }
 
@@ -150,16 +166,16 @@ export default function GuestDisplayPage() {
   const showRunning = runtime.mode === "running" && Boolean(runtime.currentTrack);
 
   return (
+    <BrandProvider brand={brand}>
     <div className="guest-projection-shell min-h-screen w-screen text-white flex flex-col overflow-x-hidden">
       {/* Header */}
       <header className="flex items-center justify-between gap-5 px-6 py-4 border-b border-brand-gold/50 bg-brand-green/90 backdrop-blur-sm">
         <div className="flex items-center gap-3.5">
-          <Image
-            src="/the-anchor-pub-logo-white-transparent.png"
-            alt="The Anchor"
+          <img
+            src={brand?.logo_dark_url ?? "/the-anchor-pub-logo-white-transparent.png"}
+            alt={brand?.name ?? "Logo"}
             width={140}
             height={44}
-            priority
             className="max-h-11 w-auto object-contain"
           />
           <div>
@@ -201,7 +217,7 @@ export default function GuestDisplayPage() {
                     value={guestUrl}
                     size={160}
                     level="H"
-                    fgColor="#003f27"
+                    fgColor={brand?.color_primary ?? "#003f27"}
                     bgColor="#ffffff"
                     aria-label={`QR code to join Music Bingo session at ${guestUrl}`}
                   />
@@ -225,9 +241,11 @@ export default function GuestDisplayPage() {
             <p className="m-0 text-[clamp(1rem,2vw,1.6rem)] text-white/90">
               Keep your cards ready — we&apos;ll resume shortly.
             </p>
-            <p className="mt-4 text-[clamp(1rem,2vw,1.5rem)] text-brand-gold font-semibold">
-              🍺 Head to the bar! Kitchen is open until 9pm.
-            </p>
+            {brand?.break_message ? (
+              <p className="mt-4 text-[clamp(1rem,2vw,1.5rem)] text-brand-gold font-semibold">
+                {brand.break_message}
+              </p>
+            ) : null}
           </div>
         ) : null}
 
@@ -256,14 +274,13 @@ export default function GuestDisplayPage() {
             <p className="m-0 text-[clamp(1rem,2vw,1.6rem)] text-white/90">
               We hope you had a great time!
             </p>
-            <div className="mt-6 space-y-3">
-              <p className="text-[clamp(1rem,2vw,1.5rem)] text-brand-gold font-semibold">
-                🍺 Drinks &amp; food orders at the bar — kitchen open until 9pm.
-              </p>
-              <p className="text-[clamp(0.9rem,1.6vw,1.3rem)] text-white/75">
-                Ask the bar team about the next Music Bingo date.
-              </p>
-            </div>
+            {brand?.end_message ? (
+              <div className="mt-6">
+                <p className="text-[clamp(1rem,2vw,1.5rem)] text-brand-gold font-semibold">
+                  {brand.end_message}
+                </p>
+              </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -366,5 +383,6 @@ export default function GuestDisplayPage() {
         </div>
       </footer>
     </div>
+    </BrandProvider>
   );
 }
