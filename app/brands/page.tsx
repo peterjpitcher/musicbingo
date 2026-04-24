@@ -8,9 +8,11 @@ import { Card } from "@/components/ui/Card";
 import { Notice } from "@/components/ui/Notice";
 import type { Brand } from "@/lib/brands/types";
 
+type BrandWithUrls = Brand & { logo_dark_public_url?: string; logo_light_public_url?: string };
+
 export default function BrandsPage(): React.ReactElement {
   const router = useRouter();
-  const [brands, setBrands] = useState<Brand[]>([]);
+  const [brands, setBrands] = useState<BrandWithUrls[]>([]);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
@@ -93,11 +95,11 @@ export default function BrandsPage(): React.ReactElement {
                   className="rounded-xl p-4 mb-3 flex items-center gap-3"
                   style={{ backgroundColor: brand.color_primary }}
                 >
-                  {brand.logo_dark_url &&
+                  {brand.logo_dark_public_url &&
                   brand.logo_dark_url !== "/placeholder.png" ? (
                     /* eslint-disable-next-line @next/next/no-img-element */
                     <img
-                      src={brand.logo_dark_url}
+                      src={brand.logo_dark_public_url}
                       alt={brand.name}
                       className="max-h-8 w-auto object-contain"
                     />
