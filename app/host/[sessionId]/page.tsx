@@ -172,11 +172,22 @@ export default function HostSessionControllerPage() {
   }, [playlistTracks]);
 
   // Track which song IDs have been played so far.
+  // When the playlist is loaded, mark all tracks up to and including the current one
+  // as played — this ensures resuming from a break shows the correct history.
   useEffect(() => {
     const track = runtime.currentTrack;
     if (!track?.trackId || track.trackId === lastPlayedTrackIdRef.current) return;
     lastPlayedTrackIdRef.current = track.trackId;
-    setPlayedTrackIds((prev) => new Set([...prev, track.trackId!]));
+    const tracks = playlistTracksRef.current;
+    const currentIndex = tracks.findIndex((t) => t.trackId === track.trackId);
+    if (currentIndex >= 0) {
+      // Mark every track up to the current one as played.
+      const preceding = tracks.slice(0, currentIndex + 1).map((t) => t.trackId);
+      setPlayedTrackIds((prev) => new Set([...prev, ...preceding]));
+    } else {
+      // Playlist not loaded yet or track not found — fall back to incremental add.
+      setPlayedTrackIds((prev) => new Set([...prev, track.trackId!]));
+    }
   }, [runtime.currentTrack]);
 
   // Fetch the full playlist track listing when the active game changes.
@@ -1058,6 +1069,18 @@ export default function HostSessionControllerPage() {
                     onClick={() => commitRuntime((prev) => ({ ...prev, extensionMs: Math.min(prev.extensionMs + 30_000, 300_000) }))}
                   >
                     +30s
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={!isController || commandBusy || !runtime.currentTrack}
+                    title="Skip forward 30 seconds in the current song"
+                    onClick={() => {
+                      const newPos = (runtime.currentTrack?.progressMs ?? 0) + 30_000;
+                      void sendCommand("seek", { positionMs: newPos });
+                    }}
+                  >
+                    Skip 30s
                   </Button>
                   <Button
                     variant="secondary"
