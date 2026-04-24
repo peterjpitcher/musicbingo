@@ -24,7 +24,13 @@ export async function listSessions(): Promise<LiveSessionV1[]> {
 
   const rows = (data ?? []) as SessionRow[];
   return rows
-    .map((row) => validateLiveSession(row.data))
+    .map((row) => {
+      const session = validateLiveSession(row.data);
+      if (!session) return null;
+      // Prefer brand_id from the DB column (authoritative) over JSONB
+      if (row.brand_id) session.brandId = row.brand_id;
+      return session;
+    })
     .filter((s): s is LiveSessionV1 => s !== null);
 }
 
@@ -39,7 +45,14 @@ export async function getSession(id: string): Promise<LiveSessionV1 | null> {
   if (error) throw new Error(`Failed to get session: ${error.message}`);
   if (!data) return null;
 
-  return validateLiveSession((data as SessionRow).data);
+  const row = data as SessionRow;
+  const session = validateLiveSession(row.data);
+  if (!session) return null;
+
+  // Prefer brand_id from the DB column (authoritative) over JSONB
+  if (row.brand_id) session.brandId = row.brand_id;
+
+  return session;
 }
 
 export async function upsertSession(session: LiveSessionV1): Promise<void> {

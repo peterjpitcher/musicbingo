@@ -96,6 +96,8 @@ export function validateLiveSession(input: unknown): LiveSessionV1 | null {
 
   const prepData = validatePrepData(input.prepData);
 
+  const brandId = asString(input.brandId);
+
   return {
     version: LIVE_SESSION_VERSION,
     id,
@@ -107,6 +109,7 @@ export function validateLiveSession(input: unknown): LiveSessionV1 | null {
     revealConfig,
     breakPlaylistId: asString(input.breakPlaylistId) ?? "",
     ...(prepData ? { prepData } : {}),
+    ...(brandId ? { brandId } : {}),
   };
 }
 
