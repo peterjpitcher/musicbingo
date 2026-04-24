@@ -2,10 +2,18 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Guest projection background — multi-layer radial gradient, too complex for inline Tailwind */
+:root {
+  --brand-primary-rgb: 0 63 39;
+  --brand-primary-light-rgb: 15 104 70;
+  --brand-accent-rgb: 165 118 38;
+  --brand-accent-light-rgb: 196 149 47;
+  --brand-font: 'Inter', ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Guest projection background — multi-layer radial gradient using brand CSS variables */
 .guest-projection-shell {
   background:
-    radial-gradient(circle at 10% 20%, rgba(165, 118, 38, 0.14), transparent 45%),
-    radial-gradient(circle at 90% 10%, rgba(15, 104, 70, 0.22), transparent 50%),
-    linear-gradient(180deg, #003f27 0%, #002f1d 100%);
+    radial-gradient(circle at 10% 20%, rgb(var(--brand-accent-rgb) / 0.14), transparent 45%),
+    radial-gradient(circle at 90% 10%, rgb(var(--brand-primary-light-rgb) / 0.22), transparent 50%),
+    linear-gradient(180deg, rgb(var(--brand-primary-rgb)) 0%, rgb(var(--brand-primary-rgb) / 0.85) 100%);
 }

@@ -8,13 +8,13 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        "brand-green": "#003f27",
-        "brand-green-light": "#0f6846",
-        "brand-gold": "#a57626",
-        "brand-gold-light": "#c4952f",
+        "brand-green": "rgb(var(--brand-primary-rgb) / <alpha-value>)",
+        "brand-green-light": "rgb(var(--brand-primary-light-rgb) / <alpha-value>)",
+        "brand-gold": "rgb(var(--brand-accent-rgb) / <alpha-value>)",
+        "brand-gold-light": "rgb(var(--brand-accent-light-rgb) / <alpha-value>)",
       },
       fontFamily: {
-        sans: ["var(--font-inter)", "ui-sans-serif", "system-ui", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "sans-serif"],
+        sans: ["var(--brand-font, 'Inter')", "ui-sans-serif", "system-ui", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "sans-serif"],
       },
     },
   },
