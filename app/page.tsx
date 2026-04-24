@@ -202,6 +202,7 @@ export default function HomePage() {
     const eventDateDisplay = formatEventDateDisplay(eventDate) || eventDate || todayIso();
     const sessionName = liveSessionName.trim() || `Music Bingo - ${eventDateDisplay}`;
     const { game1, game2 } = livePlaylistByGame;
+    const count = Number.parseInt(countInput, 10);
     return {
       version: LIVE_SESSION_VERSION,
       id: makeSessionId(),
@@ -235,6 +236,15 @@ export default function HomePage() {
           challengeSongTitle: parseChallengeSongSelection(game2ChallengeSong).title,
         },
       ],
+      prepData: {
+        game1SongsText,
+        game2SongsText,
+        game1Theme,
+        game2Theme,
+        game1ChallengeSong,
+        game2ChallengeSong,
+        cardCount: Number.isFinite(count) ? count : 40,
+      },
     };
   }
 
@@ -265,6 +275,71 @@ export default function HomePage() {
     } catch (err: any) {
       setLiveSessionNotice("");
       setError(err?.message ?? "Failed to export live session.");
+    }
+  }
+
+  async function onDownloadOnly() {
+    setError("");
+    setQrNotice("");
+    setBusy(true);
+    try {
+      const count = Number.parseInt(countInput, 10);
+      if (!Number.isFinite(count) || count < 1 || count > 1000) {
+        throw new Error("Cards per game must be a whole number between 1 and 1000.");
+      }
+
+      const pdfForm = buildBaseFormData();
+      pdfForm.set("count", String(count));
+
+      const res = await fetch("/api/generate", { method: "POST", body: pdfForm });
+      if (!res.ok) {
+        const msg = await res.text();
+        throw new Error(msg || "Failed to generate output bundle.");
+      }
+
+      const qrStatus = res.headers.get("x-music-bingo-qr-status");
+      const requestedRaw = res.headers.get("x-music-bingo-events-requested");
+      const eventsWithUrl = res.headers.get("x-music-bingo-events-with-url");
+      const eventsCount = res.headers.get("x-music-bingo-events-count");
+      const qrError = res.headers.get("x-music-bingo-qr-error");
+      const expectedEvents = (() => {
+        const n = requestedRaw ? Number.parseInt(requestedRaw, 10) : 4;
+        return Number.isFinite(n) && n > 0 ? n : 4;
+      })();
+
+      if (qrStatus && qrStatus !== "ok") {
+        if (qrStatus === "missing_config") {
+          setQrNotice("Upcoming event QRs: management API not configured.");
+        } else if (qrStatus === "no_events") {
+          setQrNotice("Upcoming event QRs: no upcoming events found after this date (placeholders used).");
+        } else if (qrStatus === "error") {
+          setQrNotice(`Upcoming event QRs: ${qrError || "failed to fetch events"} (placeholders used).`);
+        }
+      } else if (eventsWithUrl && eventsWithUrl !== String(expectedEvents)) {
+        const resolvedCount = Number.parseInt(eventsWithUrl, 10);
+        if (Number.isFinite(resolvedCount) && resolvedCount >= 0 && resolvedCount < expectedEvents) {
+          setQrNotice(
+            `Upcoming event QRs: only ${resolvedCount}/${expectedEvents} event URLs resolved (placeholders used).`
+          );
+        }
+      } else if (eventsCount && eventsCount !== String(expectedEvents)) {
+        const foundCount = Number.parseInt(eventsCount, 10);
+        if (Number.isFinite(foundCount) && foundCount >= 0 && foundCount < expectedEvents) {
+          setQrNotice(
+            `Upcoming event QRs: only ${foundCount}/${expectedEvents} upcoming events found (placeholders used).`
+          );
+        }
+      }
+
+      const blob = await res.blob();
+      const filename =
+        res.headers.get("content-disposition")?.match(/filename="(.+)"/)?.[1] ??
+        "music-bingo-event-pack.zip";
+      downloadBlob(blob, filename);
+    } catch (err: any) {
+      setError(err?.message ?? "Failed to generate output bundle.");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -564,6 +639,7 @@ export default function HomePage() {
             error={error}
             qrNotice={qrNotice}
             onSubmit={onSubmit}
+            onDownloadOnly={() => void onDownloadOnly()}
             onConnectSpotify={() => void connectSpotify()}
             onDisconnectSpotify={() => void disconnectSpotify()}
             onSaveLiveSession={() => void saveLiveSession()}

@@ -39,6 +39,17 @@ export type LiveGameConfig = {
   challengeSongTitle: string;
 };
 
+/** Raw prep-screen inputs stored so the event pack ZIP can be re-generated from the host dashboard. */
+export type PrepData = {
+  game1SongsText: string;
+  game2SongsText: string;
+  game1Theme: string;
+  game2Theme: string;
+  game1ChallengeSong: string;
+  game2ChallengeSong: string;
+  cardCount: number;
+};
+
 export type LiveSessionV1 = {
   version: typeof LIVE_SESSION_VERSION;
   id: string;
@@ -50,6 +61,8 @@ export type LiveSessionV1 = {
   revealConfig: RevealConfig;
   /** Spotify playlist URL/ID to play during breaks. Empty string = manual host control. */
   breakPlaylistId: string;
+  /** Raw prep inputs for re-generating the event pack ZIP without revisiting the prep screen. */
+  prepData?: PrepData;
 };
 
 export type LiveTrackSnapshot = {

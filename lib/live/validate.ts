@@ -3,6 +3,7 @@ import {
   LIVE_SESSION_VERSION,
   type LiveGameConfig,
   type LiveSessionV1,
+  type PrepData,
   type RevealConfig,
 } from "@/lib/live/types";
 
@@ -93,6 +94,8 @@ export function validateLiveSession(input: unknown): LiveSessionV1 | null {
     return null;
   }
 
+  const prepData = validatePrepData(input.prepData);
+
   return {
     version: LIVE_SESSION_VERSION,
     id,
@@ -103,5 +106,24 @@ export function validateLiveSession(input: unknown): LiveSessionV1 | null {
     games: [game1, game2],
     revealConfig,
     breakPlaylistId: asString(input.breakPlaylistId) ?? "",
+    ...(prepData ? { prepData } : {}),
   };
+}
+
+function validatePrepData(input: unknown): PrepData | null {
+  if (!isObject(input)) return null;
+
+  const game1SongsText = asString(input.game1SongsText);
+  const game2SongsText = asString(input.game2SongsText);
+  const game1Theme = asString(input.game1Theme);
+  const game2Theme = asString(input.game2Theme);
+  const game1ChallengeSong = asString(input.game1ChallengeSong);
+  const game2ChallengeSong = asString(input.game2ChallengeSong);
+  const cardCount = asNumber(input.cardCount);
+
+  if (!game1SongsText || !game2SongsText || !game1Theme || !game2Theme || !game1ChallengeSong || !game2ChallengeSong || cardCount === null || cardCount < 1) {
+    return null;
+  }
+
+  return { game1SongsText, game2SongsText, game1Theme, game2Theme, game1ChallengeSong, game2ChallengeSong, cardCount };
 }

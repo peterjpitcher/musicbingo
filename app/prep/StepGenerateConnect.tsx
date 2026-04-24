@@ -35,6 +35,7 @@ type StepGenerateConnectProps = {
   error: string;
   qrNotice: string;
   onSubmit: (e: React.FormEvent) => void;
+  onDownloadOnly: () => void;
   onConnectSpotify: () => void;
   onDisconnectSpotify: () => void;
   onSaveLiveSession: () => void;
@@ -57,6 +58,7 @@ export function StepGenerateConnect({
   error,
   qrNotice,
   onSubmit,
+  onDownloadOnly,
   onConnectSpotify,
   onDisconnectSpotify,
   onSaveLiveSession,
@@ -90,6 +92,18 @@ export function StepGenerateConnect({
           disabled={!canSubmit || busy}
         >
           {generateLabel}
+        </Button>
+
+        <Button
+          as="button"
+          type="button"
+          variant="secondary"
+          fullWidth
+          disabled={!canSubmit || busy}
+          className="mt-2"
+          onClick={onDownloadOnly}
+        >
+          {busy ? "Generating..." : "Re-download Event Pack Only (no Spotify)"}
         </Button>
 
         <p className={[helpClass, "text-center mt-3"].join(" ")}>
