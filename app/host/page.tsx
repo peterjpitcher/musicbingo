@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { BrandSelector } from "@/components/brand/BrandSelector";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -35,6 +36,7 @@ export default function HostDashboardPage() {
   const [error, setError] = useState<string>("");
   const [downloading, setDownloading] = useState<string | null>(null);
   const [spotifyConnected, setSpotifyConnected] = useState<boolean>(false);
+  const [changingBrand, setChangingBrand] = useState<string | null>(null);
 
   async function refreshSessions() {
     const loaded = await listLiveSessions();
@@ -164,6 +166,9 @@ export default function HostDashboardPage() {
       form.set("event_date", session.eventDateInput);
       form.set("game1_playlist_id", game1.playlistId);
       form.set("game2_playlist_id", game2.playlistId);
+      if (session.brandId) {
+        form.set("brand_id", session.brandId);
+      }
 
       if (session.prepData) {
         // Use stored prep data directly — no Spotify connection needed
@@ -269,9 +274,16 @@ export default function HostDashboardPage() {
                 <p className="text-xs text-slate-500 mb-0.5">
                   Event Date: {session.eventDateDisplay}
                 </p>
-                <p className="text-xs text-slate-500 mb-3">
+                <p className="text-xs text-slate-500 mb-0.5">
                   Created: {new Date(session.createdAt).toLocaleString()}
                 </p>
+                {session.brandId ? (
+                  <p className="text-xs text-slate-500 mb-3">
+                    Brand: {session.brandId.slice(0, 8)}…
+                  </p>
+                ) : (
+                  <div className="mb-3" />
+                )}
                 <div className="flex flex-wrap gap-2 mb-4">
                   {session.games
                     .slice()
@@ -295,6 +307,13 @@ export default function HostDashboardPage() {
                     {downloading === session.id ? "Generating..." : "Re-download Event Pack"}
                   </Button>
                   <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setChangingBrand(changingBrand === session.id ? null : session.id)}
+                  >
+                    Change Brand
+                  </Button>
+                  <Button
                     variant="danger"
                     size="sm"
                     onClick={() => void onDelete(session)}
@@ -302,6 +321,29 @@ export default function HostDashboardPage() {
                     Delete
                   </Button>
                 </div>
+                {changingBrand === session.id ? (
+                  <div className="mt-2 w-full">
+                    <BrandSelector
+                      value={session.brandId ?? null}
+                      onChange={async (brandId) => {
+                        try {
+                          const res = await fetch(`/api/sessions/${session.id}/brand`, {
+                            method: "PUT",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ brand_id: brandId }),
+                          });
+                          if (!res.ok) throw new Error("Failed to update brand");
+                          await refreshSessions();
+                          setChangingBrand(null);
+                          setNotice(`Updated brand for: ${session.name}`);
+                        } catch (err: any) {
+                          setError(err?.message ?? "Failed to update brand.");
+                        }
+                      }}
+                      className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
+                    />
+                  </div>
+                ) : null}
               </Card>
             ))}
           </div>
