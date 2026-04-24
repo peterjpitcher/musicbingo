@@ -29,13 +29,15 @@
 | `break_message` | text | YES | `null` | Break screen message. `null` = no message shown |
 | `end_message` | text | YES | `null` | End-of-game screen message. `null` = no message shown |
 | `website_url` | text | YES | `null` | Venue website URL |
-| `qr_items` | jsonb | YES | `null` | Array of `{ label: string, url: string }` for PDF footer QR codes |
+| `qr_items` | jsonb | YES | `null` | Array of `{ label: string, url: string }` for PDF footer QR codes. Validated server-side with Zod: `z.array(z.object({ label: z.string().max(50), url: z.string().url() })).max(4)` |
 | `created_at` | timestamptz | NO | `now()` | |
 | `updated_at` | timestamptz | NO | `now()` | |
 
 **Constraints:**
 - Unique partial index on `is_default WHERE is_default = true` (enforces single default)
-- `color_*` columns validated as hex format (`#RRGGBB`) at the application layer
+- `CHECK` constraints on all colour columns: `CHECK (color_primary ~ '^#[0-9a-fA-F]{6}$')` (and same for `color_primary_light`, `color_accent`, `color_accent_light`)
+- App-level fallback: if no brand has `is_default = true`, resolve to the first brand by `created_at`
+- Prevent deletion of the last remaining default brand (enforced in server action logic)
 
 ### 2.2 `live_sessions` Change
 
@@ -46,7 +48,8 @@ Add column:
 
 - New public bucket: `brand-assets`
 - Logo files stored as `{brand_id}/logo-dark.png` and `{brand_id}/logo-light.png`
-- Public URLs used directly in `logo_dark_url` / `logo_light_url` columns
+- `logo_dark_url` / `logo_light_url` store **object keys** (e.g. `{brand_id}/logo-dark.png`), not full URLs — the full Supabase Storage URL is constructed at read time. This prevents SSRF: the PDF renderer and UI only ever fetch from the known `brand-assets` bucket.
+- **Upload validation:** MIME type must be `image/png` or `image/jpeg`, max file size 2MB, max dimensions 2000x2000px
 
 ### 2.4 Pre-Seeded Data
 
@@ -56,8 +59,8 @@ One migration seeds The Anchor Pub as the default brand:
 |-------|-------|
 | `name` | The Anchor Pub |
 | `is_default` | `true` |
-| `logo_dark_url` | URL to current `the-anchor-pub-logo-white-transparent.png` (uploaded to storage) |
-| `logo_light_url` | URL to current `the-anchor-pub-logo-black-transparent.png` (uploaded to storage) |
+| `logo_dark_url` | Initially references `/the-anchor-pub-logo-white-transparent.png` in `/public`. Migrated to Storage on first admin visit or via post-deploy script. |
+| `logo_light_url` | Initially references `/the-anchor-pub-logo-black-transparent.png` in `/public`. Migrated to Storage on first admin visit or via post-deploy script. |
 | `color_primary` | `#003f27` |
 | `color_primary_light` | `#0f6846` |
 | `color_accent` | `#a57626` |
@@ -68,10 +71,11 @@ One migration seeds The Anchor Pub as the default brand:
 | `website_url` | `https://the-anchor.pub` |
 | `qr_items` | Current QR items from Anchor Management API (if applicable), or `null` |
 
-### 2.5 RLS
+### 2.5 RLS & Access Control
 
 - RLS disabled on `brands` (same pattern as `live_sessions` — accessed via service-role client)
 - The `brand-assets` storage bucket is public (logos need to be accessible by guest browsers without auth)
+- **All brand CRUD and logo uploads require authenticated host access.** Server actions for brand create/update/delete must verify the user is authenticated before proceeding. The `/brands` page itself is protected by the same auth middleware as `/host`.
 
 ## 3. Brand Admin Page (`/brands`)
 
@@ -136,50 +140,55 @@ Footer:
 
 ### 4.3 Realtime Propagation
 
-- When `brand_id` changes on a session, the Realtime channel broadcasts the new brand config to all subscribed guests
-- Guest screens re-apply CSS variables and swap the logo without a full page reload
+- The session API response includes the full brand config (joined from `brands` table), not just the `brand_id` FK
+- When the host changes the brand, the server action:
+  1. Updates `brand_id` on the `live_sessions` row
+  2. Fetches the full brand config for the new `brand_id`
+  3. Broadcasts a `brand_update` message on the session's Realtime channel containing the complete brand payload
+- Guest screens receive the `brand_update` message, re-apply CSS variables, and swap the logo without a full page reload
+- This avoids a race condition where the guest would need to re-fetch the brand by ID after seeing the FK change
 
 ## 5. Runtime Theming (CSS Custom Properties)
 
 ### 5.1 CSS Variables
 
-Brand colours are injected as CSS custom properties on the root element:
+Brand colours are injected as CSS custom properties on the root element using **RGB channel variables** to preserve Tailwind opacity modifier support (`/50`, `/70`, etc.):
 
 ```css
 :root {
-  --brand-primary: #003f27;
-  --brand-primary-light: #0f6846;
-  --brand-accent: #a57626;
-  --brand-accent-light: #c4952f;
+  --brand-primary-rgb: 0 63 39;
+  --brand-primary-light-rgb: 15 104 70;
+  --brand-accent-rgb: 165 118 38;
+  --brand-accent-light-rgb: 196 149 47;
   --brand-font: 'Inter', ui-sans-serif, system-ui, sans-serif;
 }
 ```
 
 ### 5.2 Tailwind Config Change
 
-Replace hardcoded hex values with CSS variable references:
+Replace hardcoded hex values with RGB channel variable references:
 
 ```ts
 colors: {
-  "brand-green": "var(--brand-primary)",
-  "brand-green-light": "var(--brand-primary-light)",
-  "brand-gold": "var(--brand-accent)",
-  "brand-gold-light": "var(--brand-accent-light)",
+  "brand-green": "rgb(var(--brand-primary-rgb) / <alpha-value>)",
+  "brand-green-light": "rgb(var(--brand-primary-light-rgb) / <alpha-value>)",
+  "brand-gold": "rgb(var(--brand-accent-rgb) / <alpha-value>)",
+  "brand-gold-light": "rgb(var(--brand-accent-light-rgb) / <alpha-value>)",
 }
 ```
 
-All existing Tailwind classes (`bg-brand-green`, `text-brand-gold`, `border-brand-gold/50`, etc.) continue to work unchanged — they just resolve from variables instead of fixed hex values.
+All existing Tailwind classes (`bg-brand-green`, `text-brand-gold`, `border-brand-gold/50`, etc.) continue to work unchanged — including opacity modifiers like `/50` which require the RGB channel format.
 
 ### 5.3 `globals.css` Update
 
-The `.guest-projection-shell` gradient replaces hardcoded hex values with CSS variables:
+The `.guest-projection-shell` gradient replaces hardcoded hex values with CSS variables using the RGB channel format:
 
 ```css
 .guest-projection-shell {
   background:
-    radial-gradient(circle at 10% 20%, color-mix(in srgb, var(--brand-accent) 14%, transparent), transparent 45%),
-    radial-gradient(circle at 90% 10%, color-mix(in srgb, var(--brand-primary-light) 22%, transparent), transparent 50%),
-    linear-gradient(180deg, var(--brand-primary) 0%, color-mix(in srgb, var(--brand-primary) 85%, black) 100%);
+    radial-gradient(circle at 10% 20%, rgb(var(--brand-accent-rgb) / 0.14), transparent 45%),
+    radial-gradient(circle at 90% 10%, rgb(var(--brand-primary-light-rgb) / 0.22), transparent 50%),
+    linear-gradient(180deg, rgb(var(--brand-primary-rgb)) 0%, rgb(var(--brand-primary-rgb) / 0.85) 100%);
 }
 ```
 
@@ -187,20 +196,20 @@ The `.guest-projection-shell` gradient replaces hardcoded hex values with CSS va
 
 A thin client component that:
 1. Receives the brand config as props (passed from a server component that fetches the brand)
-2. Sets CSS custom properties on `document.documentElement` on mount and when brand changes
+2. Converts hex colours to RGB channels (e.g. `#003f27` → `0 63 39`) and sets CSS custom properties on `document.documentElement` on mount and when brand changes
 3. If `font_family` is set, dynamically loads the Google Font via a `<link>` tag insertion
 4. Sets `--brand-font` to the loaded font family with fallbacks
 
 ### 5.5 Fallback
 
-CSS variables default to The Anchor colours in `globals.css`:
+CSS variables default to The Anchor colours (as RGB channels) in `globals.css`:
 
 ```css
 :root {
-  --brand-primary: #003f27;
-  --brand-primary-light: #0f6846;
-  --brand-accent: #a57626;
-  --brand-accent-light: #c4952f;
+  --brand-primary-rgb: 0 63 39;
+  --brand-primary-light-rgb: 15 104 70;
+  --brand-accent-rgb: 165 118 38;
+  --brand-accent-light-rgb: 196 149 47;
   --brand-font: 'Inter', ui-sans-serif, system-ui, sans-serif;
 }
 ```
@@ -248,7 +257,7 @@ The PDF footer QR codes are sourced from the brand config:
 
 1. If `brand.qr_items` is defined and non-empty → use those as footer QR codes (array of `{ label, url }`, same format as existing `FooterQrItem`)
 2. If no `qr_items` but `brand.website_url` is set → generate a single QR code pointing to the website with label "Upcoming Events"
-3. If neither is set → footer text reads "See {brand.name}'s website for upcoming event details" (no QR code)
+3. If neither is set → no footer QR codes or text (clean card)
 
 ### 7.4 Fonts
 
@@ -258,7 +267,7 @@ PDF fonts remain as Helvetica (StandardFonts). Embedding custom fonts in pdf-lib
 
 - `RenderOptions` type gains an optional `brand` field containing the brand config
 - `renderBingoCards()` reads colours and logo URLs from the brand when provided
-- Logo loading functions (`loadDefaultLogoPngBytes`, `loadDefaultEventLogoPngBytes`) are supplemented with a new `loadBrandLogoPngBytes(url)` that fetches from Supabase Storage
+- Logo loading functions (`loadDefaultLogoPngBytes`, `loadDefaultEventLogoPngBytes`) are supplemented with a new `loadBrandLogoPngBytes(objectKey)` that constructs the full Supabase Storage URL from the object key and fetches from the known `brand-assets` bucket only
 - Event logo loading (`loadDefaultEventLogoPngBytes`) remains unchanged — always loads from `/public`
 - Hex-to-rgb helper function added for converting brand hex colours to pdf-lib `rgb()` values
 
