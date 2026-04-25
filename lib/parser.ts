@@ -48,10 +48,21 @@ export function parseSongListText(text: string): ParseResult {
     titleByKey.set(title.toLowerCase(), titleByKey.get(title.toLowerCase()) ?? title);
   }
 
+  const poolSet = new Map<string, string>();
+  for (const artist of artistByKey.values()) {
+    const key = artist.toLowerCase();
+    if (!poolSet.has(key)) poolSet.set(key, artist);
+  }
+  for (const title of titleByKey.values()) {
+    const key = title.toLowerCase();
+    if (!poolSet.has(key)) poolSet.set(key, title);
+  }
+
   return {
     songs,
     uniqueArtists: [...artistByKey.values()],
     uniqueTitles: [...titleByKey.values()],
+    combinedPool: [...poolSet.values()],
     ignoredLines,
   };
 }

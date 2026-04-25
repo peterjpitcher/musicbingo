@@ -7,12 +7,12 @@ export type ParseResult = {
   songs: Song[];
   uniqueArtists: string[];
   uniqueTitles: string[];
+  combinedPool: string[];
   ignoredLines: string[];
 };
 
 export type Card = {
-  artists: string[];
-  titles: string[];
+  items: string[];
   cardId: string;
 };
 
