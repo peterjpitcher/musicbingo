@@ -8,12 +8,15 @@ import {
   parseGameSongsText,
   resolveChallengeSong,
 } from "@/lib/gameInput";
-import { fetchNextUpcomingEventLinks } from "@/lib/managementApi";
+import { fetchUpcomingEventDetails } from "@/lib/managementApi";
+import type { EventDetail } from "@/lib/managementApi";
 import {
   loadDefaultEventLogoPngBytes,
   loadDefaultLogoPngBytes,
   renderCardsPdf,
+  renderEventsPage,
 } from "@/lib/pdf";
+import { PDFDocument, StandardFonts } from "pdf-lib";
 import { cookies } from "next/headers";
 import {
   getOrRefreshAccessToken,
@@ -24,8 +27,6 @@ import type { Card, ParseResult, Song } from "@/lib/types";
 import { sanitizeFilenamePart } from "@/lib/utils";
 
 export const runtime = "nodejs";
-
-const EVENT_QR_COUNT = 4;
 
 function asString(value: FormDataEntryValue | null): string {
   return typeof value === "string" ? value : "";
@@ -128,6 +129,42 @@ function makeClipboardFilename(eventDate: string): string {
   return `event-clipboard-${sanitizeFilenamePart(eventDate, "event")}.docx`;
 }
 
+async function renderGamePdfWithEvents(params: {
+  cards: Card[];
+  eventDate: string;
+  theme: string;
+  logoLeftPngBytes: Uint8Array | null;
+  logoRightPngBytes: Uint8Array | null;
+  events: EventDetail[];
+}): Promise<Uint8Array> {
+  const cardsPdfBytes = await renderCardsPdf(params.cards, {
+    eventDate: params.eventDate,
+    theme: params.theme,
+    logoLeftPngBytes: params.logoLeftPngBytes,
+    logoRightPngBytes: params.logoRightPngBytes,
+    showCardId: true,
+  });
+
+  const pdf = await PDFDocument.load(cardsPdfBytes);
+  const cardPageCount = pdf.getPageCount();
+
+  // Insert events pages after each card page, in reverse order so indices don't shift
+  for (let i = cardPageCount - 1; i >= 0; i--) {
+    const tempPdf = await PDFDocument.create();
+    const tempFont = await tempPdf.embedFont(StandardFonts.Helvetica);
+    const tempFontBold = await tempPdf.embedFont(StandardFonts.HelveticaBold);
+
+    await renderEventsPage(tempPdf, tempFont, tempFontBold, {
+      events: params.events,
+    });
+
+    const [copiedPage] = await pdf.copyPages(tempPdf, [0]);
+    pdf.insertPage(i + 1, copiedPage);
+  }
+
+  return new Uint8Array(await pdf.save());
+}
+
 export async function POST(request: Request) {
   try {
     const form = await request.formData();
@@ -175,14 +212,12 @@ export async function POST(request: Request) {
     let cardsGame2: Card[];
     try {
       cardsGame1 = generateCards({
-        uniqueArtists: parsedGame1.uniqueArtists,
-        uniqueTitles: parsedGame1.uniqueTitles,
+        combinedPool: parsedGame1.combinedPool,
         count,
         seed: seed || undefined,
       });
       cardsGame2 = generateCards({
-        uniqueArtists: parsedGame2.uniqueArtists,
-        uniqueTitles: parsedGame2.uniqueTitles,
+        combinedPool: parsedGame2.combinedPool,
         count,
         seed: seed ? `${seed}-game-2` : undefined,
       });
@@ -203,50 +238,28 @@ export async function POST(request: Request) {
     const sortedGame1Songs = sortSongsBySpotifyOrder(parsedGame1.songs, spotifyTracksGame1);
     const sortedGame2Songs = sortSongsBySpotifyOrder(parsedGame2.songs, spotifyTracksGame2);
 
-    let eventItems: Array<{ label: string; url: string | null }> = [];
-    let qrStatus: "ok" | "missing_config" | "no_events" | "error" = "missing_config";
-    let qrError: string | null = null;
-    const managementConfigured = Boolean(process.env.MANAGEMENT_API_BASE_URL?.trim()) && Boolean(process.env.MANAGEMENT_API_TOKEN?.trim());
-    if (!managementConfigured) {
-      qrStatus = "missing_config";
-      console.warn("[music-bingo] MANAGEMENT_API_* not configured; event QR codes will be placeholders.");
-    } else {
-      try {
-        eventItems = await fetchNextUpcomingEventLinks({ eventDateDisplay: eventDateInput, count: EVENT_QR_COUNT });
-        qrStatus = eventItems.length ? "ok" : "no_events";
-      } catch (err) {
-        qrStatus = "error";
-        qrError = err instanceof Error ? err.message : "Failed to fetch upcoming events.";
-        console.warn("[music-bingo] Failed to fetch upcoming events for QR codes:", err);
-        eventItems = [];
-      }
-    }
-
-    const fetchedEventCount = eventItems.length;
-    const fetchedEventWithUrlCount = eventItems.filter((item) => Boolean(item.url && item.url.trim())).length;
-
-    while (eventItems.length < EVENT_QR_COUNT) {
-      eventItems.push({ label: `Next Event ${eventItems.length + 1}`, url: null });
-    }
-    const footerItems = eventItems.slice(0, EVENT_QR_COUNT);
+    // Fetch upcoming events for events back page and clipboard
+    const upcomingEvents = await fetchUpcomingEventDetails({ eventDateDisplay: eventDateInput });
 
     const logoRightPngBytes = await loadDefaultLogoPngBytes({ origin });
     const logoLeftPngBytes = await loadDefaultEventLogoPngBytes({ origin });
 
     const [pdfGame1Bytes, pdfGame2Bytes, clipboardDocxBytes] = await Promise.all([
-      renderCardsPdf(cardsGame1, {
+      renderGamePdfWithEvents({
+        cards: cardsGame1,
         eventDate: eventDateDisplay,
-        footerItems,
+        theme: game1Theme,
         logoLeftPngBytes,
         logoRightPngBytes,
-        showCardId: true,
+        events: upcomingEvents,
       }),
-      renderCardsPdf(cardsGame2, {
+      renderGamePdfWithEvents({
+        cards: cardsGame2,
         eventDate: eventDateDisplay,
-        footerItems,
+        theme: game2Theme,
         logoLeftPngBytes,
         logoRightPngBytes,
-        showCardId: true,
+        events: upcomingEvents,
       }),
       renderClipboardDocx({
         eventDateInput,
@@ -260,6 +273,7 @@ export async function POST(request: Request) {
           songs: sortedGame2Songs,
           challengeSong: game2ChallengeSong,
         },
+        upcomingEvents,
       }),
     ]);
 
@@ -282,11 +296,6 @@ export async function POST(request: Request) {
         "Content-Type": "application/zip",
         "Content-Disposition": `attachment; filename="${filename}"`,
         "Cache-Control": "no-store",
-        "X-Music-Bingo-QR-Status": qrStatus,
-        "X-Music-Bingo-Events-Requested": String(EVENT_QR_COUNT),
-        "X-Music-Bingo-Events-Count": String(fetchedEventCount),
-        "X-Music-Bingo-Events-With-Url": String(fetchedEventWithUrlCount),
-        ...(qrError ? { "X-Music-Bingo-QR-Error": qrError.slice(0, 200) } : {}),
       },
     });
   } catch (err: any) {
