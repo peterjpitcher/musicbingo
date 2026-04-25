@@ -16,6 +16,7 @@ type ParsedResult = {
   songs: Song[];
   uniqueArtists: string[];
   uniqueTitles: string[];
+  combinedPool: string[];
 };
 
 type StepGameConfigProps = {
@@ -56,13 +57,11 @@ export function StepGameConfig({
   const tooMany = parsed.songs.length > MAX_SONGS_PER_GAME;
   const notEnough =
     parsed.songs.length < 25 ||
-    parsed.uniqueArtists.length < 25 ||
-    parsed.uniqueTitles.length < 25;
+    parsed.combinedPool.length < 25;
   const canNext =
     parsed.songs.length >= 25 &&
     !tooMany &&
-    parsed.uniqueArtists.length >= 25 &&
-    parsed.uniqueTitles.length >= 25 &&
+    parsed.combinedPool.length >= 25 &&
     Boolean(challengeSong);
 
   return (
@@ -111,9 +110,8 @@ export function StepGameConfig({
                 notEnough && parsed.songs.length > 0 ? "text-amber-600" : "",
               ].join(" ")}
             >
-              Unique artists: {parsed.uniqueArtists.length} / titles:{" "}
-              {parsed.uniqueTitles.length}
-              {notEnough && parsed.songs.length > 0 ? " (need ≥25 each)" : ""}
+              Unique pool items: {parsed.combinedPool.length}
+              {notEnough && parsed.songs.length > 0 ? " (need ≥25)" : ""}
             </p>
           </div>
         </div>

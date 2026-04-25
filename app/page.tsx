@@ -159,8 +159,8 @@ export default function HomePage() {
       parsedGame2.songs.length > MAX_SONGS_PER_GAME
     )
       return false;
-    if (parsedGame1.uniqueArtists.length < 25 || parsedGame1.uniqueTitles.length < 25) return false;
-    if (parsedGame2.uniqueArtists.length < 25 || parsedGame2.uniqueTitles.length < 25) return false;
+    if (parsedGame1.combinedPool.length < 25) return false;
+    if (parsedGame2.combinedPool.length < 25) return false;
     if (!game1ChallengeSong || !game2ChallengeSong) return false;
     return true;
   }, [
@@ -168,10 +168,8 @@ export default function HomePage() {
     eventDate,
     game1ChallengeSong,
     game2ChallengeSong,
-    parsedGame1.uniqueArtists.length,
-    parsedGame1.uniqueTitles.length,
-    parsedGame2.uniqueArtists.length,
-    parsedGame2.uniqueTitles.length,
+    parsedGame1.combinedPool.length,
+    parsedGame2.combinedPool.length,
     parsedGame1.songs.length,
     parsedGame2.songs.length,
   ]);
