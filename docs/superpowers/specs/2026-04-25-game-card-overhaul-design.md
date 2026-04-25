@@ -15,6 +15,7 @@
 - 12 items drawn randomly from the combined pool per card — no enforced artist/title ratio
 - Each cell contains either an artist name OR a song title (not both)
 - Show full text wherever possible — no unnecessary truncation
+- **Fairness note**: Some cards may be inherently easier than others depending on the random mix. This is intentional — it's how bingo works. No balancing constraints.
 
 ### Page Header
 - Logos left/right (same as current)
@@ -27,13 +28,33 @@
 - QR codes removed from game card pages entirely — they move to the events back page
 
 ### Card ID
-- Small text bottom-right corner of the page (e.g. "Card 001–006 • a1b2c3")
+- Each individual card grid gets its own small ID label (e.g. "Card 001 • a1b2c3") so that if cards are cut apart, each mini-card is identifiable
+- Position: bottom-right corner of each card grid
+
+### Page Geometry (A4 Landscape)
+```
+Page: 842 × 595 pt (A4 landscape)
+Margins: 14mm (X), 10mm (Y)
+Header height: ~28mm (logos + title + theme + date)
+Card area: remaining space divided into 3 columns × 2 rows
+Column gap: 8mm
+Row gap: 6mm
+Card ID: 6pt text, 2pt below each card grid
+
+Cell dimensions (calculated):
+  Available width:  842 - 2×marginX = ~762pt → 3 columns with 2 gaps = (762 - 2×gapX) / 3 ≈ 240pt per card
+  Cell width:       240 / 5 = ~48pt per cell
+  Available height: 595 - 2×marginY - headerH = ~480pt → 2 rows with 1 gap = (480 - gapY) / 2 ≈ 230pt per card row
+  Cell height:      230 / 3 rows ≈ ~70pt per cell (after card ID space)
+```
+No cut lines — cards are distributed as full sheets, not cut apart in normal use. The per-card ID is for game administration only.
 
 ### Text Fitting Strategy
 1. **Word wrap**: Break text at word boundaries to fit cell width
 2. **Shrink font**: Scale from 9pt down to 5pt minimum (was 6pt)
-3. **Mid-word break**: If a single word exceeds cell width at min font, break with hyphen
+3. **Mid-word break**: If a single word exceeds cell width at min font, break with hyphen. The hyphen counts against width. Multi-line broken words are allowed (e.g. "Super-\nstition")
 4. **Truncate**: Only as absolute last resort, truncate with "…"
+5. All text fitting is custom logic in `wrapTextLines()` — pdf-lib has no automatic layout
 
 ## 2. Events Back Page (New)
 
@@ -45,39 +66,62 @@
 
 ### Design — B&W Editorial
 - Pure black and white, no block colour, no fills — minimal ink for cheap printing
-- Font: Helvetica (already embedded in pdf-lib)
+- Font: Helvetica / Helvetica-Bold (StandardFonts, already embedded in pdf-lib)
 
 ### Layout
-- **Header**: "What's On" (Helvetica-Bold, large) + "at The Anchor" (uppercase, letter-spaced) + "the-anchor.pub" right-aligned
+- **Header**: "What's On" (Helvetica-Bold, ~22pt) + "at The Anchor" (uppercase, letter-spaced, ~8pt) + "the-anchor.pub" right-aligned
 - **Left panel** (~190pt wide): Featured next event
   - Bold outline border (thin line, no fill)
-  - "NEXT EVENT" label with underline
-  - Event name (Helvetica-Bold, large)
-  - Date + time
-  - Price / "Free entry"
-  - Longer description (from `short_description` or `long_description`)
-  - Large QR code (~42pt) linking to `booking_url`
-  - "Scan to book" label
+  - "NEXT EVENT" label with underline (uppercase, letter-spaced)
+  - Event name (Helvetica-Bold, ~15pt)
+  - Date + time (7.5pt)
+  - Price / "Free entry" (7pt)
+  - Description text (7pt, line-height 1.5)
+  - Large QR code (~42pt) linking to event URL
+  - "Scan to book" label (vertical text)
 - **Right panel**: Remaining events as date-driven timeline
-  - Each row: large day number + month + day-of-week | divider | event name + time/price + short description | small QR code
-  - Thin hairline dividers between rows
-  - Events fill available vertical space
+  - Each row: large day number (~20pt) + month (6pt uppercase) + day-of-week (5.5pt) | 1pt vertical divider | event name (8pt bold) + time/price (6.5pt) + short description (6.5pt) | small QR code (24pt)
+  - 0.5pt hairline dividers between rows
+  - Events fill available vertical space with equal spacing
 - **Footer**: `the-anchor.pub · @theanchor.pub · 01753 682707 · #theanchor`
 
 ### Data Source
-- Management API: `GET /api/events?status=scheduled&available_only=true&from_date={event_date}`
-- Fetches all scheduled events from the event date onwards
-- First event becomes the featured panel; rest go into the timeline
-- Uses `short_description` for timeline items
-- Uses `short_description` (or `long_description` if available) for featured event
-- `booking_url` for QR codes (falls back to website URL if no booking URL)
-- Degrades gracefully if API unavailable — shows a simple "Visit the-anchor.pub for upcoming events" message
-
-### Dynamic Sizing
-- Number of events varies based on API response
-- If many events, reduce font and spacing to fit
-- If few events, increase spacing for comfortable reading
+- Reuses existing `fetchEvents()` from `lib/managementApi.ts`
+- Query: `GET /api/events?status=scheduled&available_only=true&from_date={day_after_event}`
+  - Uses day after event date to exclude the current Music Bingo event itself
+  - If no events returned, falls back to `from_date={event_date}` to show same-day events
+- First event (by date) becomes the featured panel; rest go into the timeline
 - Maximum ~10 events on the timeline (plus 1 featured) to keep readable
+
+### Normalised Event Type for PDF/DOCX
+
+New type in `lib/managementApi.ts`:
+
+```typescript
+export type EventDetail = {
+  name: string;
+  date: Date;              // parsed from startDate/start_date
+  time: string;            // formatted "7:00 pm"
+  dayOfWeek: string;       // "Wed", "Fri", etc.
+  dayNumber: string;       // "29", "6", etc.
+  monthShort: string;      // "Apr", "May", etc.
+  dateFormatted: string;   // "Wednesday 29 April"
+  price: string;           // "£3 per person", "Free entry", "Menu prices"
+  description: string;     // short_description, falling back to name
+  eventUrl: string | null; // for QR codes — resolved via getEventUrl()
+};
+```
+
+New export: `fetchUpcomingEventDetails(params: { eventDateDisplay: string }): Promise<EventDetail[]>`
+- Reuses existing `fetchEvents()`, `getEventStart()`, `getEventUrl()` helpers
+- Parses and formats each event into `EventDetail`
+- Sorts by date ascending
+- Returns empty array on API failure (graceful degradation)
+
+### Fallback States
+- **API unavailable**: Show centred message "Visit the-anchor.pub for upcoming events" with website QR code
+- **No events returned**: Same fallback message
+- **Events without booking URLs**: QR code links to `the-anchor.pub/events/{slug}` via `getEventUrl()` (already handles this)
 
 ## 3. Song Duration — 30s → 40s
 
@@ -96,16 +140,23 @@ DEFAULT_REVEAL_CONFIG:
 - Host UI "+30s" and "Skip 30s" buttons unchanged (manual overrides)
 - Existing sessions retain their stored `revealConfig` — only new sessions get the new default
 
+### UI Copy Update
+- `app/host/[sessionId]/page.tsx` line 1108: "Plays for 90s instead of 30s" → "Plays for 90s instead of 40s"
+
+### Test Update
+- `lib/live/reveal.test.ts`: Update hardcoded 10/20/25/30s thresholds to 13/27/33/40s
+
 ## 4. Clipboard DOCX — Align with Reference
 
 ### Content Updates (`lib/clipboardDocx.ts`)
 
-- **Time**: Make event time configurable (default "8:00 pm - 12:00 am" matching reference doc)
+- **Time**: Hardcode "8:00 pm - 12:00 am" (matching reference doc). Not configurable for now — can add a form field later if needed.
 - **Song pace**: Update to "40 seconds per song" to match new app default
-- **Duration calculation**: Update "about 16 minutes 20 seconds" to reflect 40s pace (50 songs × 40s = ~33 minutes)
+- **Duration calculation**: Update to "about 33 minutes 20 seconds" (50 songs × 40s = 2,000s = 33m 20s)
 - **Kitchen reminder**: Add "Reminder: The kitchen is open until 9 pm for food orders."
-- **Upcoming Events**: Replace placeholder with actual event data from Management API, formatted as bold event name + date + colon + description paragraph (matching reference doc style)
+- **Upcoming Events**: Replace placeholder with actual event data from Management API via new `fetchUpcomingEventDetails()`, formatted as bold event name + date + colon + description paragraph (matching reference doc style)
 - **Song list format**: Keep numbered `1. Artist - Title` format (unchanged)
+- **DOCX events fallback**: If API unavailable, keep the existing placeholder text asking the host to manually add events
 
 ### Structural Match with Reference
 The reference document structure:
@@ -134,38 +185,55 @@ type Card = { items: string[]; cardId: string; }
 
 `items` is a flat array of 15 elements (5×3 grid), where blank cells are empty strings and filled cells contain either an artist name or a song title.
 
+**Why not typed items?** The card is a printed game piece — the player doesn't need to know if a cell is an artist or title. They hear a song and look for either the artist OR the title on their card. Adding `{ kind: "artist" | "title"; text: string }` would complicate the type, the generator, and the PDF renderer for metadata that's never displayed or used. If we need debugging/analytics later, the hash-based `cardId` traces back to the seed.
+
 ### Generation Algorithm
 1. Combine `uniqueArtists` and `uniqueTitles` into a single pool
-2. Deduplicate (in case an artist name matches a song title)
+2. Deduplicate (in case an artist name matches a song title — e.g. "Jolene" is both)
 3. For each card:
-   a. Determine blank positions: 1 random blank per row (3 blanks total across rows 0, 1, 2)
+   a. Determine blank positions: 1 random blank per row, constrained so no column has more than 1 blank (same Latin-square approach as current, adapted to 3×5)
    b. Sample 12 unique items from the combined pool
    c. Place into 15-cell grid with blanks
    d. Hash for uniqueness check
-4. No column constraint on blanks (only 3 rows makes column constraint unnecessary)
+4. Column constraint: with 3 rows and 5 columns, we pick 3 distinct columns for the 3 blanks (a random 3-of-5 permutation). This prevents any column from being fully blank.
 
 ### Minimum Requirements
-- Combined pool must have at least 12 unique items (in practice always satisfied — 50 songs = ~100 pool items)
-- Validation: `if (combinedPool.length < 12) throw Error(...)`
+- Combined pool must have at least 25 unique items after deduplication
+  - This ensures enough variety for generating many unique cards (40+)
+  - In practice always satisfied: 25+ songs = 25+ artists + 25+ titles, minus any collisions
+- Validation: `if (combinedPool.length < 25) throw Error("Need at least 25 unique items...")`
+
+### Validation UI Changes
+- `app/page.tsx` line 162-163: Replace `uniqueArtists.length < 25 || uniqueTitles.length < 25` with combined pool check `≥ 25`
+- `app/prep/StepGameConfig.tsx` lines 59-65: Same — validate combined pool size ≥ 25 instead of separate artist/title counts
+- `app/prep/StepGameConfig.tsx` lines 114-115: Update display text from "Unique artists: X / titles: Y" to "Unique items in pool: X (need ≥25)"
+- `parseGameSongsText` return type: add `combinedPool: string[]` field (deduplicated union of artists + titles)
 
 ## 6. Files to Modify
 
 | File | Change |
 |------|--------|
-| `lib/types.ts` | `Card` type: replace `artists`/`titles` with `items` |
-| `lib/generator.ts` | Mixed pool generation, 5×3 grid, 1 blank per row |
-| `lib/pdf.ts` | Landscape A4, 6 cards/page, single grid per card, page header with theme, no QR footer, text fitting improvements |
+| `lib/types.ts` | `Card` type: replace `artists`/`titles` with `items`; `ParseResult`: add `combinedPool` |
+| `lib/generator.ts` | Mixed pool generation, 5×3 grid, 1 blank per row + column constraint, combined pool input |
+| `lib/pdf.ts` | Landscape A4, 6 cards/page, single grid per card, page header with theme, per-card IDs, no QR footer, text fitting (5pt min, mid-word break) |
 | `lib/pdf.ts` (new function) | `renderEventsPage()` — B&W editorial events back page |
 | `lib/live/types.ts` | `DEFAULT_REVEAL_CONFIG` timing values |
-| `lib/clipboardDocx.ts` | Content updates, API-driven upcoming events, timing text |
-| `app/api/generate/route.ts` | Orchestrate new card layout, interleave events pages, fetch events from API |
-| `lib/managementApi.ts` | New/updated function to fetch full event details (not just links) |
+| `lib/live/reveal.test.ts` | Update hardcoded timing thresholds |
+| `lib/clipboardDocx.ts` | Content updates, API-driven upcoming events, timing text, event time |
+| `lib/managementApi.ts` | New `EventDetail` type, new `fetchUpcomingEventDetails()` export |
+| `lib/gameInput.ts` | `parseGameSongsText`: compute and return `combinedPool` |
+| `app/api/generate/route.ts` | Orchestrate new card layout, interleave events pages, fetch events, pass theme to PDF |
+| `app/page.tsx` | Update validation from separate artist/title counts to combined pool ≥ 25 |
+| `app/prep/StepGameConfig.tsx` | Update validation logic and display text for combined pool |
+| `app/host/[sessionId]/page.tsx` | Update "90s instead of 30s" → "90s instead of 40s" |
 
 ## 7. Assumptions
 
-1. The Management API at `MANAGEMENT_API_BASE_URL` returns event data with `short_description`, `booking_url`, `date`, `time`, `price`/`is_free` fields
-2. Helvetica (StandardFonts) is sufficient for the events page — no custom fonts needed in the PDF
+1. The Management API at `MANAGEMENT_API_BASE_URL` returns events with fields documented in `OJ-AnchorManagementTools` — we normalise to `EventDetail` type
+2. Helvetica / Helvetica-Bold (StandardFonts) is sufficient for the events page — no custom fonts needed
 3. The events back page uses the same A4 landscape orientation as the game cards
-4. Card IDs are still needed for game administration (identifying which card a player has)
-5. The host UI game display (live session) is not affected — these changes are PDF/DOCX generation only
+4. Card IDs are still needed for game administration (one per mini-card)
+5. The host UI game display (live session) is not affected — these changes are PDF/DOCX generation only (except the timing config and one copy string)
 6. Existing saved sessions continue to work with their stored reveal configs
+7. Cards are distributed as full A4 sheets, not cut apart — but each card has its own ID just in case
+8. Python test suite (`npm run test:py`) may need updating if it validates card structure — check during implementation
