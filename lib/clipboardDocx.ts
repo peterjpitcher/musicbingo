@@ -2,6 +2,7 @@ import { Document, Packer, Paragraph, TextRun } from "docx";
 
 import { formatEventDateWithWeekdayDisplay } from "@/lib/eventDate";
 import { normalizeGameTheme } from "@/lib/gameInput";
+import type { EventDetail } from "@/lib/managementApi";
 import type { Song } from "@/lib/types";
 
 type ClipboardGame = {
@@ -14,6 +15,7 @@ type RenderClipboardDocxParams = {
   eventDateInput: string;
   game1: ClipboardGame;
   game2: ClipboardGame;
+  upcomingEvents?: EventDetail[];
 };
 
 function songLabel(song: Song): string {
@@ -61,6 +63,25 @@ function songsBlock(songs: Song[]): Paragraph[] {
   return out;
 }
 
+function eventParagraphs(events?: EventDetail[]): Paragraph[] {
+  if (!events || events.length === 0) {
+    return [
+      bullet("** Update this section before printing — add the next 3–4 upcoming events with dates, times, and short descriptions. **"),
+    ];
+  }
+  return events.map(
+    (evt) =>
+      new Paragraph({
+        bullet: { level: 0 },
+        children: [
+          new TextRun({ text: `${evt.name} — ${evt.dateFormatted}: `, bold: true }),
+          new TextRun({ text: evt.description }),
+        ],
+        spacing: { after: 80 },
+      }),
+  );
+}
+
 export async function renderClipboardDocx(params: RenderClipboardDocxParams): Promise<Uint8Array> {
   const eventDate = formatEventDateWithWeekdayDisplay(params.eventDateInput) || params.eventDateInput;
   const game1Theme = normalizeGameTheme(params.game1.theme);
@@ -78,17 +99,15 @@ export async function renderClipboardDocx(params: RenderClipboardDocxParams): Pr
         new TextRun({ text: "Date: ", bold: true }),
         new TextRun({ text: eventDate }),
         new TextRun({ text: "    Time: ", bold: true }),
-        new TextRun({ text: "7:00 pm - 9:30 pm" }),
+        new TextRun({ text: "8:00 pm - 12:00 am" }),
       ],
       spacing: { after: 200 },
     }),
 
     heading("OPENING REMARKS"),
-    bullet("Brief introduction of tonight's game, Music Bingo."),
-    bullet("Tonight's tagline: A night of music fun."),
     bullet("We'll be playing two separate Music Bingo games (two different song lists)."),
-    bullet("Song pace: aim for 20 seconds per song (unless there is big audience participation). Goal is speed."),
-    bullet("Each Music Bingo game is capped at 50 songs (about 16 minutes 20 seconds of constant play, plus Nikki banter)."),
+    bullet("Song pace: aim for 40 seconds per song (unless there is big audience participation). Goal is speed."),
+    bullet("Each Music Bingo game is capped at 50 songs (about 33 minutes 20 seconds of constant play, plus Nikki banter)."),
     bullet("KaraFun points (mobile quiz):"),
     subBullet("1st place 30 pts"),
     subBullet("2nd place 20 pts"),
@@ -111,7 +130,7 @@ export async function renderClipboardDocx(params: RenderClipboardDocxParams): Pr
     numbered("9. Sing Along/Out - end-of-night singalong"),
 
     heading("UPCOMING EVENTS"),
-    bullet("** Update this section before printing — add the next 3–4 upcoming events with dates, times, and short descriptions. **"),
+    ...eventParagraphs(params.upcomingEvents),
 
     heading("BONUS FUN"),
     bullet("Dancing Challenge (20 pts) - placed in Game 1."),
@@ -124,7 +143,7 @@ export async function renderClipboardDocx(params: RenderClipboardDocxParams): Pr
     heading("MUSIC BINGO"),
     bullet("IMPORTANT: Create two separate games for next time (Game 1 list and Game 2 list). Do not reuse the same pool for both."),
     bullet("Max 50 songs per game."),
-    bullet("20 seconds per song unless audience participation is high."),
+    bullet("40 seconds per song unless audience participation is high."),
 
     heading(`MUSIC BINGO GAME 1 (${game1Theme})`),
     ...songsBlock(params.game1.songs),
