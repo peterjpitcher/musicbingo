@@ -422,3 +422,158 @@ export async function fetchNextThreeUpcomingEventLinks(params: {
 }): Promise<Array<{ label: string; url: string | null }>> {
   return fetchNextUpcomingEventLinks({ eventDateDisplay: params.eventDateDisplay, count: 3 });
 }
+
+// ---------------------------------------------------------------------------
+// Event Detail types and helpers (for events back page / clipboard)
+// ---------------------------------------------------------------------------
+
+export type EventDetail = {
+  name: string;
+  date: Date;
+  time: string;          // "7:00 pm"
+  dayOfWeek: string;     // "Wed"
+  dayNumber: string;     // "29"
+  monthShort: string;    // "Apr"
+  dateFormatted: string; // "Wednesday 29 April"
+  price: string;         // "£3 per person" or "Free entry"
+  description: string;   // short_description, fallback to name
+  eventUrl: string | null;
+};
+
+function formatTime12h(date: Date): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "Europe/London",
+  }).format(date);
+}
+
+function formatEventPrice(event: ManagementApiEvent): string {
+  const ev = event as any;
+  if (ev.is_free === true || ev.isFree === true) return "Free entry";
+
+  const price = ev.price;
+  if (typeof price === "number" && price > 0) {
+    const formatted = Number.isInteger(price) ? `£${price}` : `£${price.toFixed(2)}`;
+    return `${formatted} per person`;
+  }
+
+  return "Free entry";
+}
+
+function getEventDescription(event: ManagementApiEvent): string {
+  const ev = event as any;
+
+  const short = getString(ev.short_description);
+  if (short) return short;
+
+  const long = getString(ev.long_description);
+  if (long) {
+    // Strip HTML tags
+    const stripped = long.replace(/<[^>]*>/g, "").trim();
+    if (stripped.length > 200) return stripped.slice(0, 200) + "...";
+    return stripped;
+  }
+
+  return getEventName(event) ?? "Upcoming event";
+}
+
+function toEventDetail(
+  event: ManagementApiEvent,
+  baseUrl: string,
+  publicEventsBaseUrl: string
+): EventDetail | null {
+  const name = getEventName(event);
+  if (!name) return null;
+
+  const start = getEventStart(event);
+  if (!start) return null;
+
+  const dayOfWeek = new Intl.DateTimeFormat("en-GB", {
+    weekday: "short",
+    timeZone: "Europe/London",
+  }).format(start);
+
+  const dayNumber = new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    timeZone: "Europe/London",
+  }).format(start);
+
+  const monthShort = new Intl.DateTimeFormat("en-GB", {
+    month: "short",
+    timeZone: "Europe/London",
+  }).format(start);
+
+  const dateFormatted = new Intl.DateTimeFormat("en-GB", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    timeZone: "Europe/London",
+  }).format(start);
+
+  return {
+    name,
+    date: start,
+    time: formatTime12h(start),
+    dayOfWeek,
+    dayNumber,
+    monthShort,
+    dateFormatted,
+    price: formatEventPrice(event),
+    description: getEventDescription(event),
+    eventUrl: getEventUrl(event, baseUrl, publicEventsBaseUrl),
+  };
+}
+
+export async function fetchUpcomingEventDetails(params: {
+  eventDateDisplay: string;
+}): Promise<EventDetail[]> {
+  try {
+    const config = getManagementApiConfig();
+    if (!config) return [];
+
+    const isoDate = parseDisplayDateToIsoDate(params.eventDateDisplay);
+    if (!isoDate) return [];
+
+    // Calculate day-after date to exclude the current Music Bingo event
+    const currentDate = new Date(`${isoDate}T12:00:00Z`);
+    currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+    const dayAfterIso = isoDateInLondon(currentDate);
+    if (!dayAfterIso) return [];
+
+    const response = await fetchEvents({
+      ...config,
+      fromDate: dayAfterIso,
+      availableOnly: true,
+      status: "scheduled",
+      limit: 20,
+    });
+
+    let details = (response.events ?? [])
+      .map((e) => toEventDetail(e, config.baseUrl, config.publicEventsBaseUrl))
+      .filter((d): d is EventDetail => d !== null)
+      .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+    // If no events found with day-after, retry with same-day fromDate
+    if (details.length === 0) {
+      const sameDayResponse = await fetchEvents({
+        ...config,
+        fromDate: isoDate,
+        availableOnly: true,
+        status: "scheduled",
+        limit: 20,
+      });
+
+      details = (sameDayResponse.events ?? [])
+        .map((e) => toEventDetail(e, config.baseUrl, config.publicEventsBaseUrl))
+        .filter((d): d is EventDetail => d !== null)
+        .sort((a, b) => a.date.getTime() - b.date.getTime());
+    }
+
+    return details;
+  } catch (err) {
+    console.warn("[managementApi] fetchUpcomingEventDetails failed:", err);
+    return [];
+  }
+}
