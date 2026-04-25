@@ -1105,7 +1105,7 @@ export default function HostSessionControllerPage() {
                 <p className="text-sm font-semibold text-amber-900">
                   {activeGame.challengeSongArtist} — {activeGame.challengeSongTitle}
                 </p>
-                <p className="text-xs text-amber-600 mt-0.5">Plays for 90s instead of 30s</p>
+                <p className="text-xs text-amber-600 mt-0.5">Plays for 90s instead of 40s</p>
               </div>
             ) : null}
             <p className="text-xs text-slate-400">
