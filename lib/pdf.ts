@@ -627,10 +627,15 @@ export async function renderEventsPage(
 
     const rowCenterY = rowBottom + rowH / 2;
 
-    // Date block: day-of-week (5.5pt uppercase)
-    page.drawText(ev.dayOfWeek.toUpperCase(), {
-      x: rightPanelX,
-      y: rowCenterY + 10,
+    // Date block — all centred within dateBlockW
+    const dateCenterX = rightPanelX + dateBlockW / 2;
+
+    // Day-of-week (5.5pt uppercase)
+    const dowText = ev.dayOfWeek.toUpperCase();
+    const dowW = font.widthOfTextAtSize(dowText, 5.5);
+    page.drawText(dowText, {
+      x: dateCenterX - dowW / 2,
+      y: rowCenterY + 12,
       size: 5.5,
       font,
       color: black,
@@ -639,16 +644,18 @@ export async function renderEventsPage(
     // Day number (20pt bold)
     const dayNumW = fontBold.widthOfTextAtSize(ev.dayNumber, 20);
     page.drawText(ev.dayNumber, {
-      x: rightPanelX + (dateBlockW - dayNumW) / 2,
-      y: rowCenterY - 6,
+      x: dateCenterX - dayNumW / 2,
+      y: rowCenterY - 4,
       size: 20,
       font: fontBold,
       color: black,
     });
 
     // Month (6.5pt bold uppercase)
-    page.drawText(ev.monthShort.toUpperCase(), {
-      x: rightPanelX,
+    const monthText = ev.monthShort.toUpperCase();
+    const monthW = fontBold.widthOfTextAtSize(monthText, 6.5);
+    page.drawText(monthText, {
+      x: dateCenterX - monthW / 2,
       y: rowCenterY - 16,
       size: 6.5,
       font: fontBold,
