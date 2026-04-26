@@ -523,7 +523,7 @@ export async function renderEventsPage(
   cursorY -= 12;
 
   // Description (7pt, wrapped)
-  const descMaxH = cursorY - bodyBottom - panelPad - mmToPt(18); // leave room for QR
+  const descMaxH = cursorY - bodyBottom - panelPad - mmToPt(28); // leave room for larger QR
   if (descMaxH > 10) {
     const descResult = wrapTextLines({
       text: featured.description,
@@ -548,7 +548,7 @@ export async function renderEventsPage(
 
   // QR code at bottom of left panel
   if (featured.eventUrl) {
-    const qrSize = mmToPt(14);
+    const qrSize = mmToPt(22);
     const qrY = bodyBottom + panelPad;
     const qrX = leftX + panelPad;
     try {
@@ -576,7 +576,7 @@ export async function renderEventsPage(
   const dateBlockW = mmToPt(16);
   const dividerX = rightPanelX + dateBlockW + 4;
   const detailX = dividerX + 6;
-  const qrColW = mmToPt(10);
+  const qrColW = mmToPt(16);
   const detailMaxW = pageW - marginX - qrColW - detailX - 4;
 
   for (let i = 0; i < timelineEvents.length; i++) {
@@ -682,9 +682,9 @@ export async function renderEventsPage(
       });
     }
 
-    // Small QR code (8mm)
+    // QR code (14mm)
     if (ev.eventUrl) {
-      const smallQr = mmToPt(8);
+      const smallQr = mmToPt(14);
       const qrX2 = pageW - marginX - smallQr;
       const qrY2 = rowCenterY - smallQr / 2;
       try {
