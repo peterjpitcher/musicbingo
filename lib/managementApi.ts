@@ -32,6 +32,9 @@ type ManagementApiEvent = {
   title?: unknown;
   event_name?: unknown;
   event_status?: unknown;
+  description?: unknown;
+  short_description?: unknown;
+  long_description?: unknown;
 };
 
 function envString(name: string): string | null {
@@ -464,6 +467,11 @@ function formatEventPrice(event: ManagementApiEvent): string {
 
 function getEventDescription(event: ManagementApiEvent): string {
   const ev = event as any;
+
+  // The API may return a Schema.org-transformed `description` field,
+  // or raw `short_description` / `long_description` columns.
+  const desc = getString(ev.description);
+  if (desc) return desc;
 
   const short = getString(ev.short_description);
   if (short) return short;
