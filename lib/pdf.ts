@@ -522,17 +522,18 @@ export async function renderEventsPage(
   });
   cursorY -= 12;
 
-  // Description (7pt, wrapped)
+  // Description + highlights
   const descMaxH = cursorY - bodyBottom - panelPad - mmToPt(28); // leave room for larger QR
   if (descMaxH > 10) {
+    // Description text
     const descResult = wrapTextLines({
       text: featured.description,
       maxWidth: featNameMaxW,
       font,
       fontSize: 7,
       minFontSize: 5,
-      maxHeight: descMaxH,
-      leadingRatio: 1.2,
+      maxHeight: descMaxH * 0.4,
+      leadingRatio: 1.3,
     });
     for (let li = 0; li < descResult.lines.length; li++) {
       const lineY = cursorY - li * descResult.lineHeight;
@@ -543,6 +544,38 @@ export async function renderEventsPage(
         font,
         color: black,
       });
+    }
+    cursorY -= descResult.lines.length * descResult.lineHeight + 6;
+
+    // Highlights as bullet points
+    if (featured.highlights.length > 0) {
+      const bulletMaxH = cursorY - bodyBottom - panelPad - mmToPt(28);
+      const bulletSize = 6.5;
+      const bulletLineH = font.heightAtSize(bulletSize) * 1.3;
+      const maxBullets = Math.min(featured.highlights.length, Math.floor(bulletMaxH / bulletLineH));
+      for (let bi = 0; bi < maxBullets; bi++) {
+        const bulletText = `•  ${featured.highlights[bi]}`;
+        const bulletResult = wrapTextLines({
+          text: bulletText,
+          maxWidth: featNameMaxW,
+          font,
+          fontSize: bulletSize,
+          minFontSize: 5,
+          maxHeight: bulletLineH * 2,
+          leadingRatio: 1.2,
+        });
+        for (let li = 0; li < bulletResult.lines.length; li++) {
+          const lineY = cursorY - li * bulletResult.lineHeight;
+          page.drawText(bulletResult.lines[li], {
+            x: leftX + panelPad,
+            y: lineY - bulletResult.fontSize,
+            size: bulletResult.fontSize,
+            font,
+            color: grey,
+          });
+        }
+        cursorY -= bulletResult.lines.length * bulletResult.lineHeight;
+      }
     }
   }
 
@@ -662,14 +695,17 @@ export async function renderEventsPage(
       color: grey,
     });
 
-    // Description (6.5pt, wrapped)
+    // Description + highlights (6.5pt, wrapped)
+    const timelineDesc = ev.highlights.length > 0
+      ? `${ev.description}  ·  ${ev.highlights.join("  ·  ")}`
+      : ev.description;
     const descResult2 = wrapTextLines({
-      text: ev.description,
+      text: timelineDesc,
       maxWidth: detailMaxW,
       font,
       fontSize: 6.5,
       minFontSize: 5,
-      maxHeight: rowH * 0.3,
+      maxHeight: rowH * 0.35,
       leadingRatio: 1.1,
     });
     for (let li = 0; li < descResult2.lines.length; li++) {

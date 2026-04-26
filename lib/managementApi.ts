@@ -439,7 +439,8 @@ export type EventDetail = {
   monthShort: string;    // "Apr"
   dateFormatted: string; // "Wednesday 29 April"
   price: string;         // "£3 per person" or "Free entry"
-  description: string;   // short_description, fallback to name
+  description: string;   // short description text
+  highlights: string[];  // bullet-point highlights from API
   eventUrl: string | null;
 };
 
@@ -487,6 +488,14 @@ function getEventDescription(event: ManagementApiEvent): string {
   return getEventName(event) ?? "Upcoming event";
 }
 
+function getEventHighlights(event: ManagementApiEvent): string[] {
+  const raw = (event as any).highlights;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((h: unknown) => (typeof h === "string" ? h.trim() : ""))
+    .filter((h: string) => h.length > 0);
+}
+
 function toEventDetail(
   event: ManagementApiEvent,
   baseUrl: string,
@@ -530,6 +539,7 @@ function toEventDetail(
     dateFormatted,
     price: formatEventPrice(event),
     description: getEventDescription(event),
+    highlights: getEventHighlights(event),
     eventUrl: getEventUrl(event, baseUrl, publicEventsBaseUrl),
   };
 }
