@@ -352,8 +352,6 @@ export async function renderEventsPage(
   const marginX = mmToPt(14);
   const marginY = mmToPt(10);
 
-  const grey = rgb(0.4, 0.4, 0.4);
-  const lightGrey = rgb(0.75, 0.75, 0.75);
   const black = rgb(0, 0, 0);
 
   const page = pdf.addPage([pageW, pageH]);
@@ -407,7 +405,7 @@ export async function renderEventsPage(
     start: { x: marginX, y: footerRuleY },
     end: { x: pageW - marginX, y: footerRuleY },
     thickness: 0.5,
-    color: lightGrey,
+    color: black,
   });
   const footerW = font.widthOfTextAtSize(footerText, footerSize);
   page.drawText(footerText, {
@@ -415,7 +413,7 @@ export async function renderEventsPage(
     y: contentBottom + 3,
     size: footerSize,
     font,
-    color: grey,
+    color: black,
   });
 
   const bodyTop = headerRuleY - 8;
@@ -432,7 +430,7 @@ export async function renderEventsPage(
       y: bodyBottom + bodyH / 2 - msgSize / 2,
       size: msgSize,
       font,
-      color: grey,
+      color: black,
     });
     return;
   }
@@ -512,13 +510,13 @@ export async function renderEventsPage(
   });
   cursorY -= 14;
 
-  // Price (7pt grey)
+  // Price (7pt)
   page.drawText(featured.price, {
     x: leftX + panelPad,
     y: cursorY - 7,
     size: 7,
     font,
-    color: grey,
+    color: black,
   });
   cursorY -= 12;
 
@@ -571,7 +569,7 @@ export async function renderEventsPage(
             y: lineY - bulletResult.fontSize,
             size: bulletResult.fontSize,
             font,
-            color: grey,
+            color: black,
           });
         }
         cursorY -= bulletResult.lines.length * bulletResult.lineHeight;
@@ -595,7 +593,7 @@ export async function renderEventsPage(
         y: qrY + qrSize / 2 - 3,
         size: 6,
         font,
-        color: grey,
+        color: black,
       });
     } catch {
       // QR generation failed; skip silently
@@ -623,19 +621,19 @@ export async function renderEventsPage(
         start: { x: rightPanelX, y: rowTop },
         end: { x: pageW - marginX, y: rowTop },
         thickness: 0.5,
-        color: lightGrey,
+        color: black,
       });
     }
 
     const rowCenterY = rowBottom + rowH / 2;
 
-    // Date block: day-of-week (5.5pt grey uppercase)
+    // Date block: day-of-week (5.5pt uppercase)
     page.drawText(ev.dayOfWeek.toUpperCase(), {
       x: rightPanelX,
       y: rowCenterY + 10,
       size: 5.5,
       font,
-      color: grey,
+      color: black,
     });
 
     // Day number (20pt bold)
@@ -662,7 +660,7 @@ export async function renderEventsPage(
       start: { x: dividerX, y: rowTop - 4 },
       end: { x: dividerX, y: rowBottom + 4 },
       thickness: 0.5,
-      color: lightGrey,
+      color: black,
     });
 
     // Event name (8.5pt bold)
@@ -685,14 +683,14 @@ export async function renderEventsPage(
       });
     }
 
-    // Time + price (6.5pt grey)
+    // Time + price (6.5pt)
     const timePriceText = `${ev.time} \u2022 ${ev.price}`;
     page.drawText(timePriceText, {
       x: detailX,
       y: rowCenterY - 4,
       size: 6.5,
       font,
-      color: grey,
+      color: black,
     });
 
     // Description + highlights (6.5pt, wrapped)
