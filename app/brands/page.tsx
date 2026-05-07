@@ -18,9 +18,16 @@ export default function BrandsPage(): React.ReactElement {
   const [error, setError] = useState("");
 
   async function refreshBrands(): Promise<void> {
-    const res = await fetch("/api/brands");
-    if (res.ok) {
+    setError("");
+    try {
+      const res = await fetch("/api/brands");
+      if (!res.ok) {
+        throw new Error(`Failed to load brands (HTTP ${res.status})`);
+      }
       setBrands(await res.json());
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to load brands.";
+      setError(msg);
     }
   }
 
