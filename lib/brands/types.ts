@@ -20,7 +20,7 @@ export const brandSchema = z.object({
   font_family: z.string().max(100).nullable(),
   break_message: z.string().max(500).nullable(),
   end_message: z.string().max(500).nullable(),
-  website_url: z.string().url().nullable().or(z.literal("")),
+  website_url: z.string().max(200).nullable().or(z.literal("")),
   qr_items: z.array(qrItemSchema).max(4).nullable(),
   created_at: z.string(),
   updated_at: z.string(),
