@@ -25,6 +25,9 @@ import {
 } from "@/lib/spotifyWeb";
 import type { Card, ParseResult, Song } from "@/lib/types";
 import { sanitizeFilenamePart } from "@/lib/utils";
+import { resolveBrandConfig } from "@/lib/brands/brandRepo";
+import { fetchBrandLogoPngBytes } from "@/lib/brands/brandStorage";
+import type { BrandConfig } from "@/lib/brands/types";
 
 export const runtime = "nodejs";
 
@@ -136,6 +139,7 @@ async function renderGamePdfWithEvents(params: {
   logoLeftPngBytes: Uint8Array | null;
   logoRightPngBytes: Uint8Array | null;
   events: EventDetail[];
+  brandConfig: BrandConfig | null;
 }): Promise<Uint8Array> {
   const cardsPdfBytes = await renderCardsPdf(params.cards, {
     eventDate: params.eventDate,
@@ -143,12 +147,12 @@ async function renderGamePdfWithEvents(params: {
     logoLeftPngBytes: params.logoLeftPngBytes,
     logoRightPngBytes: params.logoRightPngBytes,
     showCardId: true,
+    brandConfig: params.brandConfig,
   });
 
   const pdf = await PDFDocument.load(cardsPdfBytes);
   const cardPageCount = pdf.getPageCount();
 
-  // Insert events pages after each card page, in reverse order so indices don't shift
   for (let i = cardPageCount - 1; i >= 0; i--) {
     const tempPdf = await PDFDocument.create();
     const tempFont = await tempPdf.embedFont(StandardFonts.Helvetica);
@@ -156,6 +160,9 @@ async function renderGamePdfWithEvents(params: {
 
     await renderEventsPage(tempPdf, tempFont, tempFontBold, {
       events: params.events,
+      logoLeftPngBytes: params.logoLeftPngBytes,
+      logoRightPngBytes: params.logoRightPngBytes,
+      brandConfig: params.brandConfig,
     });
 
     const [copiedPage] = await pdf.copyPages(tempPdf, [0]);
@@ -238,11 +245,27 @@ export async function POST(request: Request) {
     const sortedGame1Songs = sortSongsBySpotifyOrder(parsedGame1.songs, spotifyTracksGame1);
     const sortedGame2Songs = sortSongsBySpotifyOrder(parsedGame2.songs, spotifyTracksGame2);
 
-    // Fetch upcoming events for events back page and clipboard
+    const brandId = asString(form.get("brand_id")).trim() || null;
+    const brandConfig = await resolveBrandConfig(brandId);
+
     const upcomingEvents = await fetchUpcomingEventDetails({ eventDateDisplay: eventDateInput });
 
-    const logoRightPngBytes = await loadDefaultLogoPngBytes({ origin });
-    const logoLeftPngBytes = await loadDefaultEventLogoPngBytes({ origin });
+    let logoRightPngBytes: Uint8Array | null = null;
+    let logoLeftPngBytes: Uint8Array | null = null;
+    if (brandConfig) {
+      const [darkLogo, lightLogo] = await Promise.all([
+        fetchBrandLogoPngBytes(brandConfig.logo_dark_url),
+        fetchBrandLogoPngBytes(brandConfig.logo_light_url),
+      ]);
+      logoRightPngBytes = darkLogo;
+      logoLeftPngBytes = lightLogo;
+    }
+    if (!logoRightPngBytes) {
+      logoRightPngBytes = await loadDefaultLogoPngBytes({ origin });
+    }
+    if (!logoLeftPngBytes) {
+      logoLeftPngBytes = await loadDefaultEventLogoPngBytes({ origin });
+    }
 
     const [pdfGame1Bytes, pdfGame2Bytes, clipboardDocxBytes] = await Promise.all([
       renderGamePdfWithEvents({
@@ -252,6 +275,7 @@ export async function POST(request: Request) {
         logoLeftPngBytes,
         logoRightPngBytes,
         events: upcomingEvents,
+        brandConfig,
       }),
       renderGamePdfWithEvents({
         cards: cardsGame2,
@@ -260,6 +284,7 @@ export async function POST(request: Request) {
         logoLeftPngBytes,
         logoRightPngBytes,
         events: upcomingEvents,
+        brandConfig,
       }),
       renderClipboardDocx({
         eventDateInput,
