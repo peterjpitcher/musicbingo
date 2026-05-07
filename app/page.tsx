@@ -98,6 +98,7 @@ export default function HomePage() {
   const [spotifyCallbackUrl, setSpotifyCallbackUrl] = useState<string>("/api/spotify/callback");
   const [liveSessionNotice, setLiveSessionNotice] = useState<string>("");
   const pendingAutoSave = useRef(false);
+  const saveLiveSessionRef = useRef<() => Promise<void>>();
 
   const parsedGame1 = useMemo(() => parseSongListText(game1SongsText), [game1SongsText]);
   const parsedGame2 = useMemo(() => parseSongListText(game2SongsText), [game2SongsText]);
@@ -153,7 +154,7 @@ export default function HomePage() {
   useEffect(() => {
     if (!pendingAutoSave.current || !livePlaylistByGame) return;
     pendingAutoSave.current = false;
-    saveLiveSession();
+    saveLiveSessionRef.current?.();
   }, [livePlaylistByGame]);
 
   const canSubmit = useMemo(() => {
@@ -269,6 +270,7 @@ export default function HomePage() {
       setError(err?.message ?? "Failed to save live session.");
     }
   }
+  saveLiveSessionRef.current = saveLiveSession;
 
   async function exportLiveSession() {
     try {
