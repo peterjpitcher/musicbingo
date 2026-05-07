@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Button } from "@/components/ui/Button";
@@ -97,6 +97,7 @@ export default function HomePage() {
   const [spotifyResult, setSpotifyResult] = useState<SpotifyPlaylistResult[] | null>(null);
   const [spotifyCallbackUrl, setSpotifyCallbackUrl] = useState<string>("/api/spotify/callback");
   const [liveSessionNotice, setLiveSessionNotice] = useState<string>("");
+  const pendingAutoSave = useRef(false);
 
   const parsedGame1 = useMemo(() => parseSongListText(game1SongsText), [game1SongsText]);
   const parsedGame2 = useMemo(() => parseSongListText(game2SongsText), [game2SongsText]);
@@ -148,6 +149,12 @@ export default function HomePage() {
     if (!game1 || !game2) return null;
     return { game1, game2 };
   }, [spotifyResult]);
+
+  useEffect(() => {
+    if (!pendingAutoSave.current || !livePlaylistByGame) return;
+    pendingAutoSave.current = false;
+    saveLiveSession();
+  }, [livePlaylistByGame]);
 
   const canSubmit = useMemo(() => {
     const count = Number.parseInt(countInput, 10);
@@ -425,6 +432,10 @@ export default function HomePage() {
       })();
 
       await Promise.all([bundlePromise, spotifyPromise]);
+      // Flag auto-save for when spotifyResult state flushes
+      if (!bundleError) {
+        pendingAutoSave.current = true;
+      }
       if (bundleError) setError(bundleError);
     } catch (err: any) {
       setError(err?.message ?? "Something went wrong.");
