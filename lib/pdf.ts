@@ -7,6 +7,8 @@ import sharp from "sharp";
 
 import type { Card, FooterQrItem } from "@/lib/types";
 import type { EventDetail } from "@/lib/managementApi";
+import type { BrandConfig } from "@/lib/brands/types";
+import { hexToPdfLibRgb } from "@/lib/brands/hexToRgb";
 import { sanitizeFilenamePart } from "@/lib/utils";
 
 const A4_WIDTH = 595.28;
@@ -23,6 +25,7 @@ type RenderOptions = {
   logoLeftPngBytes?: Uint8Array | null;
   logoRightPngBytes?: Uint8Array | null;
   showCardId?: boolean;
+  brandConfig?: BrandConfig | null;
 };
 
 type PublicAssetLoadOptions = {
@@ -338,6 +341,7 @@ type EventsPageOptions = {
   events: EventDetail[];
   logoLeftPngBytes?: Uint8Array | null;
   logoRightPngBytes?: Uint8Array | null;
+  brandConfig?: BrandConfig | null;
 };
 
 export async function renderEventsPage(
@@ -353,6 +357,13 @@ export async function renderEventsPage(
   const marginY = mmToPt(10);
 
   const black = rgb(0, 0, 0);
+  const eventsAccent = opts.brandConfig?.color_accent
+    ? rgb(
+        hexToPdfLibRgb(opts.brandConfig.color_accent).red,
+        hexToPdfLibRgb(opts.brandConfig.color_accent).green,
+        hexToPdfLibRgb(opts.brandConfig.color_accent).blue,
+      )
+    : black;
 
   const page = pdf.addPage([pageW, pageH]);
 
@@ -370,7 +381,10 @@ export async function renderEventsPage(
   });
 
   const whatsOnW = fontBold.widthOfTextAtSize("What's On", 22);
-  page.drawText("AT THE ANCHOR", {
+  const venueName = opts.brandConfig?.name
+    ? `AT ${opts.brandConfig.name.toUpperCase()}`
+    : "AT THE ANCHOR";
+  page.drawText(venueName, {
     x: marginX + whatsOnW + 8,
     y: headerTextY + 4,
     size: 8,
@@ -378,7 +392,7 @@ export async function renderEventsPage(
     color: black,
   });
 
-  const siteUrl = "the-anchor.pub";
+  const siteUrl = opts.brandConfig?.website_url || "the-anchor.pub";
   const siteUrlW = font.widthOfTextAtSize(siteUrl, 8);
   page.drawText(siteUrl, {
     x: pageW - marginX - siteUrlW,
@@ -388,17 +402,18 @@ export async function renderEventsPage(
     color: black,
   });
 
-  // 2pt horizontal rule below header
   const headerRuleY = headerTextY - 6;
   page.drawLine({
     start: { x: marginX, y: headerRuleY },
     end: { x: pageW - marginX, y: headerRuleY },
     thickness: 2,
-    color: black,
+    color: eventsAccent,
   });
 
   // --- Footer ---
-  const footerText = "the-anchor.pub  \u00b7  @theanchor.pub  \u00b7  01753 682707  \u00b7  #theanchor";
+  const footerText = opts.brandConfig?.qr_items?.length
+    ? opts.brandConfig.qr_items.map((item) => item.label).join("  \u00b7  ")
+    : "the-anchor.pub  \u00b7  @theanchor.pub  \u00b7  01753 682707  \u00b7  #theanchor";
   const footerSize = 7;
   const footerRuleY = contentBottom + 14;
   page.drawLine({
@@ -422,7 +437,8 @@ export async function renderEventsPage(
 
   // --- No events ---
   if (!opts.events || opts.events.length === 0) {
-    const msg = "Visit the-anchor.pub for upcoming events";
+    const visitUrl = opts.brandConfig?.website_url || "the-anchor.pub";
+    const msg = `Visit ${visitUrl} for upcoming events`;
     const msgSize = 14;
     const msgW = font.widthOfTextAtSize(msg, msgSize);
     page.drawText(msg, {
