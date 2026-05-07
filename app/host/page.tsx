@@ -39,8 +39,14 @@ export default function HostDashboardPage() {
   const [changingBrand, setChangingBrand] = useState<string | null>(null);
 
   async function refreshSessions() {
-    const loaded = await listLiveSessions();
-    setSessions(loaded);
+    setError("");
+    try {
+      const loaded = await listLiveSessions();
+      setSessions(loaded);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to load sessions.";
+      setError(msg);
+    }
   }
 
   useEffect(() => {
