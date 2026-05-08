@@ -8,7 +8,6 @@ import sharp from "sharp";
 import type { Card, FooterQrItem } from "@/lib/types";
 import type { EventDetail } from "@/lib/managementApi";
 import type { BrandConfig } from "@/lib/brands/types";
-import { hexToPdfLibRgb } from "@/lib/brands/hexToRgb";
 import { sanitizeFilenamePart } from "@/lib/utils";
 
 const A4_WIDTH = 595.28;
@@ -357,13 +356,6 @@ export async function renderEventsPage(
   const marginY = mmToPt(10);
 
   const black = rgb(0, 0, 0);
-  const eventsAccent = opts.brandConfig?.color_accent
-    ? rgb(
-        hexToPdfLibRgb(opts.brandConfig.color_accent).red,
-        hexToPdfLibRgb(opts.brandConfig.color_accent).green,
-        hexToPdfLibRgb(opts.brandConfig.color_accent).blue,
-      )
-    : black;
 
   const page = pdf.addPage([pageW, pageH]);
 
@@ -407,7 +399,7 @@ export async function renderEventsPage(
     start: { x: marginX, y: headerRuleY },
     end: { x: pageW - marginX, y: headerRuleY },
     thickness: 2,
-    color: eventsAccent,
+    color: black,
   });
 
   // --- Footer ---
