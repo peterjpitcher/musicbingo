@@ -182,11 +182,13 @@ export async function POST(request: Request) {
     }
     const eventDateDisplay = formatEventDateDisplay(eventDateInput);
 
-    const countRaw = asString(form.get("count")).trim() || "40";
-    const count = Number.parseInt(countRaw, 10);
-    if (!Number.isFinite(count) || count < 1 || count > 1000) {
-      return new Response("Count must be a whole number between 1 and 1000.", { status: 400 });
+    const CARDS_PER_PAGE = 6;
+    const pagesRaw = asString(form.get("count")).trim() || "40";
+    const pages = Number.parseInt(pagesRaw, 10);
+    if (!Number.isFinite(pages) || pages < 1 || pages > 200) {
+      return new Response("Pages must be a whole number between 1 and 200.", { status: 400 });
     }
+    const count = pages * CARDS_PER_PAGE;
 
     const seed = asString(form.get("seed")).trim();
     const game1SongsText = asString(form.get("game1_songs"));

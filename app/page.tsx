@@ -160,7 +160,7 @@ export default function HomePage() {
   const canSubmit = useMemo(() => {
     const count = Number.parseInt(countInput, 10);
     if (!eventDate.trim()) return false;
-    if (!Number.isFinite(count) || count < 1 || count > 1000) return false;
+    if (!Number.isFinite(count) || count < 1 || count > 200) return false;
     if (!parsedGame1.songs.length || !parsedGame2.songs.length) return false;
     if (
       parsedGame1.songs.length > MAX_SONGS_PER_GAME ||

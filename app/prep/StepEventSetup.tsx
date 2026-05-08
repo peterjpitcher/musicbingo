@@ -54,16 +54,16 @@ export function StepEventSetup({
           <p className={helpClass}>Used in PDFs, DOCX clipboard, and playlist names</p>
         </div>
         <div>
-          <label className={labelClass}>Cards Per Game</label>
+          <label className={labelClass}>Pages</label>
           <input
             type="number"
             className={inputClass}
             min={1}
-            max={1000}
+            max={200}
             value={countInput}
             onChange={(e) => onCountInput(e.target.value)}
           />
-          <p className={helpClass}>Default is 40</p>
+          <p className={helpClass}>6 cards per page — 40 pages = 240 cards</p>
         </div>
       </div>
       <div className="mb-5">
