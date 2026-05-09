@@ -250,8 +250,8 @@ export default function HostDashboardPage() {
             <Button as="link" href="/brands" variant="secondary" size="sm">
               Manage Brands
             </Button>
-            <Button as="link" href="/" variant="secondary" size="sm">
-              Back to Prep
+            <Button as="link" href="/prep" variant="primary" size="sm">
+              New Game
             </Button>
           </>
         }
@@ -271,8 +271,8 @@ export default function HostDashboardPage() {
             <p className="text-slate-500 text-sm mb-4">
               Generate playlists on the prep screen, then click &quot;Save Live Session&quot;.
             </p>
-            <Button as="link" href="/" variant="primary">
-              Open Prep Screen
+            <Button as="link" href="/prep" variant="primary">
+              New Game
             </Button>
           </Card>
         ) : (
