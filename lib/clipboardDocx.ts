@@ -8,7 +8,8 @@ import type { Song } from "@/lib/types";
 type ClipboardGame = {
   theme: string;
   songs: Song[];
-  challengeSong: Song;
+  challengeSongs: Song[];
+  introSong?: Song;
 };
 
 type RenderClipboardDocxParams = {
@@ -86,8 +87,8 @@ export async function renderClipboardDocx(params: RenderClipboardDocxParams): Pr
   const eventDate = formatEventDateWithWeekdayDisplay(params.eventDateInput) || params.eventDateInput;
   const game1Theme = normalizeGameTheme(params.game1.theme);
   const game2Theme = normalizeGameTheme(params.game2.theme);
-  const game1ChallengeSong = songLabel(params.game1.challengeSong);
-  const game2ChallengeSong = songLabel(params.game2.challengeSong);
+  const game1IntroLabel = params.game1.introSong ? songLabel(params.game1.introSong) : null;
+  const game2IntroLabel = params.game2.introSong ? songLabel(params.game2.introSong) : null;
 
   const children: Paragraph[] = [
     new Paragraph({
@@ -106,7 +107,7 @@ export async function renderClipboardDocx(params: RenderClipboardDocxParams): Pr
 
     heading("OPENING REMARKS"),
     bullet("We'll be playing two separate Music Bingo games (two different song lists)."),
-    bullet("Song pace: aim for 40 seconds per song (unless there is big audience participation). Goal is speed."),
+    bullet("Song pace: aim for 60 seconds per song (unless there is big audience participation). Goal is speed."),
     bullet("Each Music Bingo game is capped at 50 songs (about 33 minutes 20 seconds of constant play, plus Nikki banter)."),
     bullet("KaraFun points (mobile quiz):"),
     subBullet("1st place 30 pts"),
@@ -117,41 +118,57 @@ export async function renderClipboardDocx(params: RenderClipboardDocxParams): Pr
     subBullet("2 lines 25 pts"),
     subBullet("Full House 50 pts"),
     bullet("Reminder: The kitchen is open until 9 pm for food orders."),
-
-    heading("SCHEDULE"),
-    numbered("1. Welcome - Yes Sir (Nikki lip sync)"),
-    numbered("2. Announcements"),
-    numbered("3. KaraFun mobile quiz (Round 1)"),
-    numbered("4. Music Bingo Game 1 (50 songs max)"),
-    numbered("5. Break (10 mins)"),
-    numbered("6. KaraFun mobile quiz (Round 2)"),
-    numbered("7. Music Bingo Game 2 (50 songs max, different song list)"),
-    numbered("8. Announcements"),
-    numbered("9. Sing Along/Out - end-of-night singalong"),
-
-    heading("UPCOMING EVENTS"),
-    ...eventParagraphs(params.upcomingEvents),
-
-    heading("BONUS FUN"),
-    bullet("Dancing Challenge (20 pts) - placed in Game 1."),
-    subBullet(`Song: ${game1ChallengeSong}`),
-    subBullet("Nikki announces the song in advance. Anyone who wants to can get up and dance along. Nikki picks a winner and awards 20 bonus points."),
-    bullet("Sing-Along Challenge (20 pts) - placed in Game 2."),
-    subBullet(`Song: ${game2ChallengeSong}`),
-    subBullet("Nikki announces the song in advance. Everyone can play. Last person singing the right words wins. If you sing the wrong words, you sit down. Winner gets 20 bonus points."),
-
-    heading("MUSIC BINGO"),
-    bullet("IMPORTANT: Create two separate games for next time (Game 1 list and Game 2 list). Do not reuse the same pool for both."),
-    bullet("Max 50 songs per game."),
-    bullet("40 seconds per song unless audience participation is high."),
-
-    heading(`MUSIC BINGO GAME 1 (${game1Theme})`),
-    ...songsBlock(params.game1.songs),
-
-    blankLine(),
-    heading(`MUSIC BINGO GAME 2 (${game2Theme})`),
-    ...songsBlock(params.game2.songs),
   ];
+
+  // Build schedule with dynamic numbering for intro song slots
+  children.push(heading("SCHEDULE"));
+  let n = 1;
+  children.push(numbered(`${n++}. Welcome - Yes Sir (Nikki lip sync)`));
+  children.push(numbered(`${n++}. Announcements`));
+  children.push(numbered(`${n++}. KaraFun mobile quiz (Round 1)`));
+  children.push(numbered(`${n++}. Dance Along intro${game1IntroLabel ? ` — ${game1IntroLabel}` : " (TBD)"}`));
+  children.push(numbered(`${n++}. Music Bingo Game 1 (50 songs max)`));
+  children.push(numbered(`${n++}. Break (10 mins)`));
+  children.push(numbered(`${n++}. KaraFun mobile quiz (Round 2)`));
+  children.push(numbered(`${n++}. Sing Along intro${game2IntroLabel ? ` — ${game2IntroLabel}` : " (TBD)"}`));
+  children.push(numbered(`${n++}. Music Bingo Game 2 (50 songs max, different song list)`));
+  children.push(numbered(`${n++}. Announcements`));
+
+  children.push(heading("UPCOMING EVENTS"));
+  children.push(...eventParagraphs(params.upcomingEvents));
+
+  // BONUS FUN — challenge songs (multi-song) and intro songs
+  children.push(heading("BONUS FUN"));
+
+  children.push(bullet("Dancing Challenge (20 pts) - placed in Game 1."));
+  for (let i = 0; i < params.game1.challengeSongs.length; i++) {
+    children.push(subBullet(`Song ${i + 1}: ${songLabel(params.game1.challengeSongs[i]!)}`));
+  }
+  children.push(subBullet("Nikki announces the song in advance. Anyone who wants to can get up and dance along. Nikki picks a winner and awards 20 bonus points."));
+  if (game1IntroLabel) {
+    children.push(bullet(`Dance Along intro: ${game1IntroLabel}`));
+  }
+
+  children.push(bullet("Sing-Along Challenge (20 pts) - placed in Game 2."));
+  for (let i = 0; i < params.game2.challengeSongs.length; i++) {
+    children.push(subBullet(`Song ${i + 1}: ${songLabel(params.game2.challengeSongs[i]!)}`));
+  }
+  children.push(subBullet("Nikki announces the song in advance. Everyone can play. Last person singing the right words wins. If you sing the wrong words, you sit down. Winner gets 20 bonus points."));
+  if (game2IntroLabel) {
+    children.push(bullet(`Sing Along intro: ${game2IntroLabel}`));
+  }
+
+  children.push(heading("MUSIC BINGO"));
+  children.push(bullet("IMPORTANT: Create two separate games for next time (Game 1 list and Game 2 list). Do not reuse the same pool for both."));
+  children.push(bullet("Max 50 songs per game."));
+  children.push(bullet("60 seconds per song unless audience participation is high."));
+
+  children.push(heading(`MUSIC BINGO GAME 1 (${game1Theme})`));
+  children.push(...songsBlock(params.game1.songs));
+
+  children.push(blankLine());
+  children.push(heading(`MUSIC BINGO GAME 2 (${game2Theme})`));
+  children.push(...songsBlock(params.game2.songs));
 
   const doc = new Document({
     sections: [

@@ -63,3 +63,13 @@ export function resolveChallengeSong(
 
   return song;
 }
+
+export function resolveChallengeSongs(
+  selections: string[],
+  songs: Song[],
+  challengeLabel: string
+): Song[] {
+  return selections
+    .filter(s => s.trim().length > 0)
+    .map(s => resolveChallengeSong(s, songs, challengeLabel));
+}

@@ -69,6 +69,14 @@ function validateGameConfig(input: unknown): LiveGameConfig | null {
     addedCount,
     challengeSongArtist: asString(input.challengeSongArtist) ?? "",
     challengeSongTitle: asString(input.challengeSongTitle) ?? "",
+    ...(Array.isArray(input.challengeSongs) ? {
+      challengeSongs: (input.challengeSongs as unknown[])
+        .filter((cs): cs is Record<string, unknown> => isObject(cs))
+        .map(cs => ({ artist: asString(cs.artist) ?? "", title: asString(cs.title) ?? "" }))
+        .filter(cs => cs.artist && cs.title),
+    } : {}),
+    ...(asString(input.introSongArtist) ? { introSongArtist: asString(input.introSongArtist)! } : {}),
+    ...(asString(input.introSongTitle) ? { introSongTitle: asString(input.introSongTitle)! } : {}),
   };
 }
 
@@ -128,5 +136,15 @@ function validatePrepData(input: unknown): PrepData | null {
     return null;
   }
 
-  return { game1SongsText, game2SongsText, game1Theme, game2Theme, game1ChallengeSong, game2ChallengeSong, cardCount };
+  return {
+    game1SongsText, game2SongsText, game1Theme, game2Theme, game1ChallengeSong, game2ChallengeSong, cardCount,
+    ...(Array.isArray(input.game1ChallengeSongs) ? {
+      game1ChallengeSongs: (input.game1ChallengeSongs as unknown[]).filter((s): s is string => typeof s === "string" && s.trim().length > 0).map(s => (s as string).trim()),
+    } : {}),
+    ...(Array.isArray(input.game2ChallengeSongs) ? {
+      game2ChallengeSongs: (input.game2ChallengeSongs as unknown[]).filter((s): s is string => typeof s === "string" && s.trim().length > 0).map(s => (s as string).trim()),
+    } : {}),
+    ...(asString(input.game1IntroSong) ? { game1IntroSong: asString(input.game1IntroSong)! } : {}),
+    ...(asString(input.game2IntroSong) ? { game2IntroSong: asString(input.game2IntroSong)! } : {}),
+  };
 }

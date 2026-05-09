@@ -80,12 +80,18 @@ export default function PrepPage() {
   // Step 1 fields
   const [game1Theme, setGame1Theme] = useState<string>(DEFAULT_GAME_THEME);
   const [game1SongsText, setGame1SongsText] = useState<string>("");
-  const [game1ChallengeSong, setGame1ChallengeSong] = useState<string>("");
+  const [game1ChallengeSongs, setGame1ChallengeSongs] = useState<string[]>([]);
+  const [game1IntroSong, setGame1IntroSong] = useState<string>("");
 
   // Step 2 fields
   const [game2Theme, setGame2Theme] = useState<string>(DEFAULT_GAME_THEME);
   const [game2SongsText, setGame2SongsText] = useState<string>("");
-  const [game2ChallengeSong, setGame2ChallengeSong] = useState<string>("");
+  const [game2ChallengeSongs, setGame2ChallengeSongs] = useState<string[]>([]);
+  const [game2IntroSong, setGame2IntroSong] = useState<string>("");
+
+  // Legacy single challenge song (backward compat — derived from first element)
+  const game1ChallengeSong = game1ChallengeSongs[0] ?? "";
+  const game2ChallengeSong = game2ChallengeSongs[0] ?? "";
 
   // Step 3 state
   const [error, setError] = useState<string>("");
@@ -111,31 +117,59 @@ export default function PrepPage() {
       .catch(() => {});
   }, []);
 
+  // Auto-select first challenge song & prune stale selections for Game 1
   useEffect(() => {
     if (!parsedGame1.songs.length) {
-      if (game1ChallengeSong) setGame1ChallengeSong("");
+      if (game1ChallengeSongs.length) setGame1ChallengeSongs([]);
+      if (game1IntroSong) setGame1IntroSong("");
       return;
     }
-    const hasSelection = parsedGame1.songs.some(
-      (song) => makeSongSelectionValue(song) === game1ChallengeSong
-    );
-    if (!hasSelection) {
-      setGame1ChallengeSong(makeSongSelectionValue(parsedGame1.songs[0] as Song));
-    }
-  }, [parsedGame1.songs, game1ChallengeSong]);
+    const validValues = new Set(parsedGame1.songs.map(makeSongSelectionValue));
 
+    // Prune intro if stale
+    if (game1IntroSong && !validValues.has(game1IntroSong)) {
+      setGame1IntroSong("");
+    }
+
+    // Prune challenge songs that are no longer in the song list
+    const pruned = game1ChallengeSongs.map((v) => (v && validValues.has(v) ? v : ""));
+    const prunedChanged = pruned.some((v, i) => v !== (game1ChallengeSongs[i] ?? ""));
+
+    if (!pruned.some((v) => v)) {
+      // No valid selections remain — auto-select first song in slot 0
+      const autoFirst = makeSongSelectionValue(parsedGame1.songs[0] as Song);
+      setGame1ChallengeSongs([autoFirst]);
+    } else if (prunedChanged) {
+      setGame1ChallengeSongs(pruned);
+    }
+  }, [parsedGame1.songs, game1ChallengeSongs, game1IntroSong]);
+
+  // Auto-select first challenge song & prune stale selections for Game 2
   useEffect(() => {
     if (!parsedGame2.songs.length) {
-      if (game2ChallengeSong) setGame2ChallengeSong("");
+      if (game2ChallengeSongs.length) setGame2ChallengeSongs([]);
+      if (game2IntroSong) setGame2IntroSong("");
       return;
     }
-    const hasSelection = parsedGame2.songs.some(
-      (song) => makeSongSelectionValue(song) === game2ChallengeSong
-    );
-    if (!hasSelection) {
-      setGame2ChallengeSong(makeSongSelectionValue(parsedGame2.songs[0] as Song));
+    const validValues = new Set(parsedGame2.songs.map(makeSongSelectionValue));
+
+    // Prune intro if stale
+    if (game2IntroSong && !validValues.has(game2IntroSong)) {
+      setGame2IntroSong("");
     }
-  }, [parsedGame2.songs, game2ChallengeSong]);
+
+    // Prune challenge songs that are no longer in the song list
+    const pruned = game2ChallengeSongs.map((v) => (v && validValues.has(v) ? v : ""));
+    const prunedChanged = pruned.some((v, i) => v !== (game2ChallengeSongs[i] ?? ""));
+
+    if (!pruned.some((v) => v)) {
+      // No valid selections remain — auto-select first song in slot 0
+      const autoFirst = makeSongSelectionValue(parsedGame2.songs[0] as Song);
+      setGame2ChallengeSongs([autoFirst]);
+    } else if (prunedChanged) {
+      setGame2ChallengeSongs(pruned);
+    }
+  }, [parsedGame2.songs, game2ChallengeSongs, game2IntroSong]);
 
   useEffect(() => {
     const eventDateDisplay = formatEventDateDisplay(eventDate) || eventDate || todayIso();
@@ -169,13 +203,13 @@ export default function PrepPage() {
       return false;
     if (parsedGame1.combinedPool.length < 25) return false;
     if (parsedGame2.combinedPool.length < 25) return false;
-    if (!game1ChallengeSong || !game2ChallengeSong) return false;
+    if (!game1ChallengeSongs.some(Boolean) || !game2ChallengeSongs.some(Boolean)) return false;
     return true;
   }, [
     countInput,
     eventDate,
-    game1ChallengeSong,
-    game2ChallengeSong,
+    game1ChallengeSongs,
+    game2ChallengeSongs,
     parsedGame1.combinedPool.length,
     parsedGame2.combinedPool.length,
     parsedGame1.songs.length,
@@ -191,6 +225,12 @@ export default function PrepPage() {
     form.set("game2_songs", game2SongsText);
     form.set("game1_challenge_song", game1ChallengeSong);
     form.set("game2_challenge_song", game2ChallengeSong);
+    // Multi-challenge songs (JSON array)
+    form.set("game1_challenge_songs", JSON.stringify(game1ChallengeSongs.filter(Boolean)));
+    form.set("game2_challenge_songs", JSON.stringify(game2ChallengeSongs.filter(Boolean)));
+    // Intro songs
+    if (game1IntroSong) form.set("game1_intro_song", game1IntroSong);
+    if (game2IntroSong) form.set("game2_intro_song", game2IntroSong);
     if (livePlaylistByGame?.game1.playlistId) {
       form.set("game1_playlist_id", livePlaylistByGame.game1.playlistId);
     }
@@ -231,6 +271,9 @@ export default function PrepPage() {
           addedCount: game1.addedCount,
           challengeSongArtist: parseChallengeSongSelection(game1ChallengeSong).artist,
           challengeSongTitle: parseChallengeSongSelection(game1ChallengeSong).title,
+          challengeSongs: game1ChallengeSongs.filter(Boolean).map((s) => parseChallengeSongSelection(s)),
+          introSongArtist: game1IntroSong ? parseChallengeSongSelection(game1IntroSong).artist : undefined,
+          introSongTitle: game1IntroSong ? parseChallengeSongSelection(game1IntroSong).title : undefined,
         },
         {
           gameNumber: 2,
@@ -242,6 +285,9 @@ export default function PrepPage() {
           addedCount: game2.addedCount,
           challengeSongArtist: parseChallengeSongSelection(game2ChallengeSong).artist,
           challengeSongTitle: parseChallengeSongSelection(game2ChallengeSong).title,
+          challengeSongs: game2ChallengeSongs.filter(Boolean).map((s) => parseChallengeSongSelection(s)),
+          introSongArtist: game2IntroSong ? parseChallengeSongSelection(game2IntroSong).artist : undefined,
+          introSongTitle: game2IntroSong ? parseChallengeSongSelection(game2IntroSong).title : undefined,
         },
       ],
       prepData: {
@@ -252,6 +298,10 @@ export default function PrepPage() {
         game1ChallengeSong,
         game2ChallengeSong,
         cardCount: Number.isFinite(count) ? count : 40,
+        game1ChallengeSongs: game1ChallengeSongs.filter(Boolean),
+        game2ChallengeSongs: game2ChallengeSongs.filter(Boolean),
+        game1IntroSong: game1IntroSong || undefined,
+        game2IntroSong: game2IntroSong || undefined,
       },
       brandId: selectedBrandId ?? undefined,
     };
@@ -603,13 +653,14 @@ export default function PrepPage() {
           <StepGameConfig
             gameNumber={1}
             gameLabel="Dancing Challenge"
-            challengeLabel="Dancing Challenge Song (Game 1)"
             theme={game1Theme}
             onTheme={setGame1Theme}
             songsText={game1SongsText}
             onSongsText={setGame1SongsText}
-            challengeSong={game1ChallengeSong}
-            onChallengeSong={setGame1ChallengeSong}
+            challengeSongs={game1ChallengeSongs}
+            onChallengeSongs={setGame1ChallengeSongs}
+            introSong={game1IntroSong}
+            onIntroSong={setGame1IntroSong}
             parsed={parsedGame1}
             onBack={() => goToStep(0)}
             onNext={() => goToStep(2)}
@@ -621,13 +672,14 @@ export default function PrepPage() {
           <StepGameConfig
             gameNumber={2}
             gameLabel="Sing-Along Challenge"
-            challengeLabel="Sing-Along Challenge Song (Game 2)"
             theme={game2Theme}
             onTheme={setGame2Theme}
             songsText={game2SongsText}
             onSongsText={setGame2SongsText}
-            challengeSong={game2ChallengeSong}
-            onChallengeSong={setGame2ChallengeSong}
+            challengeSongs={game2ChallengeSongs}
+            onChallengeSongs={setGame2ChallengeSongs}
+            introSong={game2IntroSong}
+            onIntroSong={setGame2IntroSong}
             parsed={parsedGame2}
             onBack={() => goToStep(1)}
             onNext={() => goToStep(3)}

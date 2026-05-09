@@ -7,6 +7,7 @@ import {
   normalizeGameTheme,
   parseGameSongsText,
   resolveChallengeSong,
+  resolveChallengeSongs,
 } from "@/lib/gameInput";
 import { fetchUpcomingEventDetails } from "@/lib/managementApi";
 import type { EventDetail } from "@/lib/managementApi";
@@ -198,21 +199,42 @@ export async function POST(request: Request) {
 
     let parsedGame1: ParseResult;
     let parsedGame2: ParseResult;
-    let game1ChallengeSong: Song;
-    let game2ChallengeSong: Song;
+    let game1ChallengeSongsList: Song[];
+    let game2ChallengeSongsList: Song[];
+    let game1IntroSong: Song | undefined;
+    let game2IntroSong: Song | undefined;
     try {
       parsedGame1 = parseGameSongsText(game1SongsText, "Game 1");
       parsedGame2 = parseGameSongsText(game2SongsText, "Game 2");
-      game1ChallengeSong = resolveChallengeSong(
-        asString(form.get("game1_challenge_song")),
-        parsedGame1.songs,
-        "Game 1 dancing challenge"
-      );
-      game2ChallengeSong = resolveChallengeSong(
-        asString(form.get("game2_challenge_song")),
-        parsedGame2.songs,
-        "Game 2 sing-along challenge"
-      );
+
+      const game1ChallengeRaw = asString(form.get("game1_challenge_songs"));
+      const game2ChallengeRaw = asString(form.get("game2_challenge_songs"));
+      const game1ChallengeArr: string[] = game1ChallengeRaw ? JSON.parse(game1ChallengeRaw) : [];
+      const game2ChallengeArr: string[] = game2ChallengeRaw ? JSON.parse(game2ChallengeRaw) : [];
+
+      if (game1ChallengeArr.length > 0) {
+        game1ChallengeSongsList = resolveChallengeSongs(game1ChallengeArr, parsedGame1.songs, "Game 1 challenge");
+      } else {
+        game1ChallengeSongsList = [resolveChallengeSong(
+          asString(form.get("game1_challenge_song")), parsedGame1.songs, "Game 1 dancing challenge"
+        )];
+      }
+      if (game2ChallengeArr.length > 0) {
+        game2ChallengeSongsList = resolveChallengeSongs(game2ChallengeArr, parsedGame2.songs, "Game 2 challenge");
+      } else {
+        game2ChallengeSongsList = [resolveChallengeSong(
+          asString(form.get("game2_challenge_song")), parsedGame2.songs, "Game 2 sing-along challenge"
+        )];
+      }
+
+      const game1IntroRaw = asString(form.get("game1_intro_song"));
+      const game2IntroRaw = asString(form.get("game2_intro_song"));
+      if (game1IntroRaw) {
+        game1IntroSong = resolveChallengeSong(game1IntroRaw, parsedGame1.songs, "Game 1 intro");
+      }
+      if (game2IntroRaw) {
+        game2IntroSong = resolveChallengeSong(game2IntroRaw, parsedGame2.songs, "Game 2 intro");
+      }
     } catch (err: any) {
       return new Response(err?.message ? String(err.message) : "Invalid game inputs.", { status: 400 });
     }
@@ -293,12 +315,14 @@ export async function POST(request: Request) {
         game1: {
           theme: game1Theme,
           songs: sortedGame1Songs,
-          challengeSong: game1ChallengeSong,
+          challengeSongs: game1ChallengeSongsList,
+          introSong: game1IntroSong,
         },
         game2: {
           theme: game2Theme,
           songs: sortedGame2Songs,
-          challengeSong: game2ChallengeSong,
+          challengeSongs: game2ChallengeSongsList,
+          introSong: game2IntroSong,
         },
         upcomingEvents,
       }),

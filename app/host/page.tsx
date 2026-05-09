@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 
 import { BrandSelector } from "@/components/brand/BrandSelector";
 import { AppHeader } from "@/components/layout/AppHeader";
-import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Notice } from "@/components/ui/Notice";
@@ -185,6 +184,18 @@ export default function HostDashboardPage() {
         form.set("game2_songs", session.prepData.game2SongsText);
         form.set("game1_challenge_song", session.prepData.game1ChallengeSong);
         form.set("game2_challenge_song", session.prepData.game2ChallengeSong);
+        if (session.prepData.game1ChallengeSongs?.length) {
+          form.set("game1_challenge_songs", JSON.stringify(session.prepData.game1ChallengeSongs));
+        }
+        if (session.prepData.game2ChallengeSongs?.length) {
+          form.set("game2_challenge_songs", JSON.stringify(session.prepData.game2ChallengeSongs));
+        }
+        if (session.prepData.game1IntroSong) {
+          form.set("game1_intro_song", session.prepData.game1IntroSong);
+        }
+        if (session.prepData.game2IntroSong) {
+          form.set("game2_intro_song", session.prepData.game2IntroSong);
+        }
       } else {
         // Reconstruct from Spotify playlists — connect first if needed
         if (!spotifyConnected) {
