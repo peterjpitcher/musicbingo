@@ -8,16 +8,16 @@ import {
   updateAdvanceTrackMarker,
 } from "@/lib/live/reveal";
 
-test("getRevealPhase follows 13s/27s/33s/40s thresholds", () => {
+test("getRevealPhase follows 15s/30s/40s/60s thresholds", () => {
   assert.equal(getRevealPhase(0), "hidden");
-  assert.equal(getRevealPhase(12_999), "hidden");
-  assert.equal(getRevealPhase(13_000), "album");
-  assert.equal(getRevealPhase(26_999), "album");
-  assert.equal(getRevealPhase(27_000), "title");
-  assert.equal(getRevealPhase(32_999), "title");
-  assert.equal(getRevealPhase(33_000), "artist");
-  assert.equal(getRevealPhase(39_999), "artist");
-  assert.equal(getRevealPhase(40_000), "advance");
+  assert.equal(getRevealPhase(14_999), "hidden");
+  assert.equal(getRevealPhase(15_000), "album");
+  assert.equal(getRevealPhase(29_999), "album");
+  assert.equal(getRevealPhase(30_000), "title");
+  assert.equal(getRevealPhase(39_999), "title");
+  assert.equal(getRevealPhase(40_000), "artist");
+  assert.equal(getRevealPhase(59_999), "artist");
+  assert.equal(getRevealPhase(60_000), "advance");
 });
 
 test("computeRevealState maps phases to reveal booleans", () => {
@@ -28,28 +28,28 @@ test("computeRevealState maps phases to reveal booleans", () => {
     shouldAdvance: false,
   });
 
-  assert.deepEqual(computeRevealState(13_000), {
+  assert.deepEqual(computeRevealState(15_000), {
     showAlbum: true,
     showTitle: false,
     showArtist: false,
     shouldAdvance: false,
   });
 
-  assert.deepEqual(computeRevealState(27_000), {
+  assert.deepEqual(computeRevealState(30_000), {
     showAlbum: true,
     showTitle: true,
     showArtist: false,
     shouldAdvance: false,
   });
 
-  assert.deepEqual(computeRevealState(33_000), {
+  assert.deepEqual(computeRevealState(40_000), {
     showAlbum: true,
     showTitle: true,
     showArtist: true,
     shouldAdvance: false,
   });
 
-  assert.deepEqual(computeRevealState(40_000), {
+  assert.deepEqual(computeRevealState(60_000), {
     showAlbum: true,
     showTitle: true,
     showArtist: true,
@@ -58,7 +58,7 @@ test("computeRevealState maps phases to reveal booleans", () => {
 });
 
 test("shouldTriggerNextForTrack fires once per track", () => {
-  const reveal = computeRevealState(40_000);
+  const reveal = computeRevealState(60_000);
   assert.equal(
     shouldTriggerNextForTrack({
       trackId: "abc",

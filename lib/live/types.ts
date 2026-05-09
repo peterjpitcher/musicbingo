@@ -11,10 +11,10 @@ export type RevealConfig = {
 };
 
 export const DEFAULT_REVEAL_CONFIG: RevealConfig = {
-  albumMs: 13_000,
-  titleMs: 27_000,
-  artistMs: 33_000,
-  nextMs: 40_000,
+  albumMs: 15_000,
+  titleMs: 30_000,
+  artistMs: 40_000,
+  nextMs: 60_000,
 };
 
 /** Challenge songs play for 90 seconds instead of 40. */

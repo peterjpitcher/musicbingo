@@ -7,9 +7,10 @@ type BrandSelectorProps = {
   value: string | null;
   onChange: (brandId: string) => void;
   className?: string;
+  disabled?: boolean;
 };
 
-export function BrandSelector({ value, onChange, className }: BrandSelectorProps): React.ReactNode {
+export function BrandSelector({ value, onChange, className, disabled }: BrandSelectorProps): React.ReactNode {
   const [brands, setBrands] = useState<Brand[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -44,6 +45,7 @@ export function BrandSelector({ value, onChange, className }: BrandSelectorProps
   return (
     <select
       value={selectedId}
+      disabled={disabled}
       onChange={(e) => onChange(e.target.value)}
       className={className}
     >

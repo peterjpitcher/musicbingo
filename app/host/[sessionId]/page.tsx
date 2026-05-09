@@ -24,6 +24,7 @@ import {
 } from "@/lib/live/storage";
 import {
   CHALLENGE_REVEAL_CONFIG,
+  DEFAULT_REVEAL_CONFIG,
   LIVE_RUNTIME_VERSION,
   makeEmptyRuntimeState,
   type LiveGameConfig,
@@ -1022,7 +1023,7 @@ export default function HostSessionControllerPage() {
               <>
                 {/* Countdown display */}
                 {(() => {
-                  const baseCfg = isChallenge ? CHALLENGE_REVEAL_CONFIG : (session?.revealConfig ?? { nextMs: 30_000 });
+                  const baseCfg = isChallenge ? CHALLENGE_REVEAL_CONFIG : (session?.revealConfig ?? DEFAULT_REVEAL_CONFIG);
                   const effectiveNextMs = baseCfg.nextMs + runtime.extensionMs;
                   const progressMs = runtime.currentTrack?.progressMs ?? 0;
                   const timeUntilNextSec = Math.max(0, Math.ceil((effectiveNextMs - progressMs) / 1000));
@@ -1048,17 +1049,19 @@ export default function HostSessionControllerPage() {
                   );
                 })()}
 
-                <div className="flex flex-wrap gap-2 mb-3">
-                  <Badge active={runtime.revealState.showAlbum}>Album @10s</Badge>
-                  <Badge active={runtime.revealState.showTitle}>Title @20s</Badge>
-                  <Badge active={runtime.revealState.showArtist}>Artist @25s</Badge>
-                  <Badge active={runtime.revealState.shouldAdvance}>
-                    {(() => {
-                      const baseCfg = isChallenge ? CHALLENGE_REVEAL_CONFIG : (session?.revealConfig ?? { nextMs: 30_000 });
-                      return `Next @${Math.floor((baseCfg.nextMs + runtime.extensionMs) / 1000)}s`;
-                    })()}
-                  </Badge>
-                </div>
+                {(() => {
+                  const badgeCfg = isChallenge ? CHALLENGE_REVEAL_CONFIG : (session?.revealConfig ?? DEFAULT_REVEAL_CONFIG);
+                  return (
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      <Badge active={runtime.revealState.showAlbum}>Album @{Math.floor(badgeCfg.albumMs / 1000)}s</Badge>
+                      <Badge active={runtime.revealState.showTitle}>Title @{Math.floor(badgeCfg.titleMs / 1000)}s</Badge>
+                      <Badge active={runtime.revealState.showArtist}>Artist @{Math.floor(badgeCfg.artistMs / 1000)}s</Badge>
+                      <Badge active={runtime.revealState.shouldAdvance}>
+                        Next @{Math.floor((badgeCfg.nextMs + runtime.extensionMs) / 1000)}s
+                      </Badge>
+                    </div>
+                  );
+                })()}
 
                 <div className="flex flex-wrap gap-2 mb-4">
                   <Button
@@ -1105,7 +1108,7 @@ export default function HostSessionControllerPage() {
                 <p className="text-sm font-semibold text-amber-900">
                   {activeGame.challengeSongArtist} — {activeGame.challengeSongTitle}
                 </p>
-                <p className="text-xs text-amber-600 mt-0.5">Plays for 90s instead of 40s</p>
+                <p className="text-xs text-amber-600 mt-0.5">Plays for {Math.floor(CHALLENGE_REVEAL_CONFIG.nextMs / 1000)}s instead of {Math.floor((session?.revealConfig ?? DEFAULT_REVEAL_CONFIG).nextMs / 1000)}s</p>
               </div>
             ) : null}
             <p className="text-xs text-slate-400">

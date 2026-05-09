@@ -10,9 +10,12 @@ import { subscribeLiveChannel } from "@/lib/live/channel";
 import { getLiveSession } from "@/lib/live/sessionApi";
 import { readRuntimeState, validateRuntimeState } from "@/lib/live/storage";
 import {
+  CHALLENGE_REVEAL_CONFIG,
+  DEFAULT_REVEAL_CONFIG,
   makeEmptyRuntimeState,
   type LiveRuntimeState,
   type LiveSessionV1,
+  type RevealConfig,
 } from "@/lib/live/types";
 import { useWakeLock } from "@/hooks/useWakeLock";
 import { BrandProvider } from "@/components/brand/BrandProvider";
@@ -157,6 +160,10 @@ export default function GuestDisplayPage() {
   const activeGame = runtime.activeGameNumber
     ? session?.games.find((game) => game.gameNumber === runtime.activeGameNumber) ?? null
     : null;
+
+  const effectiveCfg: RevealConfig = runtime.isChallengeSong
+    ? CHALLENGE_REVEAL_CONFIG
+    : (session?.revealConfig ?? DEFAULT_REVEAL_CONFIG);
 
   const showWaiting =
     runtime.mode === "idle" || (!runtime.currentTrack && runtime.mode === "running");
@@ -314,7 +321,7 @@ export default function GuestDisplayPage() {
                 )
               ) : (
                 <div className="w-[min(68vh,88vw)] max-w-[560px] aspect-square rounded-[22px] border-4 border-dashed border-white/50 flex items-center justify-center text-[clamp(1rem,2vw,1.7rem)] uppercase tracking-[0.08em] bg-brand-green/72 opacity-50">
-                  Album reveals at 10s
+                  Album reveals at {Math.floor(effectiveCfg.albumMs / 1000)}s
                 </div>
               )}
             </div>
@@ -327,7 +334,7 @@ export default function GuestDisplayPage() {
                 </h2>
               ) : (
                 <h2 className="m-0 text-[clamp(1.6rem,4.5vw,4.2rem)] uppercase font-black tracking-wide text-white/75">
-                  Title reveals at 20s
+                  Title reveals at {Math.floor(effectiveCfg.titleMs / 1000)}s
                 </h2>
               )}
 
@@ -337,7 +344,7 @@ export default function GuestDisplayPage() {
                 </p>
               ) : (
                 <p className="m-0 text-[clamp(1.3rem,3vw,2.8rem)] font-bold text-white/75">
-                  Artist reveals at 25s
+                  Artist reveals at {Math.floor(effectiveCfg.artistMs / 1000)}s
                 </p>
               )}
 
@@ -351,7 +358,7 @@ export default function GuestDisplayPage() {
                 </p>
               ) : (
                 <p className="mt-1.5 text-white/90 text-[clamp(1rem,2vw,1.7rem)] uppercase tracking-[0.05em]">
-                  Next song at {Math.floor(((runtime.isChallengeSong ? 90_000 : 30_000) + runtime.extensionMs) / 1000)}s
+                  Next song at {Math.floor((effectiveCfg.nextMs + runtime.extensionMs) / 1000)}s
                 </p>
               )}
             </div>

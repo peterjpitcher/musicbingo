@@ -36,7 +36,7 @@ export default function HostDashboardPage() {
   const [error, setError] = useState<string>("");
   const [downloading, setDownloading] = useState<string | null>(null);
   const [spotifyConnected, setSpotifyConnected] = useState<boolean>(false);
-  const [changingBrand, setChangingBrand] = useState<string | null>(null);
+  const [updatingBrand, setUpdatingBrand] = useState<string | null>(null);
 
   async function refreshSessions() {
     setError("");
@@ -276,85 +276,93 @@ export default function HostDashboardPage() {
             </Button>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {sessions.map((session) => (
-              <Card as="article" key={session.id}>
-                <h2 className="text-base font-bold text-slate-800 mb-1">{session.name}</h2>
-                <p className="text-xs text-slate-500 mb-0.5">
-                  Event Date: {session.eventDateDisplay}
-                </p>
-                <p className="text-xs text-slate-500 mb-0.5">
-                  Created: {new Date(session.createdAt).toLocaleString()}
-                </p>
-                {session.brandId ? (
-                  <p className="text-xs text-slate-500 mb-3">
-                    Brand: {session.brandId.slice(0, 8)}…
-                  </p>
-                ) : (
-                  <div className="mb-3" />
-                )}
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {session.games
-                    .slice()
-                    .sort((a, b) => a.gameNumber - b.gameNumber)
-                    .map((game) => (
-                      <Badge key={game.gameNumber}>
-                        Game {game.gameNumber}: {game.theme}
-                      </Badge>
-                    ))}
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button as="link" href={`/host/${session.id}`} variant="primary" size="sm">
-                    Open Host Controller
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    disabled={downloading === session.id}
-                    onClick={() => void onRedownload(session)}
-                  >
-                    {downloading === session.id ? "Generating..." : "Re-download Event Pack"}
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setChangingBrand(changingBrand === session.id ? null : session.id)}
-                  >
-                    Change Brand
-                  </Button>
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    onClick={() => void onDelete(session)}
-                  >
-                    Delete
-                  </Button>
-                </div>
-                {changingBrand === session.id ? (
-                  <div className="mt-2 w-full">
-                    <BrandSelector
-                      value={session.brandId ?? null}
-                      onChange={async (brandId) => {
-                        try {
-                          const res = await fetch(`/api/sessions/${session.id}/brand`, {
-                            method: "PUT",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ brand_id: brandId }),
-                          });
-                          if (!res.ok) throw new Error("Failed to update brand");
-                          await refreshSessions();
-                          setChangingBrand(null);
-                          setNotice(`Updated brand for: ${session.name}`);
-                        } catch (err: any) {
-                          setError(err?.message ?? "Failed to update brand.");
-                        }
-                      }}
-                      className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
-                    />
-                  </div>
-                ) : null}
-              </Card>
-            ))}
+          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+            <table className="w-full text-sm text-left">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50">
+                  <th scope="col" className="px-4 py-3 font-semibold text-slate-700">Session</th>
+                  <th scope="col" className="px-4 py-3 font-semibold text-slate-700">Event Date</th>
+                  <th scope="col" className="px-4 py-3 font-semibold text-slate-700">Games</th>
+                  <th scope="col" className="px-4 py-3 font-semibold text-slate-700 min-w-[160px]">Brand</th>
+                  <th scope="col" className="px-4 py-3 font-semibold text-slate-700 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {sessions.map((session) => (
+                  <tr key={session.id} className="hover:bg-slate-50/60 transition-colors">
+                    <td className="px-4 py-3">
+                      <a
+                        href={`/host/${session.id}`}
+                        className="font-semibold text-slate-800 hover:text-blue-600 hover:underline underline-offset-2"
+                      >
+                        {session.name}
+                      </a>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        Created {new Date(session.createdAt).toLocaleDateString()}
+                      </p>
+                    </td>
+                    <td className="px-4 py-3 text-slate-600 whitespace-nowrap">
+                      {session.eventDateDisplay}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-1.5">
+                        {session.games
+                          .slice()
+                          .sort((a, b) => a.gameNumber - b.gameNumber)
+                          .map((game) => (
+                            <Badge key={game.gameNumber}>
+                              G{game.gameNumber}: {game.theme}
+                            </Badge>
+                          ))}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <BrandSelector
+                        value={session.brandId ?? null}
+                        disabled={updatingBrand === session.id}
+                        onChange={async (brandId) => {
+                          setUpdatingBrand(session.id);
+                          try {
+                            const res = await fetch(`/api/sessions/${session.id}/brand`, {
+                              method: "PUT",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ brand_id: brandId }),
+                            });
+                            if (!res.ok) throw new Error("Failed to update brand");
+                            await refreshSessions();
+                            setNotice(`Updated brand for: ${session.name}`);
+                          } catch (err: any) {
+                            setError(err?.message ?? "Failed to update brand.");
+                          } finally {
+                            setUpdatingBrand(null);
+                          }
+                        }}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs"
+                      />
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-2">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          disabled={downloading === session.id || updatingBrand === session.id}
+                          onClick={() => void onRedownload(session)}
+                        >
+                          {downloading === session.id ? "Generating..." : "Re-download"}
+                        </Button>
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          onClick={() => void onDelete(session)}
+                        >
+                          Delete
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </main>
