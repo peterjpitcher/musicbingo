@@ -257,7 +257,7 @@ export default function HostDashboardPage() {
         }
       />
 
-      <main className="max-w-5xl mx-auto px-4 py-8 space-y-4">
+      <main className="max-w-7xl mx-auto px-4 py-8 space-y-4">
         {notice ? <Notice variant="success">{notice}</Notice> : null}
         {error ? <Notice variant="error">{error}</Notice> : null}
 
@@ -277,19 +277,26 @@ export default function HostDashboardPage() {
           </Card>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-            <table className="w-full text-sm text-left">
+            <table className="w-full text-sm text-left table-fixed">
+              <colgroup>
+                <col className="w-[22%]" />
+                <col className="w-[14%]" />
+                <col className="w-[28%]" />
+                <col className="w-[18%]" />
+                <col className="w-[18%]" />
+              </colgroup>
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50">
                   <th scope="col" className="px-4 py-3 font-semibold text-slate-700">Session</th>
                   <th scope="col" className="px-4 py-3 font-semibold text-slate-700">Event Date</th>
                   <th scope="col" className="px-4 py-3 font-semibold text-slate-700">Games</th>
-                  <th scope="col" className="px-4 py-3 font-semibold text-slate-700 min-w-[160px]">Brand</th>
+                  <th scope="col" className="px-4 py-3 font-semibold text-slate-700">Brand</th>
                   <th scope="col" className="px-4 py-3 font-semibold text-slate-700 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {sessions.map((session) => (
-                  <tr key={session.id} className="hover:bg-slate-50/60 transition-colors">
+                  <tr key={session.id} className="hover:bg-slate-50/60 transition-colors align-top">
                     <td className="px-4 py-3">
                       <a
                         href={`/host/${session.id}`}
@@ -301,18 +308,18 @@ export default function HostDashboardPage() {
                         Created {new Date(session.createdAt).toLocaleDateString()}
                       </p>
                     </td>
-                    <td className="px-4 py-3 text-slate-600 whitespace-nowrap">
+                    <td className="px-4 py-3 text-slate-600">
                       {session.eventDateDisplay}
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1.5">
+                      <div className="flex flex-col gap-1">
                         {session.games
                           .slice()
                           .sort((a, b) => a.gameNumber - b.gameNumber)
                           .map((game) => (
-                            <Badge key={game.gameNumber}>
-                              G{game.gameNumber}: {game.theme}
-                            </Badge>
+                            <span key={game.gameNumber} className="text-xs text-slate-600">
+                              <span className="font-semibold text-slate-500">G{game.gameNumber}:</span> {game.theme}
+                            </span>
                           ))}
                       </div>
                     </td>
@@ -341,7 +348,7 @@ export default function HostDashboardPage() {
                       />
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex items-start justify-end gap-2 whitespace-nowrap">
                         <Button
                           variant="secondary"
                           size="sm"
