@@ -51,10 +51,10 @@ type StepGameConfigProps = {
 
 const CHALLENGE_SLOT_COUNT = 5;
 
-const INTRO_SLOTS: Array<{ type: IntroSong["type"]; label: string }> = [
-  { type: "dance-along", label: "Dance Along Song (plays before game)" },
-  { type: "sing-along", label: "Sing Along Song (plays before game)" },
-];
+const INTRO_CONFIG: Record<1 | 2, { type: IntroSong["type"]; label: string }> = {
+  1: { type: "dance-along", label: "Dance Along Song (plays before game)" },
+  2: { type: "sing-along", label: "Sing Along Song (plays before game)" },
+};
 
 function songLabel(song: Song): string {
   return `${song.artist} - ${song.title}`;
@@ -132,21 +132,17 @@ export function StepGameConfig({
 
   const selectedChallengeCount = challengeSongs.filter((s) => s.value).length;
 
+  const introSlot = INTRO_CONFIG[gameNumber];
+
   const [introUrls, setIntroUrls] = useState<Record<string, string>>(() => {
-    const init: Record<string, string> = {};
-    for (const slot of INTRO_SLOTS) {
-      const existing = introSongs.find((s) => s.type === slot.type);
-      init[slot.type] = existing?.spotifyUrl ?? "";
-    }
-    return init;
+    const existing = introSongs.find((s) => s.type === introSlot.type);
+    return { [introSlot.type]: existing?.spotifyUrl ?? "" };
   });
 
   const [introState, setIntroState] = useState<IntroInputState>({});
 
-  const bothIntrosResolved = spotifyConnected
-    ? INTRO_SLOTS.every((slot) =>
-        introSongs.some((s) => s.type === slot.type && s.trackId)
-      )
+  const introResolved = spotifyConnected
+    ? introSongs.some((s) => s.type === introSlot.type && s.trackId)
     : true;
 
   const canNext =
@@ -154,7 +150,7 @@ export function StepGameConfig({
     !tooMany &&
     parsed.combinedPool.length >= 25 &&
     selectedChallengeCount >= 1 &&
-    bothIntrosResolved;
+    introResolved;
 
   const resolveIntroUrl = useCallback(
     async (type: IntroSong["type"], rawUrl: string) => {
@@ -283,59 +279,52 @@ export function StepGameConfig({
           </div>
         </div>
 
-        {/* Intro song URL inputs */}
-        <div className="space-y-4">
-          {INTRO_SLOTS.map((slot) => {
-            const state = introState[slot.type];
-            const resolved = introSongs.find((s) => s.type === slot.type);
-            const urlValue = introUrls[slot.type] ?? "";
-
-            return (
-              <div key={slot.type}>
-                <label className={labelClass}>{slot.label}</label>
-                <input
-                  type="text"
-                  className={inputClass}
-                  value={urlValue}
-                  onChange={(e) =>
-                    setIntroUrls((prev) => ({
-                      ...prev,
-                      [slot.type]: e.target.value,
-                    }))
-                  }
-                  onBlur={() => resolveIntroUrl(slot.type, urlValue)}
-                  onPaste={(e) => {
-                    const pasted = e.clipboardData.getData("text");
-                    setIntroUrls((prev) => ({
-                      ...prev,
-                      [slot.type]: pasted,
-                    }));
-                    setTimeout(() => resolveIntroUrl(slot.type, pasted), 0);
-                  }}
-                  placeholder="Paste Spotify track URL..."
-                  disabled={!spotifyConnected}
-                />
-                {!spotifyConnected && (
-                  <p className={`${helpClass} text-amber-600`}>
-                    Connect Spotify first to add intro songs
-                  </p>
-                )}
-                {state?.loading && (
-                  <p className={`${helpClass} text-slate-500`}>
-                    Loading track info...
-                  </p>
-                )}
-                {state?.error && (
-                  <p className={`${helpClass} text-red-600`}>{state.error}</p>
-                )}
-                {resolved && !state?.loading && !state?.error && (
-                  <p className={`${helpClass} text-green-700`}>
-                    {resolved.artist} - {resolved.title}
-                  </p>
-                )}
-              </div>
-            );
-          })}
+        {/* Intro song URL input — one per game: dance-along for G1, sing-along for G2 */}
+        <div>
+          <label className={labelClass}>{introSlot.label}</label>
+          <input
+            type="text"
+            className={inputClass}
+            value={introUrls[introSlot.type] ?? ""}
+            onChange={(e) =>
+              setIntroUrls((prev) => ({
+                ...prev,
+                [introSlot.type]: e.target.value,
+              }))
+            }
+            onBlur={() => resolveIntroUrl(introSlot.type, introUrls[introSlot.type] ?? "")}
+            onPaste={(e) => {
+              const pasted = e.clipboardData.getData("text");
+              setIntroUrls((prev) => ({
+                ...prev,
+                [introSlot.type]: pasted,
+              }));
+              setTimeout(() => resolveIntroUrl(introSlot.type, pasted), 0);
+            }}
+            placeholder="Paste Spotify track URL..."
+            disabled={!spotifyConnected}
+          />
+          {!spotifyConnected && (
+            <p className={`${helpClass} text-amber-600`}>
+              Connect Spotify first to add intro song
+            </p>
+          )}
+          {introState[introSlot.type]?.loading && (
+            <p className={`${helpClass} text-slate-500`}>
+              Loading track info...
+            </p>
+          )}
+          {introState[introSlot.type]?.error && (
+            <p className={`${helpClass} text-red-600`}>{introState[introSlot.type]!.error}</p>
+          )}
+          {introSongs.find((s) => s.type === introSlot.type) &&
+            !introState[introSlot.type]?.loading &&
+            !introState[introSlot.type]?.error && (
+              <p className={`${helpClass} text-green-700`}>
+                {introSongs.find((s) => s.type === introSlot.type)!.artist} -{" "}
+                {introSongs.find((s) => s.type === introSlot.type)!.title}
+              </p>
+            )}
         </div>
 
         {/* Challenge song dropdowns */}
