@@ -328,16 +328,19 @@ export default function HostSessionControllerPage() {
 
         // --- Challenge song detection (uses resolved Set; falls back to text matching) ---
         // Intro takes precedence: when intro is playing, challenge is false.
+        // Always try both detection methods: ID-based first, then text-based fallback.
+        // This handles the case where the playlist loaded but a particular challenge
+        // song wasn't matched by the fuzzy ID resolution.
+        const detectChallenge = (t: typeof track): boolean => {
+          if (!t) return false;
+          if (challengeTrackIdsRef.current.has(t.trackId ?? "")) return true;
+          return matchesChallengeSong(t, game);
+        };
         const isChallengeSong = isIntroSong
           ? false
           : trackChanged
-            ? (challengeTrackIdsRef.current.size > 0
-                ? challengeTrackIdsRef.current.has(track?.trackId ?? "")
-                : matchesChallengeSong(track, game))
-            : (prev.isChallengeSong ||
-                (challengeTrackIdsRef.current.size > 0
-                  ? challengeTrackIdsRef.current.has(track?.trackId ?? "")
-                  : matchesChallengeSong(track, game)));
+            ? detectChallenge(track)
+            : (prev.isChallengeSong || detectChallenge(track));
         const baseCfg = isChallengeSong ? CHALLENGE_REVEAL_CONFIG : session.revealConfig;
         const extensionMs = trackChanged ? 0 : prev.extensionMs;
         const cfg = extensionMs > 0 ? { ...baseCfg, nextMs: baseCfg.nextMs + extensionMs } : baseCfg;

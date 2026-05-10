@@ -1,6 +1,6 @@
 ---
 generated: true
-last_updated: 2026-05-09
+last_updated: 2026-05-10T00:00:00Z
 source: session-setup
 project: music-bingo
 ---
@@ -11,36 +11,45 @@ project: music-bingo
 
 ## Summary
 
-This project does **not use React Server Actions** (`'use server'` directive). All mutations are performed through API route handlers (see [[routes]]).
+This project does NOT use React Server Actions (`'use server'` directive). All mutations are handled via API route handlers (see routes.md).
 
-### Key API-based mutation patterns
+## Data Access Layer (Repositories)
 
-| Operation | Route | Method | Repo Function | Table |
-|-----------|-------|--------|---------------|-------|
-| List sessions | `/api/sessions` | GET | `listSessions` | `live_sessions` |
-| Upsert session | `/api/sessions` | PUT | `upsertSession` | `live_sessions` |
-| Get session | `/api/sessions/[id]` | GET | `getSession` | `live_sessions` |
-| Delete session | `/api/sessions/[id]` | DELETE | `deleteSession` | `live_sessions` |
-| Update session brand | `/api/sessions/[id]/brand` | PUT | `updateSessionBrand` | `live_sessions` |
-| Get runtime state | `/api/sessions/[id]/runtime` | GET | `getRuntimeState` | `live_sessions` |
-| Upsert runtime state | `/api/sessions/[id]/runtime` | PUT | `upsertRuntimeState` | `live_sessions` |
-| Import session | `/api/sessions/import` | POST | `upsertSession` | `live_sessions` |
-| List brands | `/api/brands` | GET | `listBrands` | `brands` |
-| Create brand | `/api/brands` | POST | `createBrand` | `brands` |
-| Get brand | `/api/brands/[id]` | GET | `getBrand` | `brands` |
-| Update brand | `/api/brands/[id]` | PUT | `updateBrand` | `brands` |
-| Delete brand | `/api/brands/[id]` | DELETE | `deleteBrand` | `brands` |
-| Upload brand logo | `/api/brands/[id]/logo` | POST | `uploadBrandLogo` | `brands` + storage |
+Instead of server actions, the project uses repository modules that encapsulate Supabase queries:
 
-### Client-side API wrappers
+### lib/live/sessionRepo.ts
 
-Client pages call these routes through `lib/live/sessionApi.ts`:
-- `getLiveSession(id)` -- fetches session data
-- `upsertLiveSession(session)` -- saves session via PUT
-- `deleteLiveSession(id)` -- removes session via DELETE
-- `exportLiveSessionJson(session)` -- triggers download
-- `importLiveSessionJson(text)` -- imports via POST
+| Function | Table | Operations |
+|----------|-------|-----------|
+| `listSessions()` | live_sessions | SELECT (ordered by updated_at) |
+| `getSession(id)` | live_sessions | SELECT single by ID |
+| `upsertSession(session)` | live_sessions | UPSERT (id, data, updated_at) |
+| `deleteSession(id)` | live_sessions | DELETE by ID |
+| `getSessionRuntime(id)` | live_sessions | SELECT runtime_data by ID |
+| `updateSessionRuntime(id, data)` | live_sessions | UPDATE runtime_data by ID |
+| `updateSessionBrand(id, brandId)` | live_sessions | UPDATE brand_id by ID |
 
-### Audit Logging
+### lib/brands/brandRepo.ts
 
-No `logAuditEvent()` calls found. This project does not implement audit logging.
+| Function | Table | Operations |
+|----------|-------|-----------|
+| `listBrands()` | brands | SELECT all (ordered by name) |
+| `getBrand(id)` | brands | SELECT single by ID |
+| `createBrand(brand)` | brands | INSERT |
+| `updateBrand(id, brand)` | brands | UPDATE by ID |
+| `setDefaultBrand(id)` | brands | UPDATE is_default (clears others) |
+| `deleteBrand(id)` | brands, live_sessions | Check references then DELETE |
+
+### lib/brands/brandStorage.ts
+
+| Function | Storage Bucket | Operations |
+|----------|---------------|-----------|
+| `uploadBrandLogo(id, buffer, mime)` | brand-assets | UPLOAD |
+| `getBrandLogoUrl(id)` | brand-assets | GET public URL |
+| `downloadBrandLogo(id)` | brand-assets | DOWNLOAD |
+
+## Auth & Audit
+
+- **Auth**: None. All repository functions use the service-role Supabase client.
+- **Audit logging**: Not implemented. No `logAuditEvent` calls found.
+- **Revalidation**: Not applicable (no server actions, no `revalidatePath`).

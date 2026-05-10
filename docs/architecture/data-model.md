@@ -1,6 +1,6 @@
 ---
 generated: true
-last_updated: 2026-05-09
+last_updated: 2026-05-10T00:00:00Z
 source: session-setup
 project: music-bingo
 ---
@@ -11,40 +11,44 @@ project: music-bingo
 
 ## Tables
 
-| Table | Primary Repo | Migrations |
-|-------|-------------|------------|
-| `live_sessions` | `lib/live/sessionRepo.ts` | `20260225101214_create_live_sessions.sql`, `20260311000000_add_runtime_data.sql`, `20260424120001_add_brand_id_to_sessions.sql` |
-| `brands` | `lib/brands/brandRepo.ts` | `20260424120000_create_brands.sql` |
+### live_sessions
+
+Created in: `supabase/migrations/20260225101214_create_live_sessions.sql`
+Extended in: `supabase/migrations/20260311000000_add_runtime_data.sql`, `20260424120001_add_brand_id_to_sessions.sql`
+
+| Column (inferred) | Usage |
+|-------------------|-------|
+| id | Primary key (UUID) |
+| data | JSONB game session payload |
+| runtime_data | JSONB runtime state (added later) |
+| brand_id | FK to brands table (added later) |
+| updated_at | Timestamp for ordering |
+
+### brands
+
+Created in: `supabase/migrations/20260424120000_create_brands.sql`
+
+| Column (inferred) | Usage |
+|-------------------|-------|
+| id | Primary key (UUID) |
+| name | Brand display name |
+| is_default | Boolean flag for default brand |
+| (other fields) | Brand configuration (colours, etc.) |
 
 ## Storage Buckets
 
-| Bucket | Purpose | Repo |
-|--------|---------|------|
-| `brand-assets` | Brand logo images (PNG) | `lib/brands/brandStorage.ts` |
+### brand-assets
 
-Migration: `20260424120002_create_brand_assets_bucket.sql`
+Created in: `supabase/migrations/20260424120002_create_brand_assets_bucket.sql`
 
-## Migrations (chronological)
+Used for storing brand logo images. Accessed via `lib/brands/brandStorage.ts`.
 
-| Timestamp | File | Description |
-|-----------|------|-------------|
-| 20260225101214 | `create_live_sessions.sql` | Create `live_sessions` table |
-| 20260311000000 | `add_runtime_data.sql` | Add runtime data columns to `live_sessions` |
-| 20260424120000 | `create_brands.sql` | Create `brands` table |
-| 20260424120001 | `add_brand_id_to_sessions.sql` | Add `brand_id` FK to `live_sessions` |
-| 20260424120002 | `create_brand_assets_bucket.sql` | Create `brand-assets` storage bucket |
+## Notes
 
-## Schema Details
-
-See `supabase/migrations/` for full column definitions. For live schema inspection:
-
-```sql
-SELECT column_name, data_type FROM information_schema.columns
-WHERE table_name IN ('live_sessions', 'brands') ORDER BY ordinal_position;
-```
-
-## Type Definitions
-
-- `lib/live/types.ts` -- `LiveSessionV1`, reveal config, game state types
-- `lib/brands/types.ts` -- `Brand`, `BrandConfig`, `brandInputSchema` (Zod)
-- `lib/types.ts` -- `Song`, `Card`, `ParseResult`
+- Full schema details should be queried from the live database using:
+  ```sql
+  SELECT column_name, data_type FROM information_schema.columns
+  WHERE table_name IN ('live_sessions', 'brands') ORDER BY ordinal_position;
+  ```
+- The `data` column in `live_sessions` stores the entire game state as JSONB (tracks, cards, configuration).
+- The `runtime_data` column stores transient game runtime state (current track index, reveals, etc.).

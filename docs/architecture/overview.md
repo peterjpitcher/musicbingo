@@ -1,6 +1,6 @@
 ---
 generated: true
-last_updated: 2026-05-09
+last_updated: 2026-05-10T00:00:00Z
 source: session-setup
 project: music-bingo
 ---
@@ -13,45 +13,63 @@ project: music-bingo
 
 | Layer | Technology |
 |-------|-----------|
-| Framework | Next.js 16 (App Router) |
+| Framework | Next.js 16.1.3 (App Router) |
 | UI | React 18.3, Tailwind CSS |
 | Language | TypeScript (strict) |
 | Database | Supabase (PostgreSQL + Realtime + Storage) |
-| PDF Generation | pdf-lib + Sharp |
-| Music | Spotify Web API (OAuth 2.0) |
-| QR Codes | qrcode (server) + qrcode.react (client) |
-| Document Export | JSZip, custom DOCX renderer |
+| Auth Model | Cookie-based Spotify OAuth (no user accounts) |
+| PDF Generation | pdf-lib + Sharp + QRCode |
+| Document Export | docx (OOXML) |
+| Music Integration | Spotify Web API (OAuth 2.0) |
 | External API | Anchor Management API (event data) |
+| Deployment | Vercel |
 
 ## Counts
 
-| Metric | Count | Details |
-|--------|-------|---------|
-| Pages | 7 | See [[routes]] |
-| API Routes | 17 | See [[routes]] |
-| Server Actions | 0 | All mutations via API routes, not `'use server'` |
-| Supabase Tables | 2 | `live_sessions`, `brands` -- see [[data-model]] |
-| Storage Buckets | 1 | `brand-assets` (brand logos) |
-| Migrations | 5 | See [[data-model]] |
+| Metric | Count |
+|--------|-------|
+| Page routes | 8 |
+| API routes | 19 |
+| Supabase tables | 2 (live_sessions, brands) |
+| Supabase storage buckets | 1 (brand-assets) |
+| Migrations | 5 |
+| Lib modules | 15 |
 
 ## Key Integrations
 
-| Integration | Purpose | Files |
-|-------------|---------|-------|
-| Supabase | Session persistence, brand CRUD, Realtime subscriptions, file storage | `lib/supabase.ts`, `lib/live/sessionRepo.ts`, `lib/brands/brandRepo.ts`, `lib/brands/brandStorage.ts` |
-| Spotify Web API | OAuth login, playlist creation, live playback control | `lib/spotifyWeb.ts`, `lib/spotifyLive.ts`, 8 API routes under `/api/spotify/` |
-| pdf-lib + Sharp | Bingo card PDF generation with images, QR codes, brand logos | `lib/pdf.ts`, `app/api/generate/route.ts` |
-| qrcode / qrcode.react | QR codes in PDFs (server) and guest view (client) | `lib/pdf.ts`, `app/guest/[sessionId]/page.tsx` |
-| Anchor Management API | Fetch upcoming events for PDF event pages | `lib/managementApi.ts` |
-| JSZip | Bundle PDF + DOCX exports into downloadable ZIP | `app/api/generate/route.ts` |
+| Integration | Purpose |
+|-------------|---------|
+| Spotify Web API | OAuth login, playlist creation, track search, live playback control |
+| Supabase | Persistent session storage, real-time sync, brand asset storage |
+| Anchor Management API | Fetch upcoming events for QR codes in PDF exports |
+| pdf-lib + Sharp | Generate branded bingo card PDFs with images and QR codes |
+| docx | Generate DOCX exports of bingo cards |
+| qrcode | QR code generation for event URLs in PDFs |
+| seedrandom | Deterministic card generation for reproducibility |
 
 ## Auth Model
 
-This project has **no user authentication** (no Supabase Auth, no middleware, no login). It is a single-operator tool where:
+This project does NOT use traditional user authentication (no login, no accounts, no RLS with user scoping). Instead:
 
-- **Spotify OAuth** is the only auth flow -- cookie-based tokens (`spotify_access_cache`) for API calls to Spotify. Not user login.
-- **Supabase** uses the service-role client exclusively (bypasses RLS). No anon-key client, no `getUser()` calls.
-- **No middleware.ts** exists -- all routes are publicly accessible.
-- **No RBAC / permission checks** -- the host operator is the sole user.
+- **Spotify OAuth**: Cookie-based token storage for Spotify API access. Tokens stored in HTTP-only cookies (`spotify_access_token`, `spotify_refresh_token`).
+- **Session-based access**: Game sessions are accessed by ID (no ownership enforcement).
+- **No middleware**: No auth middleware file exists. All routes are publicly accessible.
+- **Service-role Supabase**: All database operations use the service-role key (bypasses RLS).
 
-See [[relationships]] for the full cross-reference map.
+## High-Level Data Flow
+
+```
+[Host Prep Page] --> [API: create session] --> [Supabase: live_sessions]
+       |
+       v
+[Spotify OAuth] --> [API: create playlist] --> [Spotify API]
+       |
+       v
+[API: generate] --> [PDF/DOCX with bingo cards + QR codes]
+       |
+       v
+[Host Game Page] --> [Supabase Realtime] <-- [Guest Game Page]
+       |
+       v
+[Spotify Live Control] --> [Spotify Playback API]
+```

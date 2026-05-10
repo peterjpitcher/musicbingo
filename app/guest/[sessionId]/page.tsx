@@ -16,6 +16,7 @@ import {
   type LiveSessionV1,
   type RevealConfig,
 } from "@/lib/live/types";
+import { computeRevealState } from "@/lib/live/reveal";
 import { useWakeLock } from "@/hooks/useWakeLock";
 import { BrandProvider } from "@/components/brand/BrandProvider";
 import type { BrandConfig } from "@/lib/brands/types";
@@ -23,6 +24,46 @@ import type { BrandConfig } from "@/lib/brands/types";
 function formatSeconds(ms: number): string {
   const safeMs = Number.isFinite(ms) ? Math.max(0, Math.floor(ms)) : 0;
   return `${Math.floor(safeMs / 1000)}s`;
+}
+
+/**
+ * Interpolates progressMs locally between server updates so the UI ticks
+ * smoothly every second rather than jumping every 2s when a new poll arrives.
+ * Stores the server-provided anchor point and a local tick counter.
+ */
+function useInterpolatedProgress(runtime: LiveRuntimeState): number {
+  const serverProgress = runtime.currentTrack?.progressMs ?? 0;
+  const isPlaying = runtime.currentTrack?.isPlaying ?? false;
+  const trackId = runtime.currentTrack?.trackId ?? null;
+  const updatedAt = runtime.updatedAtMs;
+
+  // Anchor: the last known server state. Memoised so it only recalculates
+  // when the server actually sends new data (trackId or updatedAt changes).
+  const anchor = useMemo(
+    () => ({ progress: serverProgress, updatedAt, trackId }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [updatedAt, trackId]
+  );
+
+  // Tick counter to drive re-renders every second.
+  // Synchronous reset on anchor change prevents stale-tick flash during track transitions.
+  const [tick, setTick] = useState(0);
+  const [lastAnchor, setLastAnchor] = useState(anchor);
+  if (anchor !== lastAnchor) {
+    setLastAnchor(anchor);
+    setTick(0);
+  }
+
+  useEffect(() => {
+    if (!isPlaying || !trackId) return;
+    const id = window.setInterval(() => {
+      setTick((t) => t + 1);
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [isPlaying, trackId, anchor]);
+
+  if (!isPlaying) return anchor.progress;
+  return anchor.progress + tick * 1000;
 }
 
 export default function GuestDisplayPage() {
@@ -117,6 +158,8 @@ export default function GuestDisplayPage() {
     return () => window.clearInterval(id);
   }, [sessionId]);
 
+  const interpolatedProgress = useInterpolatedProgress(runtime);
+
   if (sessionLoading) {
     return (
       <BrandProvider brand={brand}>
@@ -157,6 +200,16 @@ export default function GuestDisplayPage() {
   const effectiveCfg: RevealConfig = runtime.isChallengeSong
     ? CHALLENGE_REVEAL_CONFIG
     : (session?.revealConfig ?? DEFAULT_REVEAL_CONFIG);
+
+  // Include host-side extensions in the config so guest matches host timing
+  const effectiveNextCfg: RevealConfig = runtime.extensionMs > 0
+    ? { ...effectiveCfg, nextMs: effectiveCfg.nextMs + runtime.extensionMs }
+    : effectiveCfg;
+
+  // Use locally interpolated progress for smooth reveal transitions
+  const localRevealState = (runtime.isIntroSong || runtime.freePlay)
+    ? { showAlbum: true, showTitle: true, showArtist: true, shouldAdvance: false }
+    : computeRevealState(interpolatedProgress, effectiveNextCfg);
 
   const showWaiting =
     runtime.mode === "idle" || (!runtime.currentTrack && runtime.mode === "running");
@@ -348,7 +401,7 @@ export default function GuestDisplayPage() {
           <div className="grid grid-cols-1 lg:[grid-template-columns:minmax(260px,560px)_minmax(0,1fr)] gap-7 items-center">
             {/* Album art */}
             <div className="flex items-center justify-center">
-              {(runtime.isIntroSong || runtime.freePlay || runtime.revealState.showAlbum) ? (
+              {(runtime.isIntroSong || runtime.freePlay || localRevealState.showAlbum) ? (
                 runtime.currentTrack.albumImageUrl ? (
                   <img
                     src={runtime.currentTrack.albumImageUrl}
@@ -369,7 +422,7 @@ export default function GuestDisplayPage() {
 
             {/* Track metadata */}
             <div className="grid gap-3.5 lg:text-left text-center">
-              {(runtime.isIntroSong || runtime.freePlay || runtime.revealState.showTitle) ? (
+              {(runtime.isIntroSong || runtime.freePlay || localRevealState.showTitle) ? (
                 <h2 className="m-0 text-[clamp(1.6rem,4.5vw,4.2rem)] uppercase font-black tracking-wide text-white">
                   {runtime.currentTrack.title || "Unknown Title"}
                 </h2>
@@ -379,7 +432,7 @@ export default function GuestDisplayPage() {
                 </h2>
               )}
 
-              {(runtime.isIntroSong || runtime.freePlay || runtime.revealState.showArtist) ? (
+              {(runtime.isIntroSong || runtime.freePlay || localRevealState.showArtist) ? (
                 <p className="m-0 text-[clamp(1.3rem,3vw,2.8rem)] font-bold text-white">
                   {runtime.currentTrack.artist || "Unknown Artist"}
                 </p>
@@ -393,7 +446,7 @@ export default function GuestDisplayPage() {
                 <p className="mt-1.5 text-white/70 text-[clamp(1rem,2vw,1.7rem)] uppercase tracking-[0.05em]">
                   Free Play
                 </p>
-              ) : runtime.revealState.shouldAdvance ? (
+              ) : localRevealState.shouldAdvance ? (
                 <p className="mt-1.5 text-white/90 text-[clamp(1rem,2vw,1.7rem)] uppercase tracking-[0.05em]">
                   Advancing to next song...
                 </p>
@@ -424,7 +477,7 @@ export default function GuestDisplayPage() {
         </div>
         <div className="text-right">
           <p className="m-0 text-[clamp(0.85rem,1.4vw,1.2rem)] text-white/92">
-            Progress: {formatSeconds(runtime.currentTrack?.progressMs ?? 0)}
+            Progress: {formatSeconds(interpolatedProgress)}
           </p>
           <p className="m-0 text-[clamp(0.85rem,1.4vw,1.2rem)] text-white/92">
             Updated: {new Date(runtime.updatedAtMs).toLocaleTimeString()}
