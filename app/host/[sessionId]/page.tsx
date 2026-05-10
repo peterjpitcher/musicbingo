@@ -26,6 +26,7 @@ import {
   CHALLENGE_REVEAL_CONFIG,
   DEFAULT_REVEAL_CONFIG,
   LIVE_RUNTIME_VERSION,
+  getChallengeSongs,
   makeEmptyRuntimeState,
   type LiveGameConfig,
   type LiveRuntimeState,
@@ -34,18 +35,22 @@ import {
   type RevealConfig,
 } from "@/lib/live/types";
 
-/** True if the Spotify track matches the stored challenge song (case-insensitive contains). */
+/** True if the Spotify track matches any of the game's challenge songs (case-insensitive contains). */
 function matchesChallengeSong(
   track: { title: string; artist: string } | null,
   game: LiveGameConfig | null | undefined
 ): boolean {
-  if (!track || !game?.challengeSongTitle || !game?.challengeSongArtist) return false;
+  if (!track || !game) return false;
+  const songs = getChallengeSongs(game);
+  if (songs.length === 0) return false;
   const norm = (s: string) => s.trim().toLowerCase();
   const t = norm(track.title);
   const a = norm(track.artist);
-  const ct = norm(game.challengeSongTitle);
-  const ca = norm(game.challengeSongArtist);
-  return (t.includes(ct) || ct.includes(t)) && (a.includes(ca) || ca.includes(a));
+  return songs.some((cs) => {
+    const ct = norm(cs.title);
+    const ca = norm(cs.artist);
+    return (t.includes(ct) || ct.includes(t)) && (a.includes(ca) || ca.includes(a));
+  });
 }
 
 function getRevealConfig(
@@ -161,8 +166,10 @@ export default function HostSessionControllerPage() {
   const fetchingPlaylistIdRef = useRef<string | null>(null);
   const [playlistLoadError, setPlaylistLoadError] = useState<boolean>(false);
   const [playlistRetryCount, setPlaylistRetryCount] = useState<number>(0);
-  // Resolved Spotify track ID for the challenge song of the active game (exact match, no text guessing).
-  const challengeTrackIdRef = useRef<string | null>(null);
+  // Resolved Spotify track IDs for all challenge songs of the active game (exact match, no text guessing).
+  const challengeTrackIdsRef = useRef<Set<string>>(new Set());
+  // Resolved Spotify track ID for the intro song (first track in playlist when introSongArtist is set).
+  const introTrackIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     runtimeRef.current = runtime;
@@ -192,7 +199,7 @@ export default function HostSessionControllerPage() {
   }, [runtime.currentTrack]);
 
   // Fetch the full playlist track listing when the active game changes.
-  // Once loaded, resolve the challenge song to its exact Spotify track ID.
+  // Once loaded, resolve challenge songs and intro song to their exact Spotify track IDs.
   // playlistRetryCount is incremented by the Retry button to force a re-fetch after failure.
   useEffect(() => {
     const game = runtime.activeGameNumber
@@ -204,7 +211,8 @@ export default function HostSessionControllerPage() {
     fetchingPlaylistIdRef.current = playlistId;
     setPlaylistLoadError(false);
     setPlaylistTracks([]);
-    challengeTrackIdRef.current = null;
+    challengeTrackIdsRef.current = new Set();
+    introTrackIdRef.current = null;
     void fetch(`/api/spotify/playlist/${encodeURIComponent(playlistId)}/tracks`, { cache: "no-store" })
       .then(async (res) => {
         if (!res.ok) {
@@ -222,18 +230,28 @@ export default function HostSessionControllerPage() {
         loadedPlaylistIdRef.current = playlistId;
         fetchingPlaylistIdRef.current = null;
         setPlaylistTracks(data.tracks);
-        // Resolve the challenge song track ID by fuzzy-matching stored title/artist against
+        // Resolve all challenge song track IDs by fuzzy-matching stored title/artist against
         // actual Spotify metadata. This is done once so runtime detection uses exact track IDs.
-        if (game?.challengeSongTitle && game?.challengeSongArtist) {
+        if (game) {
+          const songs = getChallengeSongs(game);
           const norm = (s: string) => s.trim().toLowerCase();
-          const ct = norm(game.challengeSongTitle);
-          const ca = norm(game.challengeSongArtist);
-          const match = data.tracks.find((t) => {
-            const tt = norm(t.title);
-            const ta = norm(t.artist);
-            return (tt.includes(ct) || ct.includes(tt)) && (ta.includes(ca) || ca.includes(ta));
-          });
-          challengeTrackIdRef.current = match?.trackId ?? null;
+          const matched = new Set<string>();
+          for (const cs of songs) {
+            const ct = norm(cs.title);
+            const ca = norm(cs.artist);
+            const match = data.tracks.find((t) => {
+              const tt = norm(t.title);
+              const ta = norm(t.artist);
+              return (tt.includes(ct) || ct.includes(tt)) && (ta.includes(ca) || ca.includes(ta));
+            });
+            if (match?.trackId) matched.add(match.trackId);
+          }
+          challengeTrackIdsRef.current = matched;
+        }
+        // Resolve the intro song track ID: the playlist creation route puts the intro as
+        // track 1, so the first track in the array IS the intro when introSongArtist is set.
+        if (game?.introSongArtist && data.tracks.length > 0) {
+          introTrackIdRef.current = data.tracks[0].trackId ?? null;
         }
       })
       .catch(() => {
@@ -296,20 +314,34 @@ export default function HostSessionControllerPage() {
           ? session.games.find((g) => g.gameNumber === prev.activeGameNumber) ?? null
           : null;
         const trackChanged = track?.trackId != null && track.trackId !== prev.currentTrack?.trackId;
-        // Use resolved Spotify track ID for exact detection; fall back to text matching if not yet resolved.
-        const isChallengeSong = trackChanged
-          ? (challengeTrackIdRef.current
-              ? track?.trackId === challengeTrackIdRef.current
-              : matchesChallengeSong(track, game))
-          : (prev.isChallengeSong ||
-              (challengeTrackIdRef.current
-                ? track?.trackId === challengeTrackIdRef.current
-                : matchesChallengeSong(track, game)));
+
+        // --- Intro song detection (derived every tick, not sticky) ---
+        const isIntroSong = !prev.introPlayed
+          && introTrackIdRef.current != null
+          && track?.trackId === introTrackIdRef.current;
+        // Flip introPlayed on first track change after intro was playing.
+        const introPlayed = prev.introPlayed || (prev.isIntroSong && trackChanged);
+
+        // --- Challenge song detection (uses resolved Set; falls back to text matching) ---
+        // Intro takes precedence: when intro is playing, challenge is false.
+        const isChallengeSong = isIntroSong
+          ? false
+          : trackChanged
+            ? (challengeTrackIdsRef.current.size > 0
+                ? challengeTrackIdsRef.current.has(track?.trackId ?? "")
+                : matchesChallengeSong(track, game))
+            : (prev.isChallengeSong ||
+                (challengeTrackIdsRef.current.size > 0
+                  ? challengeTrackIdsRef.current.has(track?.trackId ?? "")
+                  : matchesChallengeSong(track, game)));
         const baseCfg = isChallengeSong ? CHALLENGE_REVEAL_CONFIG : session.revealConfig;
         const extensionMs = trackChanged ? 0 : prev.extensionMs;
         const cfg = extensionMs > 0 ? { ...baseCfg, nextMs: baseCfg.nextMs + extensionMs } : baseCfg;
 
-        const revealState = computeRevealState(track?.progressMs ?? 0, cfg);
+        // When intro or free play is active, show all metadata immediately (no timed reveal).
+        const revealState = (isIntroSong || prev.freePlay)
+          ? { showAlbum: true, showTitle: true, showArtist: true, shouldAdvance: false }
+          : computeRevealState(track?.progressMs ?? 0, cfg);
         const marker = updateAdvanceTrackMarker({
           trackId: track?.trackId ?? null,
           advanceTriggeredForTrackId: prev.advanceTriggeredForTrackId,
@@ -321,6 +353,8 @@ export default function HostSessionControllerPage() {
           currentTrack: track,
           revealState,
           isChallengeSong,
+          isIntroSong,
+          introPlayed,
           extensionMs,
           advanceTriggeredForTrackId: marker,
           warningMessage: warnings[0] ?? (payload.error?.message ?? null),
@@ -465,6 +499,7 @@ export default function HostSessionControllerPage() {
         isController &&
         Boolean(data.canControlPlayback) &&
         !runtimeRef.current.freePlay &&
+        !runtimeRef.current.isIntroSong &&
         shouldTriggerNextForTrack({
           trackId: track?.trackId ?? null,
           revealState,
@@ -600,6 +635,8 @@ export default function HostSessionControllerPage() {
         mode: "running",
         activeGameNumber: gameNumber,
         advanceTriggeredForTrackId: null,
+        isIntroSong: false,
+        introPlayed: false,
       }));
       setNoticeVariant("success");
       setNotice(`Started Game ${gameNumber}: ${game.theme}`);
@@ -951,6 +988,8 @@ export default function HostSessionControllerPage() {
                           revealState: { showAlbum: false, showTitle: false, showArtist: false, shouldAdvance: false },
                           advanceTriggeredForTrackId: null,
                           isChallengeSong: false,
+                          isIntroSong: false,
+                          introPlayed: false,
                           extensionMs: 0,
                           freePlay: false,
                         }))
@@ -992,7 +1031,12 @@ export default function HostSessionControllerPage() {
                   ? `${runtime.currentTrack.title} — ${runtime.currentTrack.artist}`
                   : "No track detected"}
               </strong>
-              {isChallenge && runtime.mode !== "break" && (
+              {runtime.isIntroSong && runtime.mode !== "break" && (
+                <span className="ml-2 inline-flex items-center rounded-full bg-purple-100 border border-purple-300 px-2 py-0.5 text-xs font-bold text-purple-800">
+                  INTRO SONG
+                </span>
+              )}
+              {isChallenge && !runtime.isIntroSong && runtime.mode !== "break" && (
                 <span className="ml-2 inline-flex items-center rounded-full bg-amber-100 border border-brand-gold px-2 py-0.5 text-xs font-bold text-amber-800">
                   CHALLENGE SONG
                 </span>
@@ -1021,13 +1065,26 @@ export default function HostSessionControllerPage() {
             ) : (
               /* Game mode — countdown, reveal badges, and controls */
               <>
-                {/* Countdown display */}
+                {/* Countdown / intro elapsed display */}
                 {(() => {
+                  const progressMs = runtime.currentTrack?.progressMs ?? 0;
+                  const progressSec = Math.floor(progressMs / 1000);
+                  // Intro mode: show elapsed time only, no countdown to next song.
+                  if (runtime.isIntroSong) {
+                    return (
+                      <div className="rounded-xl bg-purple-50 border border-purple-200 px-3 py-2 mb-3">
+                        <div className="flex items-baseline gap-3 flex-wrap">
+                          <span className="text-2xl font-black text-purple-800 tabular-nums">{progressSec}s</span>
+                          <span className="text-sm font-semibold text-purple-600">
+                            {runtime.activeGameNumber === 1 ? "Dance Along" : "Sing Along"}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  }
                   const baseCfg = isChallenge ? CHALLENGE_REVEAL_CONFIG : (session?.revealConfig ?? DEFAULT_REVEAL_CONFIG);
                   const effectiveNextMs = baseCfg.nextMs + runtime.extensionMs;
-                  const progressMs = runtime.currentTrack?.progressMs ?? 0;
                   const timeUntilNextSec = Math.max(0, Math.ceil((effectiveNextMs - progressMs) / 1000));
-                  const progressSec = Math.floor(progressMs / 1000);
                   const nextSec = Math.floor(effectiveNextMs / 1000);
                   return (
                     <div className="rounded-xl bg-slate-100 border border-slate-200 px-3 py-2 mb-3">
@@ -1100,25 +1157,44 @@ export default function HostSessionControllerPage() {
               </>
             )}
 
-            {activeGame?.challengeSongTitle && runtime.mode !== "break" ? (
-              <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 mb-3">
-                <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-0.5">
-                  Challenge Song — Game {activeGame.gameNumber}
+            {activeGame && runtime.mode !== "break" && (() => {
+              const songs = getChallengeSongs(activeGame);
+              if (songs.length === 0) return null;
+              return (
+                <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 mb-3">
+                  <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-0.5">
+                    {songs.length === 1 ? "Challenge Song" : `Challenge Songs (${songs.length})`} — Game {activeGame.gameNumber}
+                  </p>
+                  {songs.map((cs, i) => (
+                    <p key={i} className="text-sm font-semibold text-amber-900">
+                      {cs.artist} — {cs.title}
+                    </p>
+                  ))}
+                  <p className="text-xs text-amber-600 mt-0.5">Plays for {Math.floor(CHALLENGE_REVEAL_CONFIG.nextMs / 1000)}s instead of {Math.floor((session?.revealConfig ?? DEFAULT_REVEAL_CONFIG).nextMs / 1000)}s</p>
+                </div>
+              );
+            })()}
+            {activeGame?.introSongArtist && runtime.mode !== "break" ? (
+              <div className="rounded-xl bg-purple-50 border border-purple-200 px-3 py-2 mb-3">
+                <p className="text-xs font-semibold text-purple-700 uppercase tracking-wide mb-0.5">
+                  Intro Song — Game {activeGame.gameNumber}
                 </p>
-                <p className="text-sm font-semibold text-amber-900">
-                  {activeGame.challengeSongArtist} — {activeGame.challengeSongTitle}
+                <p className="text-sm font-semibold text-purple-900">
+                  {activeGame.introSongArtist} — {activeGame.introSongTitle}
                 </p>
-                <p className="text-xs text-amber-600 mt-0.5">Plays for {Math.floor(CHALLENGE_REVEAL_CONFIG.nextMs / 1000)}s instead of {Math.floor((session?.revealConfig ?? DEFAULT_REVEAL_CONFIG).nextMs / 1000)}s</p>
+                <p className="text-xs text-purple-600 mt-0.5">
+                  {activeGame.gameNumber === 1 ? "Dance Along" : "Sing Along"} — no auto-advance
+                </p>
               </div>
             ) : null}
             <p className="text-xs text-slate-400">
-              Guest screen:{" "}
+              TV screen:{" "}
               <Link
                 href={`/guest/${sessionId}`}
                 target="_blank"
                 className="underline underline-offset-2"
               >
-                /guest/{sessionId}
+                Open TV display
               </Link>
             </p>
           </Card>

@@ -4,7 +4,6 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { QRCodeSVG } from "qrcode.react";
 
 import { subscribeLiveChannel } from "@/lib/live/channel";
 import { getLiveSession } from "@/lib/live/sessionApi";
@@ -39,12 +38,6 @@ export default function GuestDisplayPage() {
   const [sessionLoading, setSessionLoading] = useState<boolean>(true);
   const sessionLoadedRef = useRef<boolean>(false);
   const [brand, setBrand] = useState<BrandConfig | null>(null);
-  // Derive the guest URL once on mount (window is always available in client components).
-  const guestUrl = useMemo(
-    () => (sessionId && typeof window !== "undefined" ? `${window.location.origin}/guest/${sessionId}` : ""),
-    [sessionId]
-  );
-
   const error = useMemo(() => {
     if (!sessionId) return "Invalid guest session id.";
     if (!sessionLoading && !session)
@@ -214,26 +207,6 @@ export default function GuestDisplayPage() {
             <p className="m-0 text-[clamp(1rem,2vw,1.6rem)] text-white/90">
               The host will start Game 1 or Game 2 shortly.
             </p>
-            {guestUrl ? (
-              <div className="mt-6 flex flex-col items-center gap-3">
-                <p className="text-white/70 uppercase tracking-widest text-[clamp(0.65rem,1.2vw,0.9rem)]">
-                  Follow along on your phone
-                </p>
-                <div className="bg-white p-3 rounded-2xl inline-block shadow-lg">
-                  <QRCodeSVG
-                    value={guestUrl}
-                    size={160}
-                    level="H"
-                    fgColor={brand?.color_primary ?? "#003f27"}
-                    bgColor="#ffffff"
-                    aria-label={`QR code to join Music Bingo session at ${guestUrl}`}
-                  />
-                </div>
-                <p className="text-white/65 text-[clamp(0.6rem,1vw,0.8rem)] break-all max-w-xs">
-                  {guestUrl}
-                </p>
-              </div>
-            ) : null}
           </div>
         ) : null}
 
@@ -293,8 +266,73 @@ export default function GuestDisplayPage() {
 
         {showRunning && runtime.currentTrack ? (
           <div className="w-[min(1400px,96vw)] flex flex-col gap-5">
-            {/* Challenge banner */}
-            {runtime.isChallengeSong ? (
+            {/* Intro layout takes priority over challenge banner */}
+            {runtime.isIntroSong ? (
+              activeGame?.gameNumber === 2 ? (
+                /* ── Sing Along intro (Game 2) ── */
+                <div className="w-full flex flex-col items-center gap-6">
+                  <div className="w-full bg-brand-gold/90 border-2 border-white/60 rounded-2xl py-5 px-8 text-center">
+                    <p className="m-0 uppercase tracking-[0.2em] text-white/80 text-[clamp(0.7rem,1.4vw,1rem)]">
+                      Get Ready for Game 2
+                    </p>
+                    <h2 className="m-0 mt-1 uppercase font-black text-white text-[clamp(2rem,5vw,4.5rem)] leading-none tracking-wide">
+                      Sing Along!
+                    </h2>
+                  </div>
+
+                  {/* Song title EXTRA LARGE - the main focus */}
+                  <div className="text-center">
+                    <h3 className="m-0 text-[clamp(2rem,5vw,5rem)] uppercase font-black tracking-wide text-white">
+                      {runtime.currentTrack.title}
+                    </h3>
+                    <p className="m-0 mt-2 text-[clamp(1.2rem,2.5vw,2.2rem)] text-white/80 uppercase tracking-wide">
+                      {runtime.currentTrack.artist}
+                    </p>
+                  </div>
+
+                  {/* Album art - secondary, smaller */}
+                  {runtime.currentTrack.albumImageUrl && (
+                    <img
+                      src={runtime.currentTrack.albumImageUrl}
+                      alt="Album cover"
+                      className="w-[min(35vh,50vw)] max-w-[320px] aspect-square rounded-[18px] border-3 border-white/70 shadow-xl object-cover bg-black"
+                    />
+                  )}
+                </div>
+              ) : (
+                /* ── Dance Along intro (Game 1, default) ── */
+                <div className="w-full flex flex-col items-center gap-6">
+                  <div className="w-full bg-brand-gold/90 border-2 border-white/60 rounded-2xl py-5 px-8 text-center">
+                    <p className="m-0 uppercase tracking-[0.2em] text-white/80 text-[clamp(0.7rem,1.4vw,1rem)]">
+                      Get Ready for Game 1
+                    </p>
+                    <h2 className="m-0 mt-1 uppercase font-black text-white text-[clamp(2rem,5vw,4.5rem)] leading-none tracking-wide">
+                      Dance Along!
+                    </h2>
+                  </div>
+
+                  {/* Large album art */}
+                  {runtime.currentTrack.albumImageUrl && (
+                    <img
+                      src={runtime.currentTrack.albumImageUrl}
+                      alt="Album cover"
+                      className="w-[min(60vh,80vw)] max-w-[500px] aspect-square rounded-[22px] border-4 border-white/90 shadow-2xl object-cover bg-black"
+                    />
+                  )}
+
+                  {/* Song info - shown immediately, no reveal phases */}
+                  <div className="text-center">
+                    <h3 className="m-0 text-[clamp(1.4rem,3.5vw,3rem)] uppercase font-black tracking-wide text-white">
+                      {runtime.currentTrack.title}
+                    </h3>
+                    <p className="m-0 mt-1 text-[clamp(1rem,2vw,1.8rem)] text-white/80 uppercase tracking-wide">
+                      {runtime.currentTrack.artist}
+                    </p>
+                  </div>
+                </div>
+              )
+            ) : runtime.isChallengeSong ? (
+              /* ── Challenge banner (non-intro) ── */
               <div className="w-full bg-brand-gold/90 border-2 border-white/60 rounded-2xl py-4 px-6 text-center">
                 <p className="m-0 uppercase tracking-[0.2em] text-white/80 text-[clamp(0.65rem,1.2vw,0.9rem)]">
                   {activeGame?.gameNumber === 1 ? "Dancing Challenge" : "Sing-Along Challenge"}
@@ -304,10 +342,13 @@ export default function GuestDisplayPage() {
                 </h2>
               </div>
             ) : null}
+
+            {/* Normal running layout (album art + metadata grid) — hidden during intro */}
+            {!runtime.isIntroSong && (
           <div className="grid grid-cols-1 lg:[grid-template-columns:minmax(260px,560px)_minmax(0,1fr)] gap-7 items-center">
             {/* Album art */}
             <div className="flex items-center justify-center">
-              {(runtime.freePlay || runtime.revealState.showAlbum) ? (
+              {(runtime.isIntroSong || runtime.freePlay || runtime.revealState.showAlbum) ? (
                 runtime.currentTrack.albumImageUrl ? (
                   <img
                     src={runtime.currentTrack.albumImageUrl}
@@ -328,7 +369,7 @@ export default function GuestDisplayPage() {
 
             {/* Track metadata */}
             <div className="grid gap-3.5 lg:text-left text-center">
-              {(runtime.freePlay || runtime.revealState.showTitle) ? (
+              {(runtime.isIntroSong || runtime.freePlay || runtime.revealState.showTitle) ? (
                 <h2 className="m-0 text-[clamp(1.6rem,4.5vw,4.2rem)] uppercase font-black tracking-wide text-white">
                   {runtime.currentTrack.title || "Unknown Title"}
                 </h2>
@@ -338,7 +379,7 @@ export default function GuestDisplayPage() {
                 </h2>
               )}
 
-              {(runtime.freePlay || runtime.revealState.showArtist) ? (
+              {(runtime.isIntroSong || runtime.freePlay || runtime.revealState.showArtist) ? (
                 <p className="m-0 text-[clamp(1.3rem,3vw,2.8rem)] font-bold text-white">
                   {runtime.currentTrack.artist || "Unknown Artist"}
                 </p>
@@ -363,6 +404,7 @@ export default function GuestDisplayPage() {
               )}
             </div>
           </div>
+            )}
           </div>
         ) : null}
       </section>

@@ -185,6 +185,8 @@ export function validateRuntimeState(input: unknown): LiveRuntimeState | null {
         : null,
     extensionMs: asNumber(input.extensionMs) ?? 0,
     freePlay: Boolean(input.freePlay),
+    isIntroSong: Boolean(input.isIntroSong),
+    introPlayed: Boolean(input.introPlayed),
     updatedAtMs,
   };
 }

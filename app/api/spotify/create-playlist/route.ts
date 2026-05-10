@@ -196,6 +196,8 @@ type PlaylistBuildResult = {
   addedCount: number;
   notFoundCount: number;
   notFound: Array<{ artist: string; title: string }>;
+  introTrackId: string | null;
+  introNotFound: boolean;
 };
 
 async function createPlaylistForGame(params: {
@@ -204,6 +206,8 @@ async function createPlaylistForGame(params: {
   playlistName: string;
   description: string;
   songs: Song[];
+  introSongArtist?: string;
+  introSongTitle?: string;
 }): Promise<PlaylistBuildResult> {
   const playlist = await spotifyJson<SpotifyPlaylistResponse>(
     params.accessToken,
@@ -292,7 +296,54 @@ async function createPlaylistForGame(params: {
   const matchedTracks = results.flatMap((r: any) => (r?.match ? [r.match as MatchedTrack] : []));
   const notFound = results.flatMap((r: any) => (r?.notFound ? [r.notFound as { artist: string; title: string }] : []));
 
+  // --- Intro song handling ---
+  let introTrack: MatchedTrack | null = null;
+  let introNotFound = false;
+  const hasIntro = Boolean(params.introSongArtist?.trim() && params.introSongTitle?.trim());
+
+  if (hasIntro) {
+    const introArtistNorm = normalizeForMatch(params.introSongArtist!);
+    const introTitleNorm = normalizeForMatch(params.introSongTitle!);
+
+    // Check if the intro song was already matched in the regular pass
+    const introIndex = matchedTracks.findIndex((t) => {
+      const tArtist = normalizeForMatch(t.artist);
+      const tTitle = normalizeForMatch(t.title);
+      return (
+        stringSimilarity(introArtistNorm, tArtist) >= 0.7 &&
+        stringSimilarity(introTitleNorm, tTitle) >= 0.7
+      );
+    });
+
+    if (introIndex >= 0) {
+      // Pull the intro out of the regular matched tracks
+      introTrack = matchedTracks.splice(introIndex, 1)[0] ?? null;
+    }
+
+    // If not found in matched tracks, check if it's in notFound
+    if (!introTrack) {
+      const inNotFound = notFound.some(
+        (nf) =>
+          stringSimilarity(normalizeForMatch(nf.artist), introArtistNorm) >= 0.7 &&
+          stringSimilarity(normalizeForMatch(nf.title), introTitleNorm) >= 0.7
+      );
+      if (inNotFound) {
+        introNotFound = true;
+      } else {
+        // Intro wasn't in matched or notFound — shouldn't happen, but flag it
+        introNotFound = true;
+      }
+    }
+  }
+
+  // Shuffle the remaining tracks
   shuffleInPlace(matchedTracks);
+
+  // Prepend intro track as position 0 if found
+  if (introTrack) {
+    matchedTracks.unshift(introTrack);
+  }
+
   const trackUris = matchedTracks.map((track) => track.uri);
   for (const uris of chunk(trackUris, 100)) {
     await spotifyJson(params.accessToken, `https://api.spotify.com/v1/playlists/${encodeURIComponent(playlistId)}/tracks`, {
@@ -302,6 +353,11 @@ async function createPlaylistForGame(params: {
     });
   }
 
+  // Extract Spotify track ID from URI (format: spotify:track:<id>)
+  const introTrackId = introTrack
+    ? introTrack.uri.replace(/^spotify:track:/, "")
+    : null;
+
   return {
     playlistId,
     playlistName: params.playlistName,
@@ -310,6 +366,8 @@ async function createPlaylistForGame(params: {
     addedCount: trackUris.length,
     notFoundCount: notFound.length,
     notFound,
+    introTrackId,
+    introNotFound,
   };
 }
 
@@ -328,6 +386,10 @@ export async function POST(request: NextRequest) {
   const eventDateDisplay = formatEventDateDisplay(eventDateInput);
   const game1Theme = normalizeGameTheme(asString(form.get("game1_theme")));
   const game2Theme = normalizeGameTheme(asString(form.get("game2_theme")));
+  const game1IntroArtist = asString(form.get("game1_intro_artist")).trim() || undefined;
+  const game1IntroTitle = asString(form.get("game1_intro_title")).trim() || undefined;
+  const game2IntroArtist = asString(form.get("game2_intro_artist")).trim() || undefined;
+  const game2IntroTitle = asString(form.get("game2_intro_title")).trim() || undefined;
 
   let parsedGame1: ParseResult;
   let parsedGame2: ParseResult;
@@ -361,11 +423,15 @@ export async function POST(request: NextRequest) {
         gameNumber: 1 as const,
         theme: game1Theme,
         songs: parsedGame1.songs,
+        introSongArtist: game1IntroArtist,
+        introSongTitle: game1IntroTitle,
       },
       {
         gameNumber: 2 as const,
         theme: game2Theme,
         songs: parsedGame2.songs,
+        introSongArtist: game2IntroArtist,
+        introSongTitle: game2IntroTitle,
       },
     ];
 
@@ -380,6 +446,8 @@ export async function POST(request: NextRequest) {
         playlistName,
         description,
         songs: game.songs,
+        introSongArtist: game.introSongArtist,
+        introSongTitle: game.introSongTitle,
       });
 
       playlists.push({
@@ -392,6 +460,8 @@ export async function POST(request: NextRequest) {
         addedCount: created.addedCount,
         notFoundCount: created.notFoundCount,
         notFound: created.notFound,
+        introTrackId: created.introTrackId,
+        introNotFound: created.introNotFound,
       });
     }
 

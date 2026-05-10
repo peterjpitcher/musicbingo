@@ -17,7 +17,7 @@ export const DEFAULT_REVEAL_CONFIG: RevealConfig = {
   nextMs: 60_000,
 };
 
-/** Challenge songs play for 90 seconds instead of 40. */
+/** Challenge songs play for 90 seconds instead of 60. */
 export const CHALLENGE_REVEAL_CONFIG: RevealConfig = {
   albumMs: 10_000,
   titleMs: 20_000,
@@ -37,6 +37,12 @@ export type LiveGameConfig = {
   challengeSongArtist: string;
   /** Title of the challenge song for this game (user-entered, may be "" for legacy sessions). */
   challengeSongTitle: string;
+  /** Up to 5 challenge songs per game. Authoritative when present; falls back to single legacy pair. */
+  challengeSongs?: Array<{ artist: string; title: string }>;
+  /** Artist of the intro song played before the game starts. */
+  introSongArtist?: string;
+  /** Title of the intro song played before the game starts. */
+  introSongTitle?: string;
 };
 
 /** Raw prep-screen inputs stored so the event pack ZIP can be re-generated from the host dashboard. */
@@ -48,6 +54,12 @@ export type PrepData = {
   game1ChallengeSong: string;
   game2ChallengeSong: string;
   cardCount: number;
+  /** Multiple challenge songs per game (artist|||title format). */
+  game1ChallengeSongs?: string[];
+  game2ChallengeSongs?: string[];
+  /** Intro songs (artist|||title format). */
+  game1IntroSong?: string;
+  game2IntroSong?: string;
 };
 
 export type LiveSessionV1 = {
@@ -104,6 +116,10 @@ export type LiveRuntimeState = {
   extensionMs: number;
   /** When true, auto-advance is disabled and songs play in full (free play / post-round mode). */
   freePlay: boolean;
+  /** True when playing the intro song (track 1) before a game starts. Derived, not sticky. */
+  isIntroSong: boolean;
+  /** Flips true after first track change post-intro. Persisted in localStorage. Prevents re-trigger after refresh. */
+  introPlayed: boolean;
   updatedAtMs: number;
 };
 
@@ -153,6 +169,19 @@ export function makeEmptyRuntimeState(sessionId: string): LiveRuntimeState {
     preBreakPlaylistId: null,
     extensionMs: 0,
     freePlay: false,
+    isIntroSong: false,
+    introPlayed: false,
     updatedAtMs: Date.now(),
   };
+}
+
+/** Returns the effective challenge songs for a game. Uses the array when present, falls back to the single legacy pair. */
+export function getChallengeSongs(game: LiveGameConfig): Array<{ artist: string; title: string }> {
+  if (game.challengeSongs && game.challengeSongs.length > 0) {
+    return game.challengeSongs;
+  }
+  if (game.challengeSongArtist && game.challengeSongTitle) {
+    return [{ artist: game.challengeSongArtist, title: game.challengeSongTitle }];
+  }
+  return [];
 }
