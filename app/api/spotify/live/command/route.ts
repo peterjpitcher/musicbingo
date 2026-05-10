@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   getPlaybackState,
   pausePlayback,
+  playTrackByUri,
   resumePlayback,
   seekToPositionMs,
   skipNext,
@@ -22,7 +23,7 @@ export const runtime = "nodejs";
 
 const COOKIE_REFRESH = "spotify_refresh_token";
 
-type LiveCommandAction = "play_game" | "pause" | "resume" | "next" | "previous" | "seek" | "play_break" | "resume_from_track";
+type LiveCommandAction = "play_game" | "play_track" | "pause" | "resume" | "next" | "previous" | "seek" | "play_break" | "resume_from_track";
 
 type LiveCommandPayload = {
   action?: unknown;
@@ -46,6 +47,7 @@ function asNumber(value: unknown): number | null {
 
 function asAction(value: unknown): LiveCommandAction | null {
   return value === "play_game"
+    || value === "play_track"
     || value === "pause"
     || value === "resume"
     || value === "next"
@@ -92,6 +94,15 @@ async function runCommand(params: {
   accessToken: string;
 }): Promise<void> {
   const deviceId = asString(params.payload.deviceId) ?? undefined;
+
+  if (params.action === "play_track") {
+    const trackId = asString(params.payload.trackId);
+    if (!trackId) {
+      throw new SpotifyLiveError("API_ERROR", "`trackId` is required for play_track.");
+    }
+    await playTrackByUri({ accessToken: params.accessToken, trackId, deviceId });
+    return;
+  }
 
   if (params.action === "play_game") {
     const playlistId = asString(params.payload.playlistId);
@@ -191,7 +202,7 @@ export async function POST(request: NextRequest) {
 
   const action = asAction(payload.action);
   if (!action) {
-    return new Response("Invalid action. Use one of: play_game, pause, resume, next, previous, seek.", {
+    return new Response("Invalid action. Use one of: play_game, play_track, pause, resume, next, previous, seek, play_break, resume_from_track.", {
       status: 400,
       headers: { "Cache-Control": "no-store" },
     });

@@ -278,6 +278,24 @@ export async function startTrackInPlaylistPlayback(params: {
   });
 }
 
+export async function playTrackByUri(params: {
+  accessToken: string;
+  trackId: string;
+  deviceId?: string;
+}): Promise<void> {
+  await runPlayerCommand({
+    accessToken: params.accessToken,
+    method: "PUT",
+    path: "/me/player/play",
+    query: { device_id: params.deviceId },
+    body: {
+      uris: [`spotify:track:${params.trackId}`],
+      position_ms: 0,
+    },
+    actionLabel: "Play single track",
+  });
+}
+
 export async function pausePlayback(params: { accessToken: string; deviceId?: string }): Promise<void> {
   await runPlayerCommand({
     accessToken: params.accessToken,

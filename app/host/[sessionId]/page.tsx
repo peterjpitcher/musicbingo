@@ -27,6 +27,7 @@ import {
   DEFAULT_REVEAL_CONFIG,
   LIVE_RUNTIME_VERSION,
   getChallengeSongs,
+  getIntroSongs,
   makeEmptyRuntimeState,
   type LiveGameConfig,
   type LiveRuntimeState,
@@ -248,10 +249,13 @@ export default function HostSessionControllerPage() {
           }
           challengeTrackIdsRef.current = matched;
         }
-        // Resolve the intro song track ID: the playlist creation route puts the intro as
-        // track 1, so the first track in the array IS the intro when introSongArtist is set.
-        if (game?.introSongArtist && data.tracks.length > 0) {
-          introTrackIdRef.current = data.tracks[0].trackId ?? null;
+        if (game) {
+          const intros = getIntroSongs(game);
+          if (intros.length > 0 && intros[0].trackId) {
+            introTrackIdRef.current = intros[0].trackId;
+          } else if (game.introSongArtist && data.tracks.length > 0) {
+            introTrackIdRef.current = data.tracks[0].trackId ?? null;
+          }
         }
       })
       .catch(() => {
@@ -570,7 +574,7 @@ export default function HostSessionControllerPage() {
 
   const sendCommand = useCallback(
     async (
-      action: "play_game" | "pause" | "resume" | "next" | "previous" | "seek" | "play_break" | "resume_from_track",
+      action: "play_game" | "play_track" | "pause" | "resume" | "next" | "previous" | "seek" | "play_break" | "resume_from_track",
       payload?: Record<string, unknown>,
       opts?: { modeOnSuccess?: LiveRuntimeState["mode"] }
     ): Promise<boolean> => {
@@ -652,6 +656,31 @@ export default function HostSessionControllerPage() {
       setNotice(
         "Spotify control unavailable. Continue in manual host control mode."
       );
+    }
+  }
+
+  async function playIntroSong(gameNumber: 1 | 2) {
+    if (!session || !isController) return;
+    const game = session.games.find((item) => item.gameNumber === gameNumber);
+    if (!game) return;
+    const intros = getIntroSongs(game);
+    if (intros.length === 0 || !intros[0].trackId) {
+      setError(`No intro song configured for Game ${gameNumber}.`);
+      return;
+    }
+    setNotice("");
+    const ok = await sendCommand("play_track", { trackId: intros[0].trackId });
+    if (ok) {
+      commitRuntime((prev) => ({
+        ...prev,
+        mode: "running",
+        activeGameNumber: gameNumber,
+        isIntroSong: true,
+        introPlayed: false,
+      }));
+      const label = intros[0].type === "dance-along" ? "Dance Along" : "Sing Along";
+      setNoticeVariant("success");
+      setNotice(`Playing ${label}: ${intros[0].artist} — ${intros[0].title}`);
     }
   }
 
@@ -859,6 +888,16 @@ export default function HostSessionControllerPage() {
             </p>
 
             <div className="flex flex-wrap gap-2.5 mb-3">
+              {session?.games.find((g) => g.gameNumber === 1) && getIntroSongs(session.games.find((g) => g.gameNumber === 1)!).length > 0 && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={!isController || commandBusy}
+                  onClick={() => void playIntroSong(1)}
+                >
+                  Play Dance Along
+                </Button>
+              )}
               <Button
                 variant="primary"
                 size="sm"
@@ -867,6 +906,16 @@ export default function HostSessionControllerPage() {
               >
                 Start Game 1
               </Button>
+              {session?.games.find((g) => g.gameNumber === 2) && getIntroSongs(session.games.find((g) => g.gameNumber === 2)!).length > 0 && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={!isController || commandBusy}
+                  onClick={() => void playIntroSong(2)}
+                >
+                  Play Sing Along
+                </Button>
+              )}
               <Button
                 variant="primary"
                 size="sm"
@@ -1174,19 +1223,25 @@ export default function HostSessionControllerPage() {
                 </div>
               );
             })()}
-            {activeGame?.introSongArtist && runtime.mode !== "break" ? (
-              <div className="rounded-xl bg-purple-50 border border-purple-200 px-3 py-2 mb-3">
-                <p className="text-xs font-semibold text-purple-700 uppercase tracking-wide mb-0.5">
-                  Intro Song — Game {activeGame.gameNumber}
-                </p>
-                <p className="text-sm font-semibold text-purple-900">
-                  {activeGame.introSongArtist} — {activeGame.introSongTitle}
-                </p>
-                <p className="text-xs text-purple-600 mt-0.5">
-                  {activeGame.gameNumber === 1 ? "Dance Along" : "Sing Along"} — no auto-advance
-                </p>
-              </div>
-            ) : null}
+            {(() => {
+              if (!activeGame || runtime.mode === "break") return null;
+              const intros = getIntroSongs(activeGame);
+              if (intros.length === 0) return null;
+              const intro = intros[0];
+              return (
+                <div className="rounded-xl bg-purple-50 border border-purple-200 px-3 py-2 mb-3">
+                  <p className="text-xs font-semibold text-purple-700 uppercase tracking-wide mb-0.5">
+                    {intro.type === "dance-along" ? "Dance Along" : "Sing Along"} — Game {activeGame.gameNumber}
+                  </p>
+                  <p className="text-sm font-semibold text-purple-900">
+                    {intro.artist} — {intro.title}
+                  </p>
+                  <p className="text-xs text-purple-600 mt-0.5">
+                    Plays before game — no auto-advance
+                  </p>
+                </div>
+              );
+            })()}
             <p className="text-xs text-slate-400">
               TV screen:{" "}
               <Link
