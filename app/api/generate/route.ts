@@ -77,25 +77,29 @@ async function fetchSpotifyPlaylistTracks(
   }
 
   try {
-    const url = `https://api.spotify.com/v1/playlists/${encodeURIComponent(playlistId)}/tracks?fields=items(track(id,name,artists(name)))&limit=100`;
-    const res = await spotifyApiRequest({ accessToken, url });
-    if (!res.ok) {
-      console.warn(`[music-bingo] Spotify playlist fetch failed (HTTP ${res.status}) — using input order.`);
-      return null;
-    }
-    const json = (await res.json()) as { items?: unknown[] };
-    return (json.items ?? [])
-      .map((item: unknown) => {
+    const tracks: SpotifyTrack[] = [];
+    const fields = encodeURIComponent("items(track(id,name,artists(name))),next,total");
+    let url: string | null = `https://api.spotify.com/v1/playlists/${encodeURIComponent(playlistId)}/tracks?fields=${fields}&limit=100`;
+
+    while (url) {
+      const res = await spotifyApiRequest({ accessToken, url });
+      if (!res.ok) {
+        console.warn(`[music-bingo] Spotify playlist fetch failed (HTTP ${res.status}) — using input order.`);
+        return null;
+      }
+      const json = (await res.json()) as { items?: unknown[]; next?: string | null };
+      for (const item of json.items ?? []) {
         const t = (item as { track?: { id?: string; name?: string; artists?: { name?: string }[] } })?.track;
-        if (!t || typeof t.id !== "string") return null;
-        // Only the first listed artist is used — matching the behaviour of the host page
-        // playlist fetch. Songs with multiple artists may not match if entered differently.
+        if (!t || typeof t.id !== "string") continue;
         const artist = Array.isArray(t.artists) && t.artists.length > 0
           ? String(t.artists[0]?.name ?? "")
           : "";
-        return { trackId: t.id, title: String(t.name ?? ""), artist };
-      })
-      .filter((t): t is SpotifyTrack => t !== null);
+        tracks.push({ trackId: t.id, title: String(t.name ?? ""), artist });
+      }
+      url = json.next ?? null;
+    }
+
+    return tracks;
   } catch {
     console.warn("[music-bingo] Error fetching Spotify playlist for clipboard ordering — using input order.");
     return null;
