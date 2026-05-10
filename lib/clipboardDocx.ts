@@ -5,11 +5,19 @@ import { normalizeGameTheme } from "@/lib/gameInput";
 import type { EventDetail } from "@/lib/managementApi";
 import type { Song } from "@/lib/types";
 
+type IntroSongEntry = {
+  type: string;
+  artist: string;
+  title: string;
+};
+
 type ClipboardGame = {
   theme: string;
   songs: Song[];
   challengeSongs: Song[];
   introSong?: Song;
+  challengeTypes?: string[];
+  introSongs?: IntroSongEntry[];
 };
 
 type RenderClipboardDocxParams = {
@@ -21,6 +29,17 @@ type RenderClipboardDocxParams = {
 
 function songLabel(song: Song): string {
   return `${song.artist} - ${song.title}`;
+}
+
+function challengeTypeLabel(type: string): string {
+  switch (type) {
+    case "dance-along":
+      return "DANCE ALONG";
+    case "sing-along":
+      return "SING ALONG";
+    default:
+      return type.toUpperCase();
+  }
 }
 
 function blankLine(): Paragraph {
@@ -137,26 +156,41 @@ export async function renderClipboardDocx(params: RenderClipboardDocxParams): Pr
   children.push(heading("UPCOMING EVENTS"));
   children.push(...eventParagraphs(params.upcomingEvents));
 
-  // BONUS FUN — challenge songs (multi-song) and intro songs
   children.push(heading("BONUS FUN"));
 
-  children.push(bullet("Dancing Challenge (20 pts) - placed in Game 1."));
-  for (let i = 0; i < params.game1.challengeSongs.length; i++) {
-    children.push(subBullet(`Song ${i + 1}: ${songLabel(params.game1.challengeSongs[i]!)}`));
-  }
-  children.push(subBullet("Nikki announces the song in advance. Anyone who wants to can get up and dance along. Nikki picks a winner and awards 20 bonus points."));
-  if (game1IntroLabel) {
+  if (params.game1.introSongs && params.game1.introSongs.length > 0) {
+    children.push(bullet("Game 1 Intro Songs:"));
+    for (const intro of params.game1.introSongs) {
+      children.push(subBullet(`${challengeTypeLabel(intro.type)}: ${intro.artist} - ${intro.title}`));
+    }
+  } else if (game1IntroLabel) {
     children.push(bullet(`Dance Along intro: ${game1IntroLabel}`));
   }
 
-  children.push(bullet("Sing-Along Challenge (20 pts) - placed in Game 2."));
-  for (let i = 0; i < params.game2.challengeSongs.length; i++) {
-    children.push(subBullet(`Song ${i + 1}: ${songLabel(params.game2.challengeSongs[i]!)}`));
+  children.push(bullet("Dancing Challenge (20 pts) - placed in Game 1."));
+  const g1Types = params.game1.challengeTypes ?? [];
+  for (let i = 0; i < params.game1.challengeSongs.length; i++) {
+    const typePrefix = g1Types[i] ? `${challengeTypeLabel(g1Types[i])}: ` : "";
+    children.push(subBullet(`Song ${i + 1}: ${typePrefix}${songLabel(params.game1.challengeSongs[i]!)}`));
   }
-  children.push(subBullet("Nikki announces the song in advance. Everyone can play. Last person singing the right words wins. If you sing the wrong words, you sit down. Winner gets 20 bonus points."));
-  if (game2IntroLabel) {
+  children.push(subBullet("Nikki announces the song in advance. Anyone who wants to can get up and dance along. Nikki picks a winner and awards 20 bonus points."));
+
+  if (params.game2.introSongs && params.game2.introSongs.length > 0) {
+    children.push(bullet("Game 2 Intro Songs:"));
+    for (const intro of params.game2.introSongs) {
+      children.push(subBullet(`${challengeTypeLabel(intro.type)}: ${intro.artist} - ${intro.title}`));
+    }
+  } else if (game2IntroLabel) {
     children.push(bullet(`Sing Along intro: ${game2IntroLabel}`));
   }
+
+  children.push(bullet("Sing-Along Challenge (20 pts) - placed in Game 2."));
+  const g2Types = params.game2.challengeTypes ?? [];
+  for (let i = 0; i < params.game2.challengeSongs.length; i++) {
+    const typePrefix = g2Types[i] ? `${challengeTypeLabel(g2Types[i])}: ` : "";
+    children.push(subBullet(`Song ${i + 1}: ${typePrefix}${songLabel(params.game2.challengeSongs[i]!)}`));
+  }
+  children.push(subBullet("Nikki announces the song in advance. Everyone can play. Last person singing the right words wins. If you sing the wrong words, you sit down. Winner gets 20 bonus points."));
 
   children.push(heading("MUSIC BINGO"));
   children.push(bullet("IMPORTANT: Create two separate games for next time (Game 1 list and Game 2 list). Do not reuse the same pool for both."));

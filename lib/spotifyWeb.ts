@@ -270,3 +270,169 @@ export function makeSpotifyPopupHtml(params: {
   </body>
 </html>`;
 }
+
+// ---------------------------------------------------------------------------
+// Spotify URL / URI parsing
+// ---------------------------------------------------------------------------
+
+export function parseSpotifyTrackUrl(
+  input: string,
+): { trackId: string } | { error: string } {
+  const trimmed = input.trim();
+
+  if (!trimmed) {
+    return { error: "Please paste a valid Spotify track URL" };
+  }
+
+  const uriMatch = trimmed.match(/^spotify:track:([A-Za-z0-9]+)$/);
+  if (uriMatch) {
+    return { trackId: uriMatch[1] };
+  }
+
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    return { error: "Please paste a valid Spotify track URL" };
+  }
+
+  if (url.hostname === "spotify.link") {
+    return { error: "Please paste the full track URL from Spotify" };
+  }
+
+  if (url.hostname !== "open.spotify.com") {
+    return { error: "Please paste a valid Spotify track URL" };
+  }
+
+  const pathSegments = url.pathname.split("/").filter(Boolean);
+
+  if (pathSegments.length < 2) {
+    return { error: "Please paste a valid Spotify track URL" };
+  }
+
+  const resourceType = pathSegments[0];
+
+  if (resourceType === "playlist") {
+    return { error: "Please paste a track URL, not a playlist" };
+  }
+
+  if (resourceType === "album") {
+    return { error: "Please paste a track URL, not an album" };
+  }
+
+  if (resourceType !== "track") {
+    return { error: "Please paste a valid Spotify track URL" };
+  }
+
+  const trackId = pathSegments[1];
+  if (!trackId || !/^[A-Za-z0-9]+$/.test(trackId)) {
+    return { error: "Please paste a valid Spotify track URL" };
+  }
+
+  return { trackId };
+}
+
+// ---------------------------------------------------------------------------
+// Playlist track fetching (paginated)
+// ---------------------------------------------------------------------------
+
+export async function getPlaylistTracks(
+  accessToken: string,
+  playlistId: string,
+): Promise<
+  Array<{
+    uri: string;
+    trackId: string;
+    title: string;
+    artist: string;
+    position: number;
+  }>
+> {
+  const fields = encodeURIComponent(
+    "items(track(id,uri,name,artists(name))),next",
+  );
+  let url: string | null =
+    `https://api.spotify.com/v1/playlists/${playlistId}/tracks?fields=${fields}&limit=100`;
+
+  const tracks: Array<{
+    uri: string;
+    trackId: string;
+    title: string;
+    artist: string;
+    position: number;
+  }> = [];
+
+  while (url) {
+    const res = await spotifyApiRequest({ accessToken, url });
+
+    if (!res.ok) {
+      throw new Error(
+        `Failed to fetch playlist tracks: HTTP ${res.status}`,
+      );
+    }
+
+    const json = (await res.json()) as {
+      items?: Array<{
+        track: {
+          id: string;
+          uri: string;
+          name: string;
+          artists: Array<{ name: string }>;
+        } | null;
+      }>;
+      next?: string | null;
+    };
+
+    for (const item of json.items ?? []) {
+      if (!item.track) continue;
+      tracks.push({
+        uri: item.track.uri,
+        trackId: item.track.id,
+        title: item.track.name,
+        artist: item.track.artists[0]?.name ?? "Unknown Artist",
+        position: tracks.length,
+      });
+    }
+
+    url = json.next ?? null;
+  }
+
+  return tracks;
+}
+
+// ---------------------------------------------------------------------------
+// Single track metadata lookup
+// ---------------------------------------------------------------------------
+
+export async function getTrackMetadata(
+  accessToken: string,
+  trackId: string,
+): Promise<{
+  trackId: string;
+  title: string;
+  artist: string;
+  albumArt: string | null;
+}> {
+  const url = `https://api.spotify.com/v1/tracks/${trackId}`;
+  const res = await spotifyApiRequest({ accessToken, url });
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch track metadata: HTTP ${res.status}`);
+  }
+
+  const json = (await res.json()) as {
+    id: string;
+    name: string;
+    artists: Array<{ name: string }>;
+    album?: {
+      images?: Array<{ url: string }>;
+    };
+  };
+
+  return {
+    trackId: json.id,
+    title: json.name,
+    artist: json.artists[0]?.name ?? "Unknown Artist",
+    albumArt: json.album?.images?.[0]?.url ?? null,
+  };
+}

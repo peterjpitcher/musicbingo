@@ -72,11 +72,23 @@ function validateGameConfig(input: unknown): LiveGameConfig | null {
     ...(Array.isArray(input.challengeSongs) ? {
       challengeSongs: (input.challengeSongs as unknown[])
         .filter((cs): cs is Record<string, unknown> => isObject(cs))
-        .map(cs => ({ artist: asString(cs.artist) ?? "", title: asString(cs.title) ?? "" }))
+        .map(cs => ({ artist: asString(cs.artist) ?? "", title: asString(cs.title) ?? "", type: asString(cs.type) === "dance-along" ? "dance-along" as const : "sing-along" as const }))
         .filter(cs => cs.artist && cs.title),
     } : {}),
     ...(asString(input.introSongArtist) ? { introSongArtist: asString(input.introSongArtist)! } : {}),
     ...(asString(input.introSongTitle) ? { introSongTitle: asString(input.introSongTitle)! } : {}),
+    ...(Array.isArray(input.introSongs) ? {
+      introSongs: (input.introSongs as unknown[])
+        .filter((entry): entry is Record<string, unknown> => isObject(entry))
+        .map(entry => ({
+          type: asString(entry.type) === "dance-along" ? "dance-along" as const : "sing-along" as const,
+          spotifyUrl: asString(entry.spotifyUrl) ?? "",
+          trackId: asString(entry.trackId) ?? "",
+          artist: asString(entry.artist) ?? "",
+          title: asString(entry.title) ?? "",
+        }))
+        .filter(entry => entry.trackId && entry.artist && entry.title),
+    } : {}),
   };
 }
 

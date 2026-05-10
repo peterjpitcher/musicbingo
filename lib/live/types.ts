@@ -25,6 +25,20 @@ export const CHALLENGE_REVEAL_CONFIG: RevealConfig = {
   nextMs: 90_000,
 };
 
+export type ChallengeSong = {
+  artist: string;
+  title: string;
+  type: 'sing-along' | 'dance-along';
+};
+
+export type IntroSong = {
+  type: 'dance-along' | 'sing-along';
+  spotifyUrl: string;
+  trackId: string;
+  artist: string;
+  title: string;
+};
+
 export type LiveGameConfig = {
   gameNumber: 1 | 2;
   theme: string;
@@ -38,11 +52,12 @@ export type LiveGameConfig = {
   /** Title of the challenge song for this game (user-entered, may be "" for legacy sessions). */
   challengeSongTitle: string;
   /** Up to 5 challenge songs per game. Authoritative when present; falls back to single legacy pair. */
-  challengeSongs?: Array<{ artist: string; title: string }>;
-  /** Artist of the intro song played before the game starts. */
+  challengeSongs?: ChallengeSong[];
+  /** @deprecated Use introSongs instead */
   introSongArtist?: string;
-  /** Title of the intro song played before the game starts. */
+  /** @deprecated Use introSongs instead */
   introSongTitle?: string;
+  introSongs?: IntroSong[];
 };
 
 /** Raw prep-screen inputs stored so the event pack ZIP can be re-generated from the host dashboard. */
@@ -176,12 +191,33 @@ export function makeEmptyRuntimeState(sessionId: string): LiveRuntimeState {
 }
 
 /** Returns the effective challenge songs for a game. Uses the array when present, falls back to the single legacy pair. */
-export function getChallengeSongs(game: LiveGameConfig): Array<{ artist: string; title: string }> {
+export function getChallengeSongs(game: LiveGameConfig): ChallengeSong[] {
   if (game.challengeSongs && game.challengeSongs.length > 0) {
-    return game.challengeSongs;
+    return game.challengeSongs.map((s) => ({
+      artist: s.artist,
+      title: s.title,
+      type: s.type ?? 'sing-along',
+    }));
   }
   if (game.challengeSongArtist && game.challengeSongTitle) {
-    return [{ artist: game.challengeSongArtist, title: game.challengeSongTitle }];
+    return [{ artist: game.challengeSongArtist, title: game.challengeSongTitle, type: 'sing-along' as const }];
+  }
+  return [];
+}
+
+/** Returns the effective intro songs for a game. Uses the array when present, falls back to legacy single pair. */
+export function getIntroSongs(game: LiveGameConfig): IntroSong[] {
+  if (game.introSongs && game.introSongs.length > 0) {
+    return game.introSongs;
+  }
+  if (game.introSongArtist && game.introSongTitle) {
+    return [{
+      type: 'sing-along' as const,
+      spotifyUrl: '',
+      trackId: '',
+      artist: game.introSongArtist,
+      title: game.introSongTitle,
+    }];
   }
   return [];
 }

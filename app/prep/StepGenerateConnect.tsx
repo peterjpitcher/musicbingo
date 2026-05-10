@@ -17,6 +17,15 @@ type SpotifyPlaylistResult = {
   notFound: Array<{ artist: string; title: string }>;
 };
 
+type PlaylistResult = {
+  gameNumber: 1 | 2;
+  playlistId: string;
+  playlistUrl: string;
+  addedCount: number;
+  totalSongs: number;
+  notFoundSongs: Array<{ artist: string; title: string }>;
+};
+
 type StepGenerateConnectProps = {
   canSubmit: boolean;
   busy: boolean;
@@ -29,18 +38,23 @@ type StepGenerateConnectProps = {
     game1: SpotifyPlaylistResult;
     game2: SpotifyPlaylistResult;
   } | null;
+  playlistsCreated: boolean;
+  playlistResults: PlaylistResult[] | null;
   liveSessionName: string;
   onLiveSessionName: (v: string) => void;
   liveSessionNotice: string;
   error: string;
   qrNotice: string;
-  onSubmit: (e: React.FormEvent) => void;
+  onCreatePlaylists: () => void;
+  onRefreshFromSpotify: () => void;
+  onGenerateEventPack: () => void;
   onDownloadOnly: () => void;
   onConnectSpotify: () => void;
   onDisconnectSpotify: () => void;
   onSaveLiveSession: () => void;
   onExportLiveSession: () => void;
   onBack: () => void;
+  refreshing: boolean;
 };
 
 export function StepGenerateConnect({
@@ -52,77 +66,36 @@ export function StepGenerateConnect({
   spotifyCallbackUrl,
   spotifyResult,
   livePlaylistByGame,
+  playlistsCreated,
+  playlistResults,
   liveSessionName,
   onLiveSessionName,
   liveSessionNotice,
   error,
   qrNotice,
-  onSubmit,
+  onCreatePlaylists,
+  onRefreshFromSpotify,
+  onGenerateEventPack,
   onDownloadOnly,
   onConnectSpotify,
   onDisconnectSpotify,
   onSaveLiveSession,
   onExportLiveSession,
   onBack,
+  refreshing,
 }: StepGenerateConnectProps) {
-  const generateLabel = spotifyConnecting
+  const createPlaylistsLabel = spotifyConnecting
     ? "Connecting Spotify..."
     : spotifyCreating
-    ? "Creating Spotify playlists..."
-    : busy
-    ? "Generating event pack..."
-    : "Generate Event Pack + Create Spotify Playlists";
+    ? "Creating Playlists..."
+    : "Create Spotify Playlists";
 
   return (
     <div className="space-y-5">
-      <Card as="form" onSubmit={onSubmit}>
-        <h2 className="text-xl font-bold text-slate-800 mb-4">Generate</h2>
-        <p className="text-sm text-slate-500 mb-6">
-          Downloads: Game 1 PDF, Game 2 PDF, Event Clipboard DOCX, and QR codes. Also creates two private Spotify playlists.
-        </p>
-
-        {error ? <Notice variant="error" className="mb-4">{error}</Notice> : null}
-        {qrNotice ? <Notice variant="info" className="mb-4">{qrNotice}</Notice> : null}
-
-        <Button
-          as="button"
-          type="submit"
-          variant="primary"
-          fullWidth
-          disabled={!canSubmit || busy}
-        >
-          {generateLabel}
-        </Button>
-
-        <Button
-          as="button"
-          type="button"
-          variant="secondary"
-          fullWidth
-          disabled={!canSubmit || busy}
-          className="mt-2"
-          onClick={onDownloadOnly}
-        >
-          {busy ? "Generating..." : "Re-download Event Pack Only (no Spotify)"}
-        </Button>
-
-        <p className={[helpClass, "text-center mt-3"].join(" ")}>
-          Menu QR is always included. Event QR codes require{" "}
-          <code className="bg-slate-100 px-1 rounded text-slate-700">MANAGEMENT_API_BASE_URL</code> +{" "}
-          <code className="bg-slate-100 px-1 rounded text-slate-700">MANAGEMENT_API_TOKEN</code> on the server.
-        </p>
-
-        <div className="flex justify-start mt-6">
-          <Button variant="secondary" onClick={onBack} as="button" type="button">
-            ← Back
-          </Button>
-        </div>
-      </Card>
-
       <Card>
         <h2 className="text-xl font-bold text-slate-800 mb-2">Spotify</h2>
         <p className="text-sm text-slate-500 mb-4">
-          Connect Spotify once, then use the Generate button above to create one private playlist per game.
+          Connect Spotify once, then create one private playlist per game.
         </p>
 
         <p className={helpClass}>
@@ -152,7 +125,115 @@ export function StepGenerateConnect({
           )}
         </div>
 
-        {spotifyResult && spotifyResult.length > 0 ? (
+        <div className="mt-5 pt-4 border-t border-slate-100 text-xs text-slate-500 space-y-1">
+          <p>
+            Spotify settings checklist: In Spotify Dashboard → your app → Settings → Redirect URIs, add:{" "}
+            <code className="bg-slate-100 px-1 rounded">
+              {spotifyCallbackUrl || "/api/spotify/callback"}
+            </code>
+          </p>
+          <p>
+            In Vercel Environment Variables, set{" "}
+            <code className="bg-slate-100 px-1 rounded">SPOTIFY_CLIENT_ID</code> and{" "}
+            <code className="bg-slate-100 px-1 rounded">SPOTIFY_CLIENT_SECRET</code>.
+          </p>
+        </div>
+      </Card>
+
+      <Card>
+        <h2 className="text-xl font-bold text-slate-800 mb-4">
+          {playlistsCreated ? "Playlist Status" : "Step 1: Create Playlists"}
+        </h2>
+
+        {error ? <Notice variant="error" className="mb-4">{error}</Notice> : null}
+        {qrNotice ? <Notice variant="info" className="mb-4">{qrNotice}</Notice> : null}
+
+        {!playlistsCreated ? (
+          <div className="space-y-3">
+            <p className="text-sm text-slate-500">
+              Create private Spotify playlists for each game, then review them before generating your event pack.
+            </p>
+
+            <Button
+              variant="primary"
+              fullWidth
+              disabled={!spotifyConnected || !canSubmit || busy || spotifyCreating}
+              onClick={onCreatePlaylists}
+            >
+              {createPlaylistsLabel}
+            </Button>
+
+            <Button
+              variant="secondary"
+              fullWidth
+              disabled={!canSubmit || busy}
+              onClick={onDownloadOnly}
+            >
+              {busy ? "Generating..." : "Download Only (No Spotify)"}
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {playlistResults && playlistResults.length > 0 ? (
+              <div className="space-y-3">
+                {playlistResults.map((result) => (
+                  <div
+                    key={result.gameNumber}
+                    className="rounded-xl bg-slate-50 border border-slate-200 p-3 text-sm"
+                  >
+                    <p className="font-semibold text-slate-700">
+                      Game {result.gameNumber}
+                    </p>
+                    <p className={helpClass}>
+                      <span className="text-emerald-600 font-medium">
+                        &#10003; {result.addedCount}/{result.totalSongs} tracks matched
+                      </span>
+                      {" "}&mdash;{" "}
+                      <a
+                        href={result.playlistUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-sky-600 underline underline-offset-2"
+                      >
+                        Open in Spotify &#8599;
+                      </a>
+                    </p>
+                    {result.notFoundSongs.length > 0 ? (
+                      <div className="mt-2">
+                        <p className="text-xs font-medium text-amber-700">
+                          Not found ({result.notFoundSongs.length}):
+                        </p>
+                        <ul className="mt-1 text-xs text-slate-600 space-y-0.5 pl-3">
+                          {result.notFoundSongs.map((song) => (
+                            <li key={`${song.artist}-${song.title}`}>
+                              &bull; {song.artist} &ndash; {song.title}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            <div className="flex gap-3 flex-wrap">
+              <Button
+                variant="secondary"
+                onClick={onRefreshFromSpotify}
+                disabled={refreshing}
+              >
+                {refreshing ? "Refreshing..." : "Refresh from Spotify"}
+              </Button>
+            </div>
+
+            <p className="text-sm text-slate-500">
+              Review your playlists in Spotify, then generate your event pack.
+            </p>
+          </div>
+        )}
+
+        {spotifyResult && spotifyResult.length > 0 && !playlistResults ? (
           <div className="mt-4 space-y-3">
             {spotifyResult.map((playlist) => (
               <div
@@ -170,7 +251,7 @@ export function StepGenerateConnect({
                     : ""}
                   {playlist.playlistUrl ? (
                     <>
-                      {" "}—{" "}
+                      {" "}&mdash;{" "}
                       <a
                         href={playlist.playlistUrl}
                         target="_blank"
@@ -199,50 +280,68 @@ export function StepGenerateConnect({
           </div>
         ) : null}
 
-        {livePlaylistByGame ? (
-          <div className="mt-5 pt-5 border-t border-slate-200">
-            <h3 className="text-base font-bold text-slate-800 mb-3">Live Session</h3>
-            <label className={labelClass}>Session Name</label>
-            <input
-              type="text"
-              className={inputClass}
-              value={liveSessionName}
-              onChange={(e) => onLiveSessionName(e.target.value)}
-              placeholder="Music Bingo - Event Date"
-            />
-            {liveSessionNotice ? (
-              <Notice variant="success" className="mt-3">
-                {liveSessionNotice}
-              </Notice>
-            ) : null}
-            <div className="flex flex-wrap gap-2.5 mt-4">
-              <Button variant="primary" onClick={onSaveLiveSession}>
-                Save Live Session
-              </Button>
-              <Button variant="secondary" onClick={onExportLiveSession}>
-                Export JSON
-              </Button>
-              <Button as="link" href="/host" variant="secondary">
-                Open Live Host Console
-              </Button>
-            </div>
-          </div>
-        ) : null}
-
-        <div className="mt-5 pt-4 border-t border-slate-100 text-xs text-slate-500 space-y-1">
-          <p>
-            Spotify settings checklist: In Spotify Dashboard → your app → Settings → Redirect URIs, add:{" "}
-            <code className="bg-slate-100 px-1 rounded">
-              {spotifyCallbackUrl || "/api/spotify/callback"}
-            </code>
-          </p>
-          <p>
-            In Vercel Environment Variables, set{" "}
-            <code className="bg-slate-100 px-1 rounded">SPOTIFY_CLIENT_ID</code> and{" "}
-            <code className="bg-slate-100 px-1 rounded">SPOTIFY_CLIENT_SECRET</code>.
-          </p>
+        <div className="flex justify-start mt-6">
+          <Button variant="secondary" onClick={onBack} as="button" type="button">
+            &larr; Back
+          </Button>
         </div>
       </Card>
+
+      {playlistsCreated ? (
+        <Card>
+          <h2 className="text-xl font-bold text-slate-800 mb-4">
+            Step 2: Generate Event Pack
+          </h2>
+          <p className="text-sm text-slate-500 mb-4">
+            Downloads: Game 1 PDF, Game 2 PDF, Event Clipboard DOCX, and QR codes.
+          </p>
+
+          <Button
+            variant="primary"
+            fullWidth
+            disabled={busy}
+            onClick={onGenerateEventPack}
+          >
+            {busy ? "Generating Event Pack..." : "Generate Event Pack"}
+          </Button>
+
+          <p className={[helpClass, "text-center mt-3"].join(" ")}>
+            Menu QR is always included. Event QR codes require{" "}
+            <code className="bg-slate-100 px-1 rounded text-slate-700">MANAGEMENT_API_BASE_URL</code> +{" "}
+            <code className="bg-slate-100 px-1 rounded text-slate-700">MANAGEMENT_API_TOKEN</code> on the server.
+          </p>
+        </Card>
+      ) : null}
+
+      {livePlaylistByGame ? (
+        <Card>
+          <h3 className="text-base font-bold text-slate-800 mb-3">Live Session</h3>
+          <label className={labelClass}>Session Name</label>
+          <input
+            type="text"
+            className={inputClass}
+            value={liveSessionName}
+            onChange={(e) => onLiveSessionName(e.target.value)}
+            placeholder="Music Bingo - Event Date"
+          />
+          {liveSessionNotice ? (
+            <Notice variant="success" className="mt-3">
+              {liveSessionNotice}
+            </Notice>
+          ) : null}
+          <div className="flex flex-wrap gap-2.5 mt-4">
+            <Button variant="primary" onClick={onSaveLiveSession}>
+              Save Live Session
+            </Button>
+            <Button variant="secondary" onClick={onExportLiveSession}>
+              Export JSON
+            </Button>
+            <Button as="link" href="/host" variant="secondary">
+              Open Live Host Console
+            </Button>
+          </div>
+        </Card>
+      ) : null}
     </div>
   );
 }

@@ -197,15 +197,62 @@ export async function POST(request: Request) {
     const game1Theme = normalizeGameTheme(asString(form.get("game1_theme")));
     const game2Theme = normalizeGameTheme(asString(form.get("game2_theme")));
 
+    const spotifyPlaylistIdGame1 = asString(form.get("spotify_playlist_id_game1")).trim();
+    const spotifyPlaylistIdGame2 = asString(form.get("spotify_playlist_id_game2")).trim();
+    const game1ChallengeSongTypesRaw = asString(form.get("game1_challenge_song_types"));
+    const game2ChallengeSongTypesRaw = asString(form.get("game2_challenge_song_types"));
+    const game1IntroSongsJson = asString(form.get("game1_intro_songs"));
+    const game2IntroSongsJson = asString(form.get("game2_intro_songs"));
+
+    const g1ChallengeTypes = game1ChallengeSongTypesRaw ? game1ChallengeSongTypesRaw.split(",") : [];
+    const g2ChallengeTypes = game2ChallengeSongTypesRaw ? game2ChallengeSongTypesRaw.split(",") : [];
+    const g1IntroSongs: Array<{ type: string; artist: string; title: string }> = game1IntroSongsJson
+      ? JSON.parse(game1IntroSongsJson)
+      : [];
+    const g2IntroSongs: Array<{ type: string; artist: string; title: string }> = game2IntroSongsJson
+      ? JSON.parse(game2IntroSongsJson)
+      : [];
+
     let parsedGame1: ParseResult;
     let parsedGame2: ParseResult;
     let game1ChallengeSongsList: Song[];
     let game2ChallengeSongsList: Song[];
     let game1IntroSong: Song | undefined;
     let game2IntroSong: Song | undefined;
+
+    const origin = new URL(request.url).origin;
+
+    const [spotifyTracksGame1Source, spotifyTracksGame2Source] = await Promise.all([
+      spotifyPlaylistIdGame1 ? fetchSpotifyPlaylistTracks(spotifyPlaylistIdGame1, origin) : Promise.resolve(null),
+      spotifyPlaylistIdGame2 ? fetchSpotifyPlaylistTracks(spotifyPlaylistIdGame2, origin) : Promise.resolve(null),
+    ]);
+
     try {
-      parsedGame1 = parseGameSongsText(game1SongsText, "Game 1");
-      parsedGame2 = parseGameSongsText(game2SongsText, "Game 2");
+      if (spotifyTracksGame1Source && spotifyTracksGame1Source.length > 0) {
+        const spotifySongs: Song[] = spotifyTracksGame1Source.map(t => ({ artist: t.artist, title: t.title }));
+        parsedGame1 = {
+          songs: spotifySongs,
+          uniqueArtists: [...new Set(spotifySongs.map(s => s.artist))],
+          uniqueTitles: [...new Set(spotifySongs.map(s => s.title))],
+          combinedPool: spotifySongs.map(s => `${s.artist} - ${s.title}`),
+          ignoredLines: [],
+        };
+      } else {
+        parsedGame1 = parseGameSongsText(game1SongsText, "Game 1");
+      }
+
+      if (spotifyTracksGame2Source && spotifyTracksGame2Source.length > 0) {
+        const spotifySongs: Song[] = spotifyTracksGame2Source.map(t => ({ artist: t.artist, title: t.title }));
+        parsedGame2 = {
+          songs: spotifySongs,
+          uniqueArtists: [...new Set(spotifySongs.map(s => s.artist))],
+          uniqueTitles: [...new Set(spotifySongs.map(s => s.title))],
+          combinedPool: spotifySongs.map(s => `${s.artist} - ${s.title}`),
+          ignoredLines: [],
+        };
+      } else {
+        parsedGame2 = parseGameSongsText(game2SongsText, "Game 2");
+      }
 
       const game1ChallengeRaw = asString(form.get("game1_challenge_songs"));
       const game2ChallengeRaw = asString(form.get("game2_challenge_songs"));
@@ -235,8 +282,9 @@ export async function POST(request: Request) {
       if (game2IntroRaw) {
         game2IntroSong = resolveChallengeSong(game2IntroRaw, parsedGame2.songs, "Game 2 intro");
       }
-    } catch (err: any) {
-      return new Response(err?.message ? String(err.message) : "Invalid game inputs.", { status: 400 });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Invalid game inputs.";
+      return new Response(message, { status: 400 });
     }
 
     let cardsGame1: Card[];
@@ -252,22 +300,23 @@ export async function POST(request: Request) {
         count,
         seed: seed ? `${seed}-game-2` : undefined,
       });
-    } catch (err: any) {
-      return new Response(err?.message ? String(err.message) : "Failed to generate cards.", { status: 400 });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to generate cards.";
+      return new Response(message, { status: 400 });
     }
 
-    // Fetch Spotify playlist order for both games in parallel so the clipboard DOCX
-    // lists songs in the same order they will play. Degrades gracefully if Spotify
-    // auth is unavailable or playlist IDs were not provided (e.g. pre-Spotify generate).
     const game1PlaylistId = asString(form.get("game1_playlist_id")).trim();
     const game2PlaylistId = asString(form.get("game2_playlist_id")).trim();
-    const origin = new URL(request.url).origin;
-    const [spotifyTracksGame1, spotifyTracksGame2] = await Promise.all([
-      fetchSpotifyPlaylistTracks(game1PlaylistId, origin),
-      fetchSpotifyPlaylistTracks(game2PlaylistId, origin),
+    const [spotifyTracksGame1Sort, spotifyTracksGame2Sort] = await Promise.all([
+      game1PlaylistId && !spotifyTracksGame1Source
+        ? fetchSpotifyPlaylistTracks(game1PlaylistId, origin)
+        : Promise.resolve(spotifyTracksGame1Source),
+      game2PlaylistId && !spotifyTracksGame2Source
+        ? fetchSpotifyPlaylistTracks(game2PlaylistId, origin)
+        : Promise.resolve(spotifyTracksGame2Source),
     ]);
-    const sortedGame1Songs = sortSongsBySpotifyOrder(parsedGame1.songs, spotifyTracksGame1);
-    const sortedGame2Songs = sortSongsBySpotifyOrder(parsedGame2.songs, spotifyTracksGame2);
+    const sortedGame1Songs = sortSongsBySpotifyOrder(parsedGame1.songs, spotifyTracksGame1Sort);
+    const sortedGame2Songs = sortSongsBySpotifyOrder(parsedGame2.songs, spotifyTracksGame2Sort);
 
     const brandId = asString(form.get("brand_id")).trim() || null;
     const brandConfig = await resolveBrandConfig(brandId);
@@ -317,12 +366,16 @@ export async function POST(request: Request) {
           songs: sortedGame1Songs,
           challengeSongs: game1ChallengeSongsList,
           introSong: game1IntroSong,
+          challengeTypes: g1ChallengeTypes.length > 0 ? g1ChallengeTypes : undefined,
+          introSongs: g1IntroSongs.length > 0 ? g1IntroSongs : undefined,
         },
         game2: {
           theme: game2Theme,
           songs: sortedGame2Songs,
           challengeSongs: game2ChallengeSongsList,
           introSong: game2IntroSong,
+          challengeTypes: g2ChallengeTypes.length > 0 ? g2ChallengeTypes : undefined,
+          introSongs: g2IntroSongs.length > 0 ? g2IntroSongs : undefined,
         },
         upcomingEvents,
       }),
@@ -349,8 +402,8 @@ export async function POST(request: Request) {
         "Cache-Control": "no-store",
       },
     });
-  } catch (err: any) {
-    const msg = err?.message ? String(err.message) : "Failed to generate output bundle.";
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Failed to generate output bundle.";
     return new Response(msg, { status: 500 });
   }
 }

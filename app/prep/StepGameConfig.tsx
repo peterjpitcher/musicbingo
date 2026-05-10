@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import {
@@ -10,6 +11,7 @@ import {
   textareaClass,
 } from "@/components/ui/formStyles";
 import { MAX_SONGS_PER_GAME, makeSongSelectionValue } from "@/lib/gameInput";
+import type { IntroSong } from "@/lib/live/types";
 import type { Song } from "@/lib/types";
 
 type ParsedResult = {
@@ -19,6 +21,16 @@ type ParsedResult = {
   combinedPool: string[];
 };
 
+type ChallengeEntry = {
+  value: string;
+  type: "sing-along" | "dance-along";
+};
+
+type IntroInputState = Record<
+  string,
+  { loading?: boolean; error?: string }
+>;
+
 type StepGameConfigProps = {
   gameNumber: 1 | 2;
   gameLabel: string;
@@ -26,10 +38,11 @@ type StepGameConfigProps = {
   onTheme: (v: string) => void;
   songsText: string;
   onSongsText: (v: string) => void;
-  challengeSongs: string[];
-  onChallengeSongs: (v: string[]) => void;
-  introSong: string;
-  onIntroSong: (v: string) => void;
+  challengeSongs: ChallengeEntry[];
+  onChallengeSongs: (v: ChallengeEntry[]) => void;
+  introSongs: IntroSong[];
+  onIntroSongsChange: (songs: IntroSong[]) => void;
+  spotifyConnected: boolean;
   parsed: ParsedResult;
   onBack: () => void;
   onNext: () => void;
@@ -38,8 +51,57 @@ type StepGameConfigProps = {
 
 const CHALLENGE_SLOT_COUNT = 5;
 
+const INTRO_SLOTS: Array<{ type: IntroSong["type"]; label: string }> = [
+  { type: "dance-along", label: "Dance Along Song (plays before game)" },
+  { type: "sing-along", label: "Sing Along Song (plays before game)" },
+];
+
 function songLabel(song: Song): string {
   return `${song.artist} - ${song.title}`;
+}
+
+function parseSpotifyTrackUrl(
+  input: string
+): { trackId: string } | { error: string } {
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return { error: "Please paste a valid Spotify track URL" };
+  }
+  const uriMatch = trimmed.match(/^spotify:track:([A-Za-z0-9]+)$/);
+  if (uriMatch) {
+    return { trackId: uriMatch[1] };
+  }
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    return { error: "Please paste a valid Spotify track URL" };
+  }
+  if (url.hostname === "spotify.link") {
+    return { error: "Please paste the full track URL from Spotify" };
+  }
+  if (url.hostname !== "open.spotify.com") {
+    return { error: "Please paste a valid Spotify track URL" };
+  }
+  const pathSegments = url.pathname.split("/").filter(Boolean);
+  if (pathSegments.length < 2) {
+    return { error: "Please paste a valid Spotify track URL" };
+  }
+  const resourceType = pathSegments[0];
+  if (resourceType === "playlist") {
+    return { error: "Please paste a track URL, not a playlist" };
+  }
+  if (resourceType === "album") {
+    return { error: "Please paste a track URL, not an album" };
+  }
+  if (resourceType !== "track") {
+    return { error: "Please paste a valid Spotify track URL" };
+  }
+  const trackId = pathSegments[1];
+  if (!trackId || !/^[A-Za-z0-9]+$/.test(trackId)) {
+    return { error: "Please paste a valid Spotify track URL" };
+  }
+  return { trackId };
 }
 
 function getAvailableOptions(songs: Song[], excludeValues: string[]): Song[] {
@@ -56,8 +118,9 @@ export function StepGameConfig({
   onSongsText,
   challengeSongs,
   onChallengeSongs,
-  introSong,
-  onIntroSong,
+  introSongs,
+  onIntroSongsChange,
+  spotifyConnected,
   parsed,
   onBack,
   onNext,
@@ -65,24 +128,106 @@ export function StepGameConfig({
 }: StepGameConfigProps) {
   const tooMany = parsed.songs.length > MAX_SONGS_PER_GAME;
   const notEnough =
-    parsed.songs.length < 25 ||
-    parsed.combinedPool.length < 25;
+    parsed.songs.length < 25 || parsed.combinedPool.length < 25;
 
-  const selectedChallengeCount = challengeSongs.filter((s) => s).length;
+  const selectedChallengeCount = challengeSongs.filter((s) => s.value).length;
+
+  const [introUrls, setIntroUrls] = useState<Record<string, string>>(() => {
+    const init: Record<string, string> = {};
+    for (const slot of INTRO_SLOTS) {
+      const existing = introSongs.find((s) => s.type === slot.type);
+      init[slot.type] = existing?.spotifyUrl ?? "";
+    }
+    return init;
+  });
+
+  const [introState, setIntroState] = useState<IntroInputState>({});
+
+  const bothIntrosResolved = spotifyConnected
+    ? INTRO_SLOTS.every((slot) =>
+        introSongs.some((s) => s.type === slot.type && s.trackId)
+      )
+    : true;
 
   const canNext =
     parsed.songs.length >= 25 &&
     !tooMany &&
     parsed.combinedPool.length >= 25 &&
-    selectedChallengeCount >= 1;
+    selectedChallengeCount >= 1 &&
+    bothIntrosResolved;
 
-  const introLabel =
-    gameNumber === 1
-      ? "Dance Along Song (plays before game)"
-      : "Sing Along Song (plays before game)";
+  const resolveIntroUrl = useCallback(
+    async (type: IntroSong["type"], rawUrl: string) => {
+      const url = rawUrl.trim();
+      if (!url) {
+        onIntroSongsChange(introSongs.filter((s) => s.type !== type));
+        setIntroState((prev) => {
+          const next = { ...prev };
+          delete next[type];
+          return next;
+        });
+        return;
+      }
 
-  // For the intro dropdown, exclude all selected challenge songs
-  const introAvailable = getAvailableOptions(parsed.songs, challengeSongs);
+      const parseResult = parseSpotifyTrackUrl(url);
+      if ("error" in parseResult) {
+        setIntroState((prev) => ({
+          ...prev,
+          [type]: { error: parseResult.error },
+        }));
+        return;
+      }
+
+      setIntroState((prev) => ({
+        ...prev,
+        [type]: { loading: true },
+      }));
+
+      try {
+        const res = await fetch(
+          `/api/spotify/track/${encodeURIComponent(parseResult.trackId)}`
+        );
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({ error: "Request failed" }));
+          setIntroState((prev) => ({
+            ...prev,
+            [type]: { error: (body as { error?: string }).error ?? "Request failed" },
+          }));
+          return;
+        }
+
+        const data = (await res.json()) as {
+          trackId: string;
+          title: string;
+          artist: string;
+        };
+
+        const newSong: IntroSong = {
+          type,
+          spotifyUrl: url,
+          trackId: data.trackId,
+          artist: data.artist,
+          title: data.title,
+        };
+
+        const updated = introSongs.filter((s) => s.type !== type);
+        updated.push(newSong);
+        onIntroSongsChange(updated);
+
+        setIntroState((prev) => {
+          const next = { ...prev };
+          delete next[type];
+          return next;
+        });
+      } catch {
+        setIntroState((prev) => ({
+          ...prev,
+          [type]: { error: "Failed to fetch track details" },
+        }));
+      }
+    },
+    [introSongs, onIntroSongsChange]
+  );
 
   return (
     <Card>
@@ -103,7 +248,9 @@ export function StepGameConfig({
         </div>
 
         <div>
-          <label className={labelClass}>Song List (max {MAX_SONGS_PER_GAME})</label>
+          <label className={labelClass}>
+            Song List (max {MAX_SONGS_PER_GAME})
+          </label>
           <textarea
             className={textareaClass}
             value={songsText}
@@ -136,28 +283,59 @@ export function StepGameConfig({
           </div>
         </div>
 
-        {/* Intro song dropdown */}
-        <div>
-          <label className={labelClass}>{introLabel}</label>
-          <select
-            className={selectClass}
-            value={introSong}
-            onChange={(e) => onIntroSong(e.target.value)}
-            disabled={!parsed.songs.length}
-          >
-            <option value="">None (no intro)</option>
-            {introAvailable.map((song) => {
-              const value = makeSongSelectionValue(song);
-              return (
-                <option key={value} value={value}>
-                  {songLabel(song)}
-                </option>
-              );
-            })}
-          </select>
-          <p className={helpClass}>
-            Optional song that plays before Game {gameNumber} begins
-          </p>
+        {/* Intro song URL inputs */}
+        <div className="space-y-4">
+          {INTRO_SLOTS.map((slot) => {
+            const state = introState[slot.type];
+            const resolved = introSongs.find((s) => s.type === slot.type);
+            const urlValue = introUrls[slot.type] ?? "";
+
+            return (
+              <div key={slot.type}>
+                <label className={labelClass}>{slot.label}</label>
+                <input
+                  type="text"
+                  className={inputClass}
+                  value={urlValue}
+                  onChange={(e) =>
+                    setIntroUrls((prev) => ({
+                      ...prev,
+                      [slot.type]: e.target.value,
+                    }))
+                  }
+                  onBlur={() => resolveIntroUrl(slot.type, urlValue)}
+                  onPaste={(e) => {
+                    const pasted = e.clipboardData.getData("text");
+                    setIntroUrls((prev) => ({
+                      ...prev,
+                      [slot.type]: pasted,
+                    }));
+                    setTimeout(() => resolveIntroUrl(slot.type, pasted), 0);
+                  }}
+                  placeholder="Paste Spotify track URL..."
+                  disabled={!spotifyConnected}
+                />
+                {!spotifyConnected && (
+                  <p className={`${helpClass} text-amber-600`}>
+                    Connect Spotify first to add intro songs
+                  </p>
+                )}
+                {state?.loading && (
+                  <p className={`${helpClass} text-slate-500`}>
+                    Loading track info...
+                  </p>
+                )}
+                {state?.error && (
+                  <p className={`${helpClass} text-red-600`}>{state.error}</p>
+                )}
+                {resolved && !state?.loading && !state?.error && (
+                  <p className={`${helpClass} text-green-700`}>
+                    {resolved.artist} - {resolved.title}
+                  </p>
+                )}
+              </div>
+            );
+          })}
         </div>
 
         {/* Challenge song dropdowns */}
@@ -165,63 +343,100 @@ export function StepGameConfig({
           <div className="flex items-center justify-between">
             <label className={labelClass}>Challenge Songs</label>
             <span className="text-sm text-slate-500">
-              Challenge songs: {selectedChallengeCount}/{CHALLENGE_SLOT_COUNT} selected
+              Challenge songs: {selectedChallengeCount}/{CHALLENGE_SLOT_COUNT}{" "}
+              selected
             </span>
           </div>
 
           {Array.from({ length: CHALLENGE_SLOT_COUNT }, (_, i) => {
-            // For each challenge slot, exclude: introSong + all other challenge selections (not this slot)
-            const otherChallengeValues = challengeSongs.filter((_, j) => j !== i);
-            const excludeValues = [introSong, ...otherChallengeValues];
-            const available = getAvailableOptions(parsed.songs, excludeValues);
-            const currentValue = challengeSongs[i] ?? "";
+            const otherChallengeValues = challengeSongs
+              .filter((_, j) => j !== i)
+              .map((c) => c.value);
+            const available = getAvailableOptions(
+              parsed.songs,
+              otherChallengeValues
+            );
+            const current = challengeSongs[i] ?? {
+              value: "",
+              type: "sing-along" as const,
+            };
 
             return (
-              <div key={i}>
-                <label className={`${labelClass} text-sm`}>
-                  Challenge Song {i + 1}
-                </label>
-                <select
-                  className={selectClass}
-                  value={currentValue}
-                  onChange={(e) => {
-                    const updated = [...challengeSongs];
-                    // Ensure array is long enough
-                    while (updated.length <= i) updated.push("");
-                    updated[i] = e.target.value;
-                    onChallengeSongs(updated);
-                  }}
-                  disabled={!parsed.songs.length}
-                >
-                  {!parsed.songs.length ? (
-                    <option value="">Add songs first</option>
-                  ) : (
-                    <option value="">None</option>
-                  )}
-                  {available.map((song) => {
-                    const value = makeSongSelectionValue(song);
-                    return (
-                      <option key={value} value={value}>
-                        {songLabel(song)}
-                      </option>
-                    );
-                  })}
-                  {/* Keep current selection visible even if filtered out (prevents jump) */}
-                  {currentValue &&
-                    !available.some(
-                      (s) => makeSongSelectionValue(s) === currentValue
-                    ) && (
-                      <option key={currentValue} value={currentValue}>
-                        {currentValue.replace("|||", " - ")} (selected elsewhere)
-                      </option>
+              <div key={i} className="flex gap-2 items-end">
+                <div className="w-36 shrink-0">
+                  <label className={`${labelClass} text-sm`}>Type</label>
+                  <select
+                    className={selectClass}
+                    value={current.type}
+                    onChange={(e) => {
+                      const updated = [...challengeSongs];
+                      while (updated.length <= i)
+                        updated.push({
+                          value: "",
+                          type: "sing-along" as const,
+                        });
+                      updated[i] = {
+                        ...updated[i],
+                        type: e.target.value as "sing-along" | "dance-along",
+                      };
+                      onChallengeSongs(updated);
+                    }}
+                    disabled={!parsed.songs.length}
+                  >
+                    <option value="sing-along">Sing Along</option>
+                    <option value="dance-along">Dance Along</option>
+                  </select>
+                </div>
+                <div className="flex-1">
+                  <label className={`${labelClass} text-sm`}>
+                    Challenge Song {i + 1}
+                  </label>
+                  <select
+                    className={selectClass}
+                    value={current.value}
+                    onChange={(e) => {
+                      const updated = [...challengeSongs];
+                      while (updated.length <= i)
+                        updated.push({
+                          value: "",
+                          type: "sing-along" as const,
+                        });
+                      updated[i] = { ...updated[i], value: e.target.value };
+                      onChallengeSongs(updated);
+                    }}
+                    disabled={!parsed.songs.length}
+                  >
+                    {!parsed.songs.length ? (
+                      <option value="">Add songs first</option>
+                    ) : (
+                      <option value="">None</option>
                     )}
-                </select>
+                    {available.map((song) => {
+                      const value = makeSongSelectionValue(song);
+                      return (
+                        <option key={value} value={value}>
+                          {songLabel(song)}
+                        </option>
+                      );
+                    })}
+                    {current.value &&
+                      !available.some(
+                        (s) => makeSongSelectionValue(s) === current.value
+                      ) && (
+                        <option key={current.value} value={current.value}>
+                          {current.value.replace("|||", " - ")} (selected
+                          elsewhere)
+                        </option>
+                      )}
+                  </select>
+                </div>
               </div>
             );
           })}
 
           <p className={helpClass}>
-            At least 1 challenge song required. These songs play for 90 seconds instead of 60.
+            At least 1 challenge song required. These songs play for 90 seconds
+            instead of 60.
           </p>
         </div>
       </div>

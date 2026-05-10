@@ -8,7 +8,7 @@ import { StepIndicator } from "@/components/ui/StepIndicator";
 import { formatEventDateDisplay } from "@/lib/eventDate";
 import { DEFAULT_GAME_THEME, MAX_SONGS_PER_GAME, makeSongSelectionValue } from "@/lib/gameInput";
 import { exportLiveSessionJson, upsertLiveSession } from "@/lib/live/sessionApi";
-import { DEFAULT_REVEAL_CONFIG, LIVE_SESSION_VERSION, type LiveSessionV1 } from "@/lib/live/types";
+import { DEFAULT_REVEAL_CONFIG, LIVE_SESSION_VERSION, type IntroSong, type LiveSessionV1 } from "@/lib/live/types";
 import { parseSongListText } from "@/lib/parser";
 import type { Song } from "@/lib/types";
 import { sanitizeFilenamePart } from "@/lib/utils";
@@ -33,6 +33,17 @@ type SpotifyPlaylistResult = {
   addedCount: number;
   notFoundCount: number;
   notFound: Array<{ artist: string; title: string }>;
+};
+
+type ChallengeEntry = { value: string; type: "sing-along" | "dance-along" };
+
+type PlaylistPhaseResult = {
+  gameNumber: 1 | 2;
+  playlistId: string;
+  playlistUrl: string;
+  addedCount: number;
+  totalSongs: number;
+  notFoundSongs: Array<{ artist: string; title: string }>;
 };
 
 function todayIso(): string {
@@ -80,18 +91,22 @@ export default function PrepPage() {
   // Step 1 fields
   const [game1Theme, setGame1Theme] = useState<string>(DEFAULT_GAME_THEME);
   const [game1SongsText, setGame1SongsText] = useState<string>("");
-  const [game1ChallengeSongs, setGame1ChallengeSongs] = useState<string[]>([]);
-  const [game1IntroSong, setGame1IntroSong] = useState<string>("");
+  const [game1ChallengeSongs, setGame1ChallengeSongs] = useState<ChallengeEntry[]>(
+    Array(5).fill(null).map(() => ({ value: "", type: "sing-along" as const }))
+  );
+  const [game1IntroSongs, setGame1IntroSongs] = useState<IntroSong[]>([]);
 
   // Step 2 fields
   const [game2Theme, setGame2Theme] = useState<string>(DEFAULT_GAME_THEME);
   const [game2SongsText, setGame2SongsText] = useState<string>("");
-  const [game2ChallengeSongs, setGame2ChallengeSongs] = useState<string[]>([]);
-  const [game2IntroSong, setGame2IntroSong] = useState<string>("");
+  const [game2ChallengeSongs, setGame2ChallengeSongs] = useState<ChallengeEntry[]>(
+    Array(5).fill(null).map(() => ({ value: "", type: "sing-along" as const }))
+  );
+  const [game2IntroSongs, setGame2IntroSongs] = useState<IntroSong[]>([]);
 
   // Legacy single challenge song (backward compat — derived from first element)
-  const game1ChallengeSong = game1ChallengeSongs[0] ?? "";
-  const game2ChallengeSong = game2ChallengeSongs[0] ?? "";
+  const game1ChallengeSong = game1ChallengeSongs[0]?.value ?? "";
+  const game2ChallengeSong = game2ChallengeSongs[0]?.value ?? "";
 
   // Step 3 state
   const [error, setError] = useState<string>("");
@@ -103,6 +118,9 @@ export default function PrepPage() {
   const [spotifyResult, setSpotifyResult] = useState<SpotifyPlaylistResult[] | null>(null);
   const [spotifyCallbackUrl, setSpotifyCallbackUrl] = useState<string>("/api/spotify/callback");
   const [liveSessionNotice, setLiveSessionNotice] = useState<string>("");
+  const [playlistResults, setPlaylistResults] = useState<PlaylistPhaseResult[] | null>(null);
+  const [playlistsCreated, setPlaylistsCreated] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const pendingAutoSave = useRef(false);
   const saveLiveSessionRef = useRef<() => Promise<void>>();
 
@@ -120,56 +138,56 @@ export default function PrepPage() {
   // Auto-select first challenge song & prune stale selections for Game 1
   useEffect(() => {
     if (!parsedGame1.songs.length) {
-      if (game1ChallengeSongs.length) setGame1ChallengeSongs([]);
-      if (game1IntroSong) setGame1IntroSong("");
+      if (game1ChallengeSongs.some((c) => c.value)) {
+        setGame1ChallengeSongs(
+          Array(5).fill(null).map(() => ({ value: "", type: "sing-along" as const }))
+        );
+      }
       return;
     }
     const validValues = new Set(parsedGame1.songs.map(makeSongSelectionValue));
 
-    // Prune intro if stale
-    if (game1IntroSong && !validValues.has(game1IntroSong)) {
-      setGame1IntroSong("");
-    }
+    const pruned = game1ChallengeSongs.map((c) =>
+      c.value && validValues.has(c.value) ? c : { ...c, value: "" }
+    );
+    const prunedChanged = pruned.some((c, i) => c.value !== game1ChallengeSongs[i]?.value);
 
-    // Prune challenge songs that are no longer in the song list
-    const pruned = game1ChallengeSongs.map((v) => (v && validValues.has(v) ? v : ""));
-    const prunedChanged = pruned.some((v, i) => v !== (game1ChallengeSongs[i] ?? ""));
-
-    if (!pruned.some((v) => v)) {
-      // No valid selections remain — auto-select first song in slot 0
+    if (!pruned.some((c) => c.value)) {
       const autoFirst = makeSongSelectionValue(parsedGame1.songs[0] as Song);
-      setGame1ChallengeSongs([autoFirst]);
+      const reset: ChallengeEntry[] = Array(5).fill(null).map(() => ({ value: "", type: "sing-along" as const }));
+      reset[0] = { value: autoFirst, type: "sing-along" };
+      setGame1ChallengeSongs(reset);
     } else if (prunedChanged) {
       setGame1ChallengeSongs(pruned);
     }
-  }, [parsedGame1.songs, game1ChallengeSongs, game1IntroSong]);
+  }, [parsedGame1.songs, game1ChallengeSongs]);
 
   // Auto-select first challenge song & prune stale selections for Game 2
   useEffect(() => {
     if (!parsedGame2.songs.length) {
-      if (game2ChallengeSongs.length) setGame2ChallengeSongs([]);
-      if (game2IntroSong) setGame2IntroSong("");
+      if (game2ChallengeSongs.some((c) => c.value)) {
+        setGame2ChallengeSongs(
+          Array(5).fill(null).map(() => ({ value: "", type: "sing-along" as const }))
+        );
+      }
       return;
     }
     const validValues = new Set(parsedGame2.songs.map(makeSongSelectionValue));
 
-    // Prune intro if stale
-    if (game2IntroSong && !validValues.has(game2IntroSong)) {
-      setGame2IntroSong("");
-    }
+    const pruned = game2ChallengeSongs.map((c) =>
+      c.value && validValues.has(c.value) ? c : { ...c, value: "" }
+    );
+    const prunedChanged = pruned.some((c, i) => c.value !== game2ChallengeSongs[i]?.value);
 
-    // Prune challenge songs that are no longer in the song list
-    const pruned = game2ChallengeSongs.map((v) => (v && validValues.has(v) ? v : ""));
-    const prunedChanged = pruned.some((v, i) => v !== (game2ChallengeSongs[i] ?? ""));
-
-    if (!pruned.some((v) => v)) {
-      // No valid selections remain — auto-select first song in slot 0
+    if (!pruned.some((c) => c.value)) {
       const autoFirst = makeSongSelectionValue(parsedGame2.songs[0] as Song);
-      setGame2ChallengeSongs([autoFirst]);
+      const reset: ChallengeEntry[] = Array(5).fill(null).map(() => ({ value: "", type: "sing-along" as const }));
+      reset[0] = { value: autoFirst, type: "sing-along" };
+      setGame2ChallengeSongs(reset);
     } else if (prunedChanged) {
       setGame2ChallengeSongs(pruned);
     }
-  }, [parsedGame2.songs, game2ChallengeSongs, game2IntroSong]);
+  }, [parsedGame2.songs, game2ChallengeSongs]);
 
   useEffect(() => {
     const eventDateDisplay = formatEventDateDisplay(eventDate) || eventDate || todayIso();
@@ -203,7 +221,7 @@ export default function PrepPage() {
       return false;
     if (parsedGame1.combinedPool.length < 25) return false;
     if (parsedGame2.combinedPool.length < 25) return false;
-    if (!game1ChallengeSongs.some(Boolean) || !game2ChallengeSongs.some(Boolean)) return false;
+    if (!game1ChallengeSongs.some((c) => c.value) || !game2ChallengeSongs.some((c) => c.value)) return false;
     return true;
   }, [
     countInput,
@@ -225,17 +243,27 @@ export default function PrepPage() {
     form.set("game2_songs", game2SongsText);
     form.set("game1_challenge_song", game1ChallengeSong);
     form.set("game2_challenge_song", game2ChallengeSong);
-    // Multi-challenge songs (JSON array)
-    form.set("game1_challenge_songs", JSON.stringify(game1ChallengeSongs.filter(Boolean)));
-    form.set("game2_challenge_songs", JSON.stringify(game2ChallengeSongs.filter(Boolean)));
-    // Intro songs
-    if (game1IntroSong) form.set("game1_intro_song", game1IntroSong);
-    if (game2IntroSong) form.set("game2_intro_song", game2IntroSong);
+    const g1ChallengeValues = game1ChallengeSongs.filter((c) => c.value).map((c) => c.value);
+    const g2ChallengeValues = game2ChallengeSongs.filter((c) => c.value).map((c) => c.value);
+    form.set("game1_challenge_songs", JSON.stringify(g1ChallengeValues));
+    form.set("game2_challenge_songs", JSON.stringify(g2ChallengeValues));
+    const g1ChallengeTypes = game1ChallengeSongs.filter((c) => c.value).map((c) => c.type);
+    const g2ChallengeTypes = game2ChallengeSongs.filter((c) => c.value).map((c) => c.type);
+    form.set("game1_challenge_song_types", g1ChallengeTypes.join(","));
+    form.set("game2_challenge_song_types", g2ChallengeTypes.join(","));
+    if (game1IntroSongs.length) form.set("game1_intro_songs", JSON.stringify(game1IntroSongs));
+    if (game2IntroSongs.length) form.set("game2_intro_songs", JSON.stringify(game2IntroSongs));
     if (livePlaylistByGame?.game1.playlistId) {
       form.set("game1_playlist_id", livePlaylistByGame.game1.playlistId);
     }
     if (livePlaylistByGame?.game2.playlistId) {
       form.set("game2_playlist_id", livePlaylistByGame.game2.playlistId);
+    }
+    if (playlistResults) {
+      const g1Playlist = playlistResults.find((p) => p.gameNumber === 1);
+      const g2Playlist = playlistResults.find((p) => p.gameNumber === 2);
+      if (g1Playlist) form.set("spotify_playlist_id_game1", g1Playlist.playlistId);
+      if (g2Playlist) form.set("spotify_playlist_id_game2", g2Playlist.playlistId);
     }
     if (selectedBrandId) {
       form.set("brand_id", selectedBrandId);
@@ -271,9 +299,12 @@ export default function PrepPage() {
           addedCount: game1.addedCount,
           challengeSongArtist: parseChallengeSongSelection(game1ChallengeSong).artist,
           challengeSongTitle: parseChallengeSongSelection(game1ChallengeSong).title,
-          challengeSongs: game1ChallengeSongs.filter(Boolean).map((s) => parseChallengeSongSelection(s)),
-          introSongArtist: game1IntroSong ? parseChallengeSongSelection(game1IntroSong).artist : undefined,
-          introSongTitle: game1IntroSong ? parseChallengeSongSelection(game1IntroSong).title : undefined,
+          challengeSongs: game1ChallengeSongs
+            .filter((c) => c.value)
+            .map((c) => ({ ...parseChallengeSongSelection(c.value), type: c.type })),
+          introSongs: game1IntroSongs.length > 0 ? game1IntroSongs : undefined,
+          introSongArtist: game1IntroSongs[0]?.artist,
+          introSongTitle: game1IntroSongs[0]?.title,
         },
         {
           gameNumber: 2,
@@ -285,9 +316,12 @@ export default function PrepPage() {
           addedCount: game2.addedCount,
           challengeSongArtist: parseChallengeSongSelection(game2ChallengeSong).artist,
           challengeSongTitle: parseChallengeSongSelection(game2ChallengeSong).title,
-          challengeSongs: game2ChallengeSongs.filter(Boolean).map((s) => parseChallengeSongSelection(s)),
-          introSongArtist: game2IntroSong ? parseChallengeSongSelection(game2IntroSong).artist : undefined,
-          introSongTitle: game2IntroSong ? parseChallengeSongSelection(game2IntroSong).title : undefined,
+          challengeSongs: game2ChallengeSongs
+            .filter((c) => c.value)
+            .map((c) => ({ ...parseChallengeSongSelection(c.value), type: c.type })),
+          introSongs: game2IntroSongs.length > 0 ? game2IntroSongs : undefined,
+          introSongArtist: game2IntroSongs[0]?.artist,
+          introSongTitle: game2IntroSongs[0]?.title,
         },
       ],
       prepData: {
@@ -298,10 +332,8 @@ export default function PrepPage() {
         game1ChallengeSong,
         game2ChallengeSong,
         cardCount: Number.isFinite(count) ? count : 40,
-        game1ChallengeSongs: game1ChallengeSongs.filter(Boolean),
-        game2ChallengeSongs: game2ChallengeSongs.filter(Boolean),
-        game1IntroSong: game1IntroSong || undefined,
-        game2IntroSong: game2IntroSong || undefined,
+        game1ChallengeSongs: game1ChallengeSongs.filter((c) => c.value).map((c) => c.value),
+        game2ChallengeSongs: game2ChallengeSongs.filter((c) => c.value).map((c) => c.value),
       },
       brandId: selectedBrandId ?? undefined,
     };
@@ -398,96 +430,6 @@ export default function PrepPage() {
       downloadBlob(blob, filename);
     } catch (err: any) {
       setError(err?.message ?? "Failed to generate output bundle.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError("");
-    setQrNotice("");
-    setSpotifyResult(null);
-    setLiveSessionNotice("");
-    setBusy(true);
-    try {
-      const count = Number.parseInt(countInput, 10);
-      if (!Number.isFinite(count) || count < 1 || count > 1000) {
-        throw new Error("Cards per game must be a whole number between 1 and 1000.");
-      }
-
-      const pdfForm = buildBaseFormData();
-      pdfForm.set("count", String(count));
-      const spotifyForm = buildBaseFormData();
-
-      let bundleError: string | null = null;
-      const bundlePromise = (async () => {
-        try {
-          const res = await fetch("/api/generate", { method: "POST", body: pdfForm });
-          if (!res.ok) {
-            const msg = await res.text();
-            throw new Error(msg || "Failed to generate output bundle.");
-          }
-
-          const qrStatus = res.headers.get("x-music-bingo-qr-status");
-          const requestedRaw = res.headers.get("x-music-bingo-events-requested");
-          const eventsCount = res.headers.get("x-music-bingo-events-count");
-          const eventsWithUrl = res.headers.get("x-music-bingo-events-with-url");
-          const qrError = res.headers.get("x-music-bingo-qr-error");
-          const expectedEvents = (() => {
-            const n = requestedRaw ? Number.parseInt(requestedRaw, 10) : 4;
-            return Number.isFinite(n) && n > 0 ? n : 4;
-          })();
-
-          if (qrStatus && qrStatus !== "ok") {
-            if (qrStatus === "missing_config") {
-              setQrNotice("Upcoming event QRs: management API not configured.");
-            } else if (qrStatus === "no_events") {
-              setQrNotice("Upcoming event QRs: no upcoming events found after this date (placeholders used).");
-            } else if (qrStatus === "error") {
-              setQrNotice(`Upcoming event QRs: ${qrError || "failed to fetch events"} (placeholders used).`);
-            }
-          } else if (eventsWithUrl && eventsWithUrl !== String(expectedEvents)) {
-            const resolvedCount = Number.parseInt(eventsWithUrl, 10);
-            if (Number.isFinite(resolvedCount) && resolvedCount >= 0 && resolvedCount < expectedEvents) {
-              setQrNotice(
-                `Upcoming event QRs: only ${resolvedCount}/${expectedEvents} event URLs resolved (placeholders used).`
-              );
-            }
-          } else if (eventsCount && eventsCount !== String(expectedEvents)) {
-            const foundCount = Number.parseInt(eventsCount, 10);
-            if (Number.isFinite(foundCount) && foundCount >= 0 && foundCount < expectedEvents) {
-              setQrNotice(
-                `Upcoming event QRs: only ${foundCount}/${expectedEvents} upcoming events found (placeholders used).`
-              );
-            }
-          }
-
-          const blob = await res.blob();
-          const filename =
-            res.headers.get("content-disposition")?.match(/filename="(.+)"/)?.[1] ??
-            "music-bingo-event-pack.zip";
-          downloadBlob(blob, filename);
-        } catch (err: any) {
-          bundleError = err?.message ?? "Failed to generate output bundle.";
-        }
-      })();
-
-      const spotifyPromise = (async () => {
-        if (!spotifyConnected) {
-          const ok = await connectSpotify({ clearError: false });
-          if (!ok) return;
-        }
-        await createSpotifyPlaylists({ form: spotifyForm, clearError: false });
-      })();
-
-      await Promise.all([bundlePromise, spotifyPromise]);
-      if (!bundleError) {
-        pendingAutoSave.current = true;
-      }
-      if (bundleError) setError(bundleError);
-    } catch (err: any) {
-      setError(err?.message ?? "Something went wrong.");
     } finally {
       setBusy(false);
     }
@@ -605,6 +547,147 @@ export default function PrepPage() {
     }
   }
 
+  async function handleCreatePlaylists() {
+    setError("");
+    setQrNotice("");
+    setSpotifyResult(null);
+    setLiveSessionNotice("");
+    setBusy(true);
+    try {
+      if (!spotifyConnected) {
+        const ok = await connectSpotify({ clearError: false });
+        if (!ok) return;
+      }
+      const form = buildBaseFormData();
+      await createSpotifyPlaylists({ form, clearError: false });
+
+      const latestResult = await new Promise<SpotifyPlaylistResult[] | null>((resolve) => {
+        setSpotifyResult((prev) => {
+          resolve(prev);
+          return prev;
+        });
+      });
+
+      if (latestResult && latestResult.length > 0) {
+        const mapped: PlaylistPhaseResult[] = latestResult
+          .filter((r): r is SpotifyPlaylistResult & { playlistId: string; playlistUrl: string } =>
+            r.playlistId !== null && r.playlistUrl !== null && (r.gameNumber === 1 || r.gameNumber === 2)
+          )
+          .map((r) => ({
+            gameNumber: r.gameNumber as 1 | 2,
+            playlistId: r.playlistId,
+            playlistUrl: r.playlistUrl,
+            addedCount: r.addedCount,
+            totalSongs: r.totalSongs,
+            notFoundSongs: r.notFound,
+          }));
+        if (mapped.length > 0) {
+          setPlaylistResults(mapped);
+          setPlaylistsCreated(true);
+        }
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to create playlists.";
+      setError(message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleGenerateEventPack() {
+    setError("");
+    setQrNotice("");
+    setBusy(true);
+    try {
+      const count = Number.parseInt(countInput, 10);
+      if (!Number.isFinite(count) || count < 1 || count > 1000) {
+        throw new Error("Cards per game must be a whole number between 1 and 1000.");
+      }
+
+      const pdfForm = buildBaseFormData();
+      pdfForm.set("count", String(count));
+
+      const res = await fetch("/api/generate", { method: "POST", body: pdfForm });
+      if (!res.ok) {
+        const msg = await res.text();
+        throw new Error(msg || "Failed to generate output bundle.");
+      }
+
+      const qrStatus = res.headers.get("x-music-bingo-qr-status");
+      const requestedRaw = res.headers.get("x-music-bingo-events-requested");
+      const eventsWithUrl = res.headers.get("x-music-bingo-events-with-url");
+      const eventsCount = res.headers.get("x-music-bingo-events-count");
+      const qrError = res.headers.get("x-music-bingo-qr-error");
+      const expectedEvents = (() => {
+        const n = requestedRaw ? Number.parseInt(requestedRaw, 10) : 4;
+        return Number.isFinite(n) && n > 0 ? n : 4;
+      })();
+
+      if (qrStatus && qrStatus !== "ok") {
+        if (qrStatus === "missing_config") {
+          setQrNotice("Upcoming event QRs: management API not configured.");
+        } else if (qrStatus === "no_events") {
+          setQrNotice("Upcoming event QRs: no upcoming events found after this date (placeholders used).");
+        } else if (qrStatus === "error") {
+          setQrNotice(`Upcoming event QRs: ${qrError || "failed to fetch events"} (placeholders used).`);
+        }
+      } else if (eventsWithUrl && eventsWithUrl !== String(expectedEvents)) {
+        const resolvedCount = Number.parseInt(eventsWithUrl, 10);
+        if (Number.isFinite(resolvedCount) && resolvedCount >= 0 && resolvedCount < expectedEvents) {
+          setQrNotice(
+            `Upcoming event QRs: only ${resolvedCount}/${expectedEvents} event URLs resolved (placeholders used).`
+          );
+        }
+      } else if (eventsCount && eventsCount !== String(expectedEvents)) {
+        const foundCount = Number.parseInt(eventsCount, 10);
+        if (Number.isFinite(foundCount) && foundCount >= 0 && foundCount < expectedEvents) {
+          setQrNotice(
+            `Upcoming event QRs: only ${foundCount}/${expectedEvents} upcoming events found (placeholders used).`
+          );
+        }
+      }
+
+      const blob = await res.blob();
+      const filename =
+        res.headers.get("content-disposition")?.match(/filename="(.+)"/)?.[1] ??
+        "music-bingo-event-pack.zip";
+      downloadBlob(blob, filename);
+
+      pendingAutoSave.current = true;
+      if (livePlaylistByGame) {
+        saveLiveSessionRef.current?.();
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to generate output bundle.";
+      setError(message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRefreshFromSpotify() {
+    setRefreshing(true);
+    try {
+      if (!playlistResults) return;
+      const updated = await Promise.all(
+        playlistResults.map(async (pr) => {
+          const res = await fetch(`/api/spotify/playlist-tracks/${pr.playlistId}`);
+          if (!res.ok) return pr;
+          const data = await res.json();
+          return {
+            ...pr,
+            addedCount: Number(data.total ?? pr.addedCount),
+            totalSongs: Number(data.total ?? pr.totalSongs),
+            notFoundSongs: [],
+          };
+        })
+      );
+      setPlaylistResults(updated);
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
   function goToStep(step: number) {
     setCurrentStep(step);
     window.scrollTo(0, 0);
@@ -659,8 +742,9 @@ export default function PrepPage() {
             onSongsText={setGame1SongsText}
             challengeSongs={game1ChallengeSongs}
             onChallengeSongs={setGame1ChallengeSongs}
-            introSong={game1IntroSong}
-            onIntroSong={setGame1IntroSong}
+            introSongs={game1IntroSongs}
+            onIntroSongsChange={setGame1IntroSongs}
+            spotifyConnected={spotifyConnected}
             parsed={parsedGame1}
             onBack={() => goToStep(0)}
             onNext={() => goToStep(2)}
@@ -678,8 +762,9 @@ export default function PrepPage() {
             onSongsText={setGame2SongsText}
             challengeSongs={game2ChallengeSongs}
             onChallengeSongs={setGame2ChallengeSongs}
-            introSong={game2IntroSong}
-            onIntroSong={setGame2IntroSong}
+            introSongs={game2IntroSongs}
+            onIntroSongsChange={setGame2IntroSongs}
+            spotifyConnected={spotifyConnected}
             parsed={parsedGame2}
             onBack={() => goToStep(1)}
             onNext={() => goToStep(3)}
@@ -697,6 +782,8 @@ export default function PrepPage() {
             spotifyCallbackUrl={spotifyCallbackUrl}
             spotifyResult={spotifyResult}
             livePlaylistByGame={livePlaylistByGame}
+            playlistsCreated={playlistsCreated}
+            playlistResults={playlistResults}
             liveSessionName={liveSessionName}
             onLiveSessionName={(v) => {
               setLiveSessionName(v);
@@ -705,13 +792,16 @@ export default function PrepPage() {
             liveSessionNotice={liveSessionNotice}
             error={error}
             qrNotice={qrNotice}
-            onSubmit={onSubmit}
+            onCreatePlaylists={() => void handleCreatePlaylists()}
+            onRefreshFromSpotify={() => void handleRefreshFromSpotify()}
+            onGenerateEventPack={() => void handleGenerateEventPack()}
             onDownloadOnly={() => void onDownloadOnly()}
             onConnectSpotify={() => void connectSpotify()}
             onDisconnectSpotify={() => void disconnectSpotify()}
             onSaveLiveSession={() => void saveLiveSession()}
             onExportLiveSession={() => void exportLiveSession()}
             onBack={() => goToStep(2)}
+            refreshing={refreshing}
           />
         )}
       </main>
