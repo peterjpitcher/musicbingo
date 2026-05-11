@@ -5,10 +5,10 @@ type ChallengeType = "sing-along" | "dance-along";
 function normalizeComparable(input: string): string {
   return input
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[̀-ͯ]/g, "")
     .toLowerCase()
     .replace(/&/g, " and ")
-    .replace(/['\u2019]/g, "")
+    .replace(/['’]/g, "")
     .replace(/[^a-z0-9]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();

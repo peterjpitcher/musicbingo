@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Events Back Page — B&W Print</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  body {
+    background: #1a1a1a;
+    margin: 0;
+    padding: 30px;
+    font-family: 'DM Sans', sans-serif;
+    color: #eee;
+  }
+  .design-label {
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #999;
+    margin-bottom: 6px;
+    text-align: center;
+  }
+  .design-desc {
+    font-size: 12px;
+    color: #666;
+    text-align: center;
+    margin-bottom: 12px;
+  }
+  .designs {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 40px;
+  }
+
+  .a4 {
+    width: 631px;
+    height: 446px;
+    background: #fff;
+    color: #000;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+  }
+
+  .page-inner {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 18px 24px 12px;
+  }
+
+  /* ========== MASTHEAD ========== */
+  .masthead {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    border-bottom: 2px solid #000;
+    padding-bottom: 6px;
+    margin-bottom: 10px;
+  }
+  .masthead-left {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+  .masthead h1 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 22px;
+    margin: 0;
+    letter-spacing: 0.5px;
+  }
+  .masthead .tagline {
+    font-size: 8px;
+    text-transform: uppercase;
+    letter-spacing: 2.5px;
+    font-weight: 600;
+    color: #555;
+  }
+  .masthead .website {
+    font-size: 7.5px;
+    color: #777;
+    letter-spacing: 0.5px;
+  }
+
+  /* ========== EVENTS BODY ========== */
+  .events-body {
+    flex: 1;
+    display: flex;
+    gap: 16px;
+    min-height: 0;
+  }
+
+  /* Featured next event */
+  .featured {
+    width: 190px;
+    flex-shrink: 0;
+    border: 2px solid #000;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+  }
+  .f-label {
+    font-size: 6px;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    font-weight: 700;
+    border-bottom: 1px solid #000;
+    padding-bottom: 4px;
+    margin-bottom: 8px;
+  }
+  .f-name {
+    font-family: 'DM Serif Display', serif;
+    font-size: 15px;
+    line-height: 1.2;
+    margin-bottom: 5px;
+  }
+  .f-date {
+    font-size: 7.5px;
+    font-weight: 600;
+    margin-bottom: 2px;
+  }
+  .f-price {
+    font-size: 7px;
+    color: #555;
+    margin-bottom: 8px;
+  }
+  .f-desc {
+    font-size: 7px;
+    line-height: 1.5;
+    color: #333;
+    flex: 1;
+  }
+  .f-bottom {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    margin-top: 8px;
+  }
+  .f-qr {
+    width: 42px; height: 42px;
+    border: 1.5px solid #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 5px;
+    color: #999;
+  }
+  .f-scan {
+    font-size: 5.5px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: #555;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    transform: rotate(180deg);
+  }
+
+  /* Event list */
+  .event-list {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  .event-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 5px 0;
+    border-bottom: 0.5px solid #ccc;
+  }
+  .event-row:last-child { border-bottom: none; }
+
+  .ev-date-block {
+    width: 38px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  .ev-day {
+    font-family: 'DM Serif Display', serif;
+    font-size: 20px;
+    line-height: 1;
+  }
+  .ev-month {
+    font-size: 6px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    font-weight: 700;
+  }
+  .ev-dow {
+    font-size: 5.5px;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .ev-divider {
+    width: 1px;
+    align-self: stretch;
+    background: #ddd;
+    flex-shrink: 0;
+  }
+
+  .ev-details { flex: 1; min-width: 0; }
+  .ev-name {
+    font-size: 8px;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+  .ev-meta {
+    font-size: 6px;
+    color: #666;
+    margin-top: 1px;
+  }
+  .ev-desc {
+    font-size: 6.5px;
+    color: #444;
+    line-height: 1.35;
+    margin-top: 2px;
+  }
+
+  .ev-qr {
+    width: 24px; height: 24px;
+    border: 1px solid #ccc;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 5px;
+    color: #aaa;
+  }
+
+  /* Footer */
+  .page-foot {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    padding-top: 5px;
+    border-top: 1px solid #ddd;
+    margin-top: 6px;
+    flex-shrink: 0;
+  }
+  .page-foot span {
+    font-size: 6.5px;
+    color: #888;
+    letter-spacing: 0.3px;
+  }
+</style>
+</head>
+<body>
+
+<div class="designs">
+  <div>
+    <div class="design-label">B&W Print-Friendly — Editorial</div>
+    <div class="design-desc">No fills, no block colour. Pure black & white with strong typography. Minimal ink usage.</div>
+    <div class="a4">
+      <div class="page-inner">
+        <div class="masthead">
+          <div class="masthead-left">
+            <h1>What's On</h1>
+            <span class="tagline">at The Anchor</span>
+          </div>
+          <span class="website">the-anchor.pub</span>
+        </div>
+
+        <div class="events-body">
+          <div class="featured">
+            <div class="f-label">Next Event</div>
+            <div class="f-name">Open Mic Night</div>
+            <div class="f-date">Saturday 25 April · 8:00 pm</div>
+            <div class="f-price">Free entry</div>
+            <div class="f-desc">Come down for a relaxed night of local performers, good vibes and live music at The Anchor. All welcome — whether you want to perform or just enjoy the atmosphere.</div>
+            <div class="f-bottom">
+              <div class="f-scan">Scan to book</div>
+              <div class="f-qr">QR</div>
+            </div>
+          </div>
+
+          <div class="event-list">
+            <div class="event-row">
+              <div class="ev-date-block"><div class="ev-dow">Wed</div><div class="ev-day">29</div><div class="ev-month">Apr</div></div>
+              <div class="ev-divider"></div>
+              <div class="ev-details">
+                <div class="ev-name">Cash Bingo</div>
+                <div class="ev-meta">7:00 pm · £3 per person</div>
+                <div class="ev-desc">10 games, loads of prizes and a final jackpot that gets bigger the more people play.</div>
+              </div>
+              <div class="ev-qr">QR</div>
+            </div>
+
+            <div class="event-row">
+              <div class="ev-date-block"><div class="ev-dow">Wed</div><div class="ev-day">6</div><div class="ev-month">May</div></div>
+              <div class="ev-divider"></div>
+              <div class="ev-details">
+                <div class="ev-name">Quiz Night</div>
+                <div class="ev-meta">7:00 pm · £3 per person</div>
+                <div class="ev-desc">Fun rounds, spot prizes and a £25 bar voucher for the winners.</div>
+              </div>
+              <div class="ev-qr">QR</div>
+            </div>
+
+            <div class="event-row">
+              <div class="ev-date-block"><div class="ev-dow">Wed</div><div class="ev-day">13</div><div class="ev-month">May</div></div>
+              <div class="ev-divider"></div>
+              <div class="ev-details">
+                <div class="ev-name">Music Bingo</div>
+                <div class="ev-meta">7:00 pm · Free entry</div>
+                <div class="ev-desc">Bring your singing voice and get ready for another brilliant night of tunes, laughs and prizes.</div>
+              </div>
+              <div class="ev-qr">QR</div>
+            </div>
+
+            <div class="event-row">
+              <div class="ev-date-block"><div class="ev-dow">Fri</div><div class="ev-day">15</div><div class="ev-month">May</div></div>
+              <div class="ev-divider"></div>
+              <div class="ev-details">
+                <div class="ev-name">Gavin & Stacey Quiz Night</div>
+                <div class="ev-meta">7:00 pm · £3 per person</div>
+                <div class="ev-desc">Brush up on your Barry Island knowledge and come ready for a tidy night.</div>
+              </div>
+              <div class="ev-qr">QR</div>
+            </div>
+
+            <div class="event-row">
+              <div class="ev-date-block"><div class="ev-dow">Sat</div><div class="ev-day">17</div><div class="ev-month">May</div></div>
+              <div class="ev-divider"></div>
+              <div class="ev-details">
+                <div class="ev-name">Live Music: The Retros</div>
+                <div class="ev-meta">8:30 pm · Free entry</div>
+                <div class="ev-desc">Classic rock and pop covers from one of Surrey's best party bands.</div>
+              </div>
+              <div class="ev-qr">QR</div>
+            </div>
+
+            <div class="event-row">
+              <div class="ev-date-block"><div class="ev-dow">Sun</div><div class="ev-day">18</div><div class="ev-month">May</div></div>
+              <div class="ev-divider"></div>
+              <div class="ev-details">
+                <div class="ev-name">Sunday Roast & Jazz</div>
+                <div class="ev-meta">12:00 pm · Menu prices</div>
+                <div class="ev-desc">Enjoy a classic Sunday roast with live jazz from 1pm. Book your table.</div>
+              </div>
+              <div class="ev-qr">QR</div>
+            </div>
+
+            <div class="event-row">
+              <div class="ev-date-block"><div class="ev-dow">Mon</div><div class="ev-day">26</div><div class="ev-month">May</div></div>
+              <div class="ev-divider"></div>
+              <div class="ev-details">
+                <div class="ev-name">Bank Holiday BBQ</div>
+                <div class="ev-meta">2:00 pm · Free entry</div>
+                <div class="ev-desc">Beer garden BBQ with drinks offers, kids activities and live acoustic music all afternoon.</div>
+              </div>
+              <div class="ev-qr">QR</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="page-foot">
+          <span>the-anchor.pub</span>
+          <span>·</span>
+          <span>@theanchorleatherhead</span>
+          <span>·</span>
+          <span>01372 372 881</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

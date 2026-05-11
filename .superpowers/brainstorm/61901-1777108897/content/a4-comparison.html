@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>A4 Layout Comparison</title>
+<style>
+  body {
+    background: #1a1a1a;
+    margin: 0;
+    padding: 20px;
+    font-family: Helvetica, Arial, sans-serif;
+    color: #eee;
+  }
+  h1 { text-align: center; font-size: 20px; margin-bottom: 4px; }
+  .subtitle { text-align: center; color: #999; font-size: 13px; margin-bottom: 20px; }
+
+  .comparison {
+    display: flex;
+    justify-content: center;
+    gap: 30px;
+    flex-wrap: wrap;
+  }
+  .option-wrapper {
+    text-align: center;
+  }
+  .option-label {
+    font-size: 14px;
+    font-weight: bold;
+    margin-bottom: 8px;
+    color: #ccc;
+  }
+
+  /* A4 at 72 DPI: 595 x 842 points. Scale to fit on screen */
+  .a4-portrait {
+    width: 446px;   /* 595 * 0.75 */
+    height: 631px;  /* 842 * 0.75 */
+    background: #fff;
+    color: #000;
+    padding: 0;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    overflow: hidden;
+    position: relative;
+  }
+  .a4-landscape {
+    width: 631px;
+    height: 446px;
+    background: #fff;
+    color: #000;
+    padding: 0;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    overflow: hidden;
+    position: relative;
+  }
+
+  .page-inner {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 20px 22px 16px 22px;
+  }
+
+  .page-header {
+    text-align: center;
+    padding-bottom: 5px;
+    border-bottom: 1.5px solid #333;
+    flex-shrink: 0;
+    margin-bottom: 6px;
+  }
+  .page-header .title { font-size: 13px; font-weight: bold; letter-spacing: 1px; }
+  .page-header .theme { font-size: 8.5px; font-weight: bold; color: #555; margin-top: 1px; }
+  .page-header .date { font-size: 7.5px; color: #666; margin-top: 1px; }
+  .page-header-row { display: flex; align-items: center; justify-content: space-between; }
+  .logo-placeholder { width: 36px; height: 26px; border: 1px dashed #ccc; font-size: 5px; color: #999; display: flex; align-items: center; justify-content: center; }
+
+  .cards-grid-2x3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr 1fr;
+    gap: 7px 10px;
+    flex: 1;
+    min-height: 0;
+  }
+  .cards-grid-3x2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 7px 10px;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .card-slot {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .card-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    flex: 1;
+  }
+  .card-table td {
+    border: 1.2px solid #333;
+    text-align: center;
+    vertical-align: middle;
+    padding: 2px;
+    font-size: 7.5px;
+    line-height: 1.2;
+  }
+  .blank { background: #f0f0f0; }
+
+  /* Landscape gets slightly bigger text */
+  .a4-landscape .card-table td { font-size: 8.5px; }
+  .a4-landscape .page-header .title { font-size: 15px; }
+  .a4-landscape .page-header .theme { font-size: 9.5px; }
+  .a4-landscape .page-header .date { font-size: 8px; }
+
+  .page-footer {
+    display: flex;
+    justify-content: space-around;
+    padding-top: 5px;
+    border-top: 1px solid #ddd;
+    flex-shrink: 0;
+    margin-top: 6px;
+  }
+  .qr-block { text-align: center; }
+  .qr-box { width: 30px; height: 30px; border: 1px dashed #ccc; margin: 0 auto; font-size: 5px; color: #999; display: flex; align-items: center; justify-content: center; }
+  .qr-label { font-size: 5.5px; color: #666; margin-top: 1px; }
+  .a4-landscape .qr-box { width: 34px; height: 34px; }
+
+  .card-id { text-align: right; font-size: 5.5px; color: #999; margin-top: 2px; flex-shrink: 0; }
+
+  .verdict { margin-top: 24px; text-align: center; }
+  .verdict-text { font-size: 14px; color: #ccc; max-width: 700px; margin: 0 auto; line-height: 1.5; }
+</style>
+</head>
+<body>
+
+<h1>A4 Portrait vs Landscape</h1>
+<p class="subtitle">Both at true A4 proportions (scaled 75% to fit screen)</p>
+
+<div class="comparison">
+
+  <!-- PORTRAIT -->
+  <div class="option-wrapper">
+    <div class="option-label">A — Portrait</div>
+    <div class="a4-portrait">
+      <div class="page-inner">
+        <div class="page-header">
+          <div class="page-header-row">
+            <div class="logo-placeholder">Logo</div>
+            <div>
+              <div class="title">MUSIC BINGO</div>
+              <div class="theme">The best of the 70's to today!</div>
+              <div class="date">Friday, April 24th 2026</div>
+            </div>
+            <div class="logo-placeholder">Logo</div>
+          </div>
+        </div>
+
+        <div class="cards-grid-2x3">
+          <div class="card-slot"><table class="card-table"><tr><td>Chappell Roan</td><td>Believe</td><td class="blank"></td><td>September</td><td>Dancing Queen</td></tr><tr><td>Shake It Off</td><td>Outkast</td><td>Firework</td><td class="blank"></td><td>Lady Gaga</td></tr><tr><td class="blank"></td><td>Wonderwall</td><td>Ed Sheeran</td><td>Mr. Brightside</td><td>Cher</td></tr></table></div>
+          <div class="card-slot"><table class="card-table"><tr><td>Hey Ya!</td><td class="blank"></td><td>Rihanna</td><td>Jolene</td><td>ABBA</td></tr><tr><td>Taylor Swift</td><td>Bad Romance</td><td>Oasis</td><td class="blank"></td><td>Flowers</td></tr><tr><td>Katy Perry</td><td>The Best</td><td class="blank"></td><td>Spice Girls</td><td>Angels</td></tr></table></div>
+          <div class="card-slot"><table class="card-table"><tr><td>Robbie Williams</td><td>Like a Prayer</td><td>Madonna</td><td class="blank"></td><td>Superstition</td></tr><tr><td class="blank"></td><td>Queen</td><td>Espresso</td><td>Go Your Own Way</td><td>Dolly Parton</td></tr><tr><td>Pink Pony Club</td><td>Avicii</td><td>Wannabe</td><td>Bon Jovi</td><td class="blank"></td></tr></table></div>
+          <div class="card-slot"><table class="card-table"><tr><td>Fleetwood Mac</td><td class="blank"></td><td>Happy</td><td>Rick Astley</td><td>We Found Love</td></tr><tr><td>I Will Survive</td><td>Miley Cyrus</td><td>Steps</td><td>Uptown Funk</td><td class="blank"></td></tr><tr><td>Crocodile Rock</td><td>The Weeknd</td><td class="blank"></td><td>Like a Prayer</td><td>Cyndi Lauper</td></tr></table></div>
+          <div class="card-slot"><table class="card-table"><tr><td>Britney Spears</td><td>Wake Me Up</td><td>Harry Styles</td><td class="blank"></td><td>Shape of You</td></tr><tr><td class="blank"></td><td>Don't Stop Me Now</td><td>Sabrina Carpenter</td><td>Blinding Lights</td><td>Tina Turner</td></tr><tr><td>Livin' on a Prayer</td><td>Earth, Wind & Fire</td><td class="blank"></td><td>House of Pain</td><td>Don't Start Now</td></tr></table></div>
+          <div class="card-slot"><table class="card-table"><tr><td>Elton John</td><td>Dreamer</td><td>Kings of Leon</td><td>Valerie</td><td class="blank"></td></tr><tr><td>Bee Gees</td><td class="blank"></td><td>Jump Around</td><td>Wham!</td><td>Crazy in Love</td></tr><tr><td>5, 6, 7, 8</td><td>Backstreet Boys</td><td>Stevie Wonder</td><td class="blank"></td><td>Le Freak</td></tr></table></div>
+        </div>
+
+        <div class="page-footer">
+          <div class="qr-block"><div class="qr-box">QR</div><div class="qr-label">Open Mic Night</div></div>
+          <div class="qr-block"><div class="qr-box">QR</div><div class="qr-label">Cash Bingo</div></div>
+          <div class="qr-block"><div class="qr-box">QR</div><div class="qr-label">Quiz Night</div></div>
+          <div class="qr-block"><div class="qr-box">QR</div><div class="qr-label">Music Bingo</div></div>
+        </div>
+        <div class="card-id">Card 001 • a1b2c3d4e5</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LANDSCAPE -->
+  <div class="option-wrapper">
+    <div class="option-label">B — Landscape</div>
+    <div class="a4-landscape">
+      <div class="page-inner">
+        <div class="page-header">
+          <div class="page-header-row">
+            <div class="logo-placeholder">Logo</div>
+            <div>
+              <div class="title">MUSIC BINGO</div>
+              <div class="theme">The best of the 70's to today!</div>
+              <div class="date">Friday, April 24th 2026</div>
+            </div>
+            <div class="logo-placeholder">Logo</div>
+          </div>
+        </div>
+
+        <div class="cards-grid-3x2">
+          <div class="card-slot"><table class="card-table"><tr><td>Chappell Roan</td><td>Believe</td><td class="blank"></td><td>September</td><td>Dancing Queen</td></tr><tr><td>Shake It Off</td><td>Outkast</td><td>Firework</td><td class="blank"></td><td>Lady Gaga</td></tr><tr><td class="blank"></td><td>Wonderwall</td><td>Ed Sheeran</td><td>Mr. Brightside</td><td>Cher</td></tr></table></div>
+          <div class="card-slot"><table class="card-table"><tr><td>Hey Ya!</td><td class="blank"></td><td>Rihanna</td><td>Jolene</td><td>ABBA</td></tr><tr><td>Taylor Swift</td><td>Bad Romance</td><td>Oasis</td><td class="blank"></td><td>Flowers</td></tr><tr><td>Katy Perry</td><td>The Best</td><td class="blank"></td><td>Spice Girls</td><td>Angels</td></tr></table></div>
+          <div class="card-slot"><table class="card-table"><tr><td>Robbie Williams</td><td>Like a Prayer</td><td>Madonna</td><td class="blank"></td><td>Superstition</td></tr><tr><td class="blank"></td><td>Queen</td><td>Espresso</td><td>Go Your Own Way</td><td>Dolly Parton</td></tr><tr><td>Pink Pony Club</td><td>Avicii</td><td>Wannabe</td><td>Bon Jovi</td><td class="blank"></td></tr></table></div>
+          <div class="card-slot"><table class="card-table"><tr><td>Fleetwood Mac</td><td class="blank"></td><td>Happy</td><td>Rick Astley</td><td>We Found Love</td></tr><tr><td>I Will Survive</td><td>Miley Cyrus</td><td>Steps</td><td>Uptown Funk</td><td class="blank"></td></tr><tr><td>Crocodile Rock</td><td>The Weeknd</td><td class="blank"></td><td>Like a Prayer</td><td>Cyndi Lauper</td></tr></table></div>
+          <div class="card-slot"><table class="card-table"><tr><td>Britney Spears</td><td>Wake Me Up</td><td>Harry Styles</td><td class="blank"></td><td>Shape of You</td></tr><tr><td class="blank"></td><td>Don't Stop Me Now</td><td>Sabrina Carpenter</td><td>Blinding Lights</td><td>Tina Turner</td></tr><tr><td>Livin' on a Prayer</td><td>Earth, Wind & Fire</td><td class="blank"></td><td>House of Pain</td><td>Don't Start Now</td></tr></table></div>
+          <div class="card-slot"><table class="card-table"><tr><td>Elton John</td><td>Dreamer</td><td>Kings of Leon</td><td>Valerie</td><td class="blank"></td></tr><tr><td>Bee Gees</td><td class="blank"></td><td>Jump Around</td><td>Wham!</td><td>Crazy in Love</td></tr><tr><td>5, 6, 7, 8</td><td>Backstreet Boys</td><td>Stevie Wonder</td><td class="blank"></td><td>Le Freak</td></tr></table></div>
+        </div>
+
+        <div class="page-footer">
+          <div class="qr-block"><div class="qr-box">QR</div><div class="qr-label">Open Mic Night</div></div>
+          <div class="qr-block"><div class="qr-box">QR</div><div class="qr-label">Cash Bingo</div></div>
+          <div class="qr-block"><div class="qr-box">QR</div><div class="qr-label">Quiz Night</div></div>
+          <div class="qr-block"><div class="qr-box">QR</div><div class="qr-label">Music Bingo</div></div>
+        </div>
+        <div class="card-id">Card 001 • a1b2c3d4e5</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="verdict">
+  <div class="verdict-text">
+    <strong>Portrait (A)</strong> — taller cells, fits more text vertically per cell, but narrower columns.<br>
+    <strong>Landscape (B)</strong> — wider cells (3×2 grid), bigger font, more room for long names like "Earth, Wind & Fire" or "Livin' on a Prayer", but shorter cell height.
+  </div>
+</div>
+
+</body>
+</html>

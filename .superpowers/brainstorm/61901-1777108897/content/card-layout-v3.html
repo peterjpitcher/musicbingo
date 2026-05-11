@@ -1,0 +1,210 @@
+<h2>Full-page layout: maximising space</h2>
+<p class="subtitle">Cards stretch to fill available area between header and footer</p>
+
+<div class="mockup">
+  <div class="mockup-header">A4 page — cards fill the space</div>
+  <div class="mockup-body" style="padding:12px;background:#fff;max-width:480px;margin:0 auto;min-height:680px;display:flex;flex-direction:column;">
+
+    <!-- Page Header -->
+    <div style="text-align:center;margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid #333;flex-shrink:0;">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div style="width:50px;height:36px;border:1px dashed #ccc;font-size:7px;color:#999;display:flex;align-items:center;justify-content:center;">Logo</div>
+        <div>
+          <div style="font-size:18px;font-weight:bold;letter-spacing:1px;">MUSIC BINGO</div>
+          <div style="font-size:11px;font-weight:bold;color:#555;">The best of the 70's to today!</div>
+          <div style="font-size:10px;color:#666;margin-top:1px;">Friday, April 24th 2026</div>
+        </div>
+        <div style="width:50px;height:36px;border:1px dashed #ccc;font-size:7px;color:#999;display:flex;align-items:center;justify-content:center;">Logo</div>
+      </div>
+    </div>
+
+    <!-- 6 Cards: 2 columns × 3 rows — fills remaining vertical space -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr 1fr;gap:10px 12px;flex:1;">
+
+      <!-- Card 1 -->
+      <div style="display:flex;flex-direction:column;">
+        <table style="width:100%;border-collapse:collapse;table-layout:fixed;flex:1;">
+          <tr>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Chappell Roan</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Believe</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;background:#f0f0f0;"></td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">September</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Dancing Queen</td>
+          </tr>
+          <tr>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Shake It Off</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Outkast</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Firework</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;background:#f0f0f0;"></td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Lady Gaga</td>
+          </tr>
+          <tr>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;background:#f0f0f0;"></td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Wonderwall</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Ed Sheeran</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Mr. Brightside</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Cher</td>
+          </tr>
+        </table>
+      </div>
+
+      <!-- Card 2 -->
+      <div style="display:flex;flex-direction:column;">
+        <table style="width:100%;border-collapse:collapse;table-layout:fixed;flex:1;">
+          <tr>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Hey Ya!</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;background:#f0f0f0;"></td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Rihanna</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Jolene</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">ABBA</td>
+          </tr>
+          <tr>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Taylor Swift</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Bad Romance</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Oasis</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;background:#f0f0f0;"></td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Flowers</td>
+          </tr>
+          <tr>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Katy Perry</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">The Best</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;background:#f0f0f0;"></td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Spice Girls</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Angels</td>
+          </tr>
+        </table>
+      </div>
+
+      <!-- Card 3 -->
+      <div style="display:flex;flex-direction:column;">
+        <table style="width:100%;border-collapse:collapse;table-layout:fixed;flex:1;">
+          <tr>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Robbie Williams</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Like a Prayer</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Madonna</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;background:#f0f0f0;"></td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Superstition</td>
+          </tr>
+          <tr>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;background:#f0f0f0;"></td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Queen</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Espresso</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Go Your Own Way</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Dolly Parton</td>
+          </tr>
+          <tr>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Pink Pony Club</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Avicii</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Wannabe</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Bon Jovi</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;background:#f0f0f0;"></td>
+          </tr>
+        </table>
+      </div>
+
+      <!-- Card 4 -->
+      <div style="display:flex;flex-direction:column;">
+        <table style="width:100%;border-collapse:collapse;table-layout:fixed;flex:1;">
+          <tr>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Fleetwood Mac</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;background:#f0f0f0;"></td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Happy</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Rick Astley</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">We Found Love</td>
+          </tr>
+          <tr>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">I Will Survive</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Miley Cyrus</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Steps</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Uptown Funk</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;background:#f0f0f0;"></td>
+          </tr>
+          <tr>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Crocodile Rock</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">The Weeknd</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;background:#f0f0f0;"></td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Like a Prayer</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Cyndi Lauper</td>
+          </tr>
+        </table>
+      </div>
+
+      <!-- Card 5 -->
+      <div style="display:flex;flex-direction:column;">
+        <table style="width:100%;border-collapse:collapse;table-layout:fixed;flex:1;">
+          <tr>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Britney Spears</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Wake Me Up</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Harry Styles</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;background:#f0f0f0;"></td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Shape of You</td>
+          </tr>
+          <tr>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;background:#f0f0f0;"></td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Don't Stop Me Now</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Sabrina Carpenter</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Blinding Lights</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Tina Turner</td>
+          </tr>
+          <tr>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Livin' on a Prayer</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:7.5px;vertical-align:middle;">Earth, Wind & Fire</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;background:#f0f0f0;"></td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">House of Pain</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Don't Start Now</td>
+          </tr>
+        </table>
+      </div>
+
+      <!-- Card 6 -->
+      <div style="display:flex;flex-direction:column;">
+        <table style="width:100%;border-collapse:collapse;table-layout:fixed;flex:1;">
+          <tr>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Elton John</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Dreamer</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Kings of Leon</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Valerie</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;background:#f0f0f0;"></td>
+          </tr>
+          <tr>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Bee Gees</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;background:#f0f0f0;"></td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Jump Around</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Wham!</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Crazy in Love</td>
+          </tr>
+          <tr>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">5, 6, 7, 8</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Backstreet Boys</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Stevie Wonder</td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;background:#f0f0f0;"></td>
+            <td style="border:1.5px solid #333;padding:4px;text-align:center;font-size:8.5px;vertical-align:middle;">Le Freak</td>
+          </tr>
+        </table>
+      </div>
+
+    </div>
+
+    <!-- Footer -->
+    <div style="display:flex;justify-content:space-around;margin-top:8px;padding-top:6px;border-top:1px solid #ddd;flex-shrink:0;">
+      <div style="text-align:center;">
+        <div style="width:44px;height:44px;border:1px dashed #ccc;margin:0 auto;font-size:6px;color:#999;display:flex;align-items:center;justify-content:center;">QR</div>
+        <div style="font-size:7px;color:#666;margin-top:2px;">Open Mic Night</div>
+      </div>
+      <div style="text-align:center;">
+        <div style="width:44px;height:44px;border:1px dashed #ccc;margin:0 auto;font-size:6px;color:#999;display:flex;align-items:center;justify-content:center;">QR</div>
+        <div style="font-size:7px;color:#666;margin-top:2px;">Cash Bingo</div>
+      </div>
+      <div style="text-align:center;">
+        <div style="width:44px;height:44px;border:1px dashed #ccc;margin:0 auto;font-size:6px;color:#999;display:flex;align-items:center;justify-content:center;">QR</div>
+        <div style="font-size:7px;color:#666;margin-top:2px;">Quiz Night</div>
+      </div>
+      <div style="text-align:center;">
+        <div style="width:44px;height:44px;border:1px dashed #ccc;margin:0 auto;font-size:6px;color:#999;display:flex;align-items:center;justify-content:center;">QR</div>
+        <div style="font-size:7px;color:#666;margin-top:2px;">Music Bingo</div>
+      </div>
+    </div>
+
+    <div style="text-align:right;font-size:7px;color:#999;margin-top:3px;flex-shrink:0;">Card 001 • a1b2c3d4e5</div>
+  </div>
+</div>

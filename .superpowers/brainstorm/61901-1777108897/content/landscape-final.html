@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>A4 Landscape — Final Layout</title>
+<style>
+  body {
+    background: #1a1a1a;
+    margin: 0;
+    padding: 20px;
+    font-family: Helvetica, Arial, sans-serif;
+    color: #eee;
+  }
+  h1 { text-align: center; font-size: 20px; margin-bottom: 4px; }
+  .subtitle { text-align: center; color: #999; font-size: 13px; margin-bottom: 20px; }
+
+  .a4-landscape {
+    width: 842px;  /* A4 at 1:1 scale (72 DPI) */
+    height: 595px;
+    background: #fff;
+    color: #000;
+    margin: 0 auto;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    position: relative;
+    transform: scale(0.85);
+    transform-origin: top center;
+  }
+
+  .page-inner {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 24px 28px 18px 28px;
+  }
+
+  .page-header {
+    text-align: center;
+    padding-bottom: 6px;
+    border-bottom: 2px solid #333;
+    flex-shrink: 0;
+    margin-bottom: 8px;
+  }
+  .page-header-row { display: flex; align-items: center; justify-content: space-between; }
+  .logo-placeholder { width: 48px; height: 34px; border: 1px dashed #ccc; font-size: 7px; color: #999; display: flex; align-items: center; justify-content: center; }
+  .header-center .title { font-size: 18px; font-weight: bold; letter-spacing: 1.5px; }
+  .header-center .theme { font-size: 11px; font-weight: bold; color: #555; margin-top: 1px; }
+  .header-center .date { font-size: 9px; color: #666; margin-top: 1px; }
+
+  .cards-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 10px 14px;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .card-slot {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .card-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    flex: 1;
+  }
+  .card-table td {
+    border: 1.5px solid #333;
+    text-align: center;
+    vertical-align: middle;
+    padding: 3px 4px;
+    font-size: 9px;
+    line-height: 1.2;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    hyphens: auto;
+  }
+  .blank { background: #f0f0f0; }
+
+  .page-footer {
+    display: flex;
+    justify-content: space-around;
+    padding-top: 6px;
+    border-top: 1px solid #ddd;
+    flex-shrink: 0;
+    margin-top: 8px;
+  }
+  .qr-block { text-align: center; }
+  .qr-box { width: 38px; height: 38px; border: 1px dashed #ccc; margin: 0 auto; font-size: 6px; color: #999; display: flex; align-items: center; justify-content: center; }
+  .qr-label { font-size: 6.5px; color: #666; margin-top: 2px; }
+
+  .card-id { text-align: right; font-size: 6px; color: #999; margin-top: 2px; flex-shrink: 0; }
+
+  .notes { max-width: 750px; margin: 30px auto 0; }
+  .notes h3 { font-size: 14px; margin-bottom: 8px; }
+  .notes ul { font-size: 12px; color: #bbb; line-height: 1.8; padding-left: 20px; }
+  .notes li strong { color: #eee; }
+</style>
+</head>
+<body>
+
+<h1>Final Layout: A4 Landscape</h1>
+<p class="subtitle">3×2 grid, wider cells, dynamic font scaling (9pt→5pt), mid-word breaking as last resort</p>
+
+<div class="a4-landscape">
+  <div class="page-inner">
+    <div class="page-header">
+      <div class="page-header-row">
+        <div class="logo-placeholder">Logo</div>
+        <div class="header-center">
+          <div class="title">MUSIC BINGO</div>
+          <div class="theme">The best of the 70's to today!</div>
+          <div class="date">Friday, April 24th 2026</div>
+        </div>
+        <div class="logo-placeholder">Logo</div>
+      </div>
+    </div>
+
+    <div class="cards-grid">
+      <!-- Card 1 -->
+      <div class="card-slot"><table class="card-table">
+        <tr><td>Chappell Roan</td><td>Believe</td><td class="blank"></td><td>September</td><td>Dancing Queen</td></tr>
+        <tr><td>Shake It Off</td><td>Outkast</td><td>Firework</td><td class="blank"></td><td>Lady Gaga</td></tr>
+        <tr><td class="blank"></td><td>Wonderwall</td><td>Ed Sheeran</td><td>Mr. Brightside</td><td>Cher</td></tr>
+      </table></div>
+
+      <!-- Card 2 -->
+      <div class="card-slot"><table class="card-table">
+        <tr><td>Hey Ya!</td><td class="blank"></td><td>Rihanna</td><td>Jolene</td><td>ABBA</td></tr>
+        <tr><td>Taylor Swift</td><td>Bad Romance</td><td>Oasis</td><td class="blank"></td><td>Flowers</td></tr>
+        <tr><td>Katy Perry</td><td>The Best</td><td class="blank"></td><td>Spice Girls</td><td>Angels</td></tr>
+      </table></div>
+
+      <!-- Card 3 -->
+      <div class="card-slot"><table class="card-table">
+        <tr><td>Robbie Williams</td><td>Like a Prayer</td><td>Madonna</td><td class="blank"></td><td>Superstition</td></tr>
+        <tr><td class="blank"></td><td>Queen</td><td>Espresso</td><td>Go Your Own Way</td><td>Dolly Parton</td></tr>
+        <tr><td>Pink Pony Club</td><td>Avicii</td><td>Wannabe</td><td>Bon Jovi</td><td class="blank"></td></tr>
+      </table></div>
+
+      <!-- Card 4 — stress test with long names -->
+      <div class="card-slot"><table class="card-table">
+        <tr><td>Fleetwood Mac</td><td class="blank"></td><td>Happy</td><td>Rick Astley</td><td>We Found Love</td></tr>
+        <tr><td>I Will Survive</td><td>Miley Cyrus</td><td>Steps</td><td>Uptown Funk</td><td class="blank"></td></tr>
+        <tr><td>Crocodile Rock</td><td>The Weeknd</td><td class="blank"></td><td>Like a Prayer</td><td>Cyndi Lauper</td></tr>
+      </table></div>
+
+      <!-- Card 5 — stress test with really long names -->
+      <div class="card-slot"><table class="card-table">
+        <tr><td>Britney Spears</td><td>Wake Me Up</td><td>Harry Styles</td><td class="blank"></td><td>Shape of You</td></tr>
+        <tr><td class="blank"></td><td style="font-size:7.5px;">Don't Stop Me Now</td><td style="font-size:7.5px;">Sabrina Carpenter</td><td style="font-size:8px;">Blinding Lights</td><td>Tina Turner</td></tr>
+        <tr><td style="font-size:7.5px;">Livin' on a Prayer</td><td style="font-size:7px;">Earth, Wind & Fire</td><td class="blank"></td><td>House of Pain</td><td style="font-size:8px;">Don't Start Now</td></tr>
+      </table></div>
+
+      <!-- Card 6 -->
+      <div class="card-slot"><table class="card-table">
+        <tr><td>Elton John</td><td>Dreamer</td><td>Kings of Leon</td><td>Valerie</td><td class="blank"></td></tr>
+        <tr><td>Bee Gees</td><td class="blank"></td><td>Jump Around</td><td>Wham!</td><td>Crazy in Love</td></tr>
+        <tr><td>5, 6, 7, 8</td><td style="font-size:7.5px;">Backstreet Boys</td><td style="font-size:7.5px;">Stevie Wonder</td><td class="blank"></td><td>Le Freak</td></tr>
+      </table></div>
+    </div>
+
+    <div class="page-footer">
+      <div class="qr-block"><div class="qr-box">QR</div><div class="qr-label">Open Mic Night</div></div>
+      <div class="qr-block"><div class="qr-box">QR><div class="qr-label">Cash Bingo</div></div>
+      <div class="qr-block"><div class="qr-box">QR</div><div class="qr-label">Quiz Night</div></div>
+      <div class="qr-block"><div class="qr-box">QR</div><div class="qr-label">Music Bingo</div></div>
+    </div>
+    <div class="card-id">Card 001 • a1b2c3d4e5</div>
+  </div>
+</div>
+
+<div class="notes">
+  <h3>Text fitting strategy (in the actual PDF)</h3>
+  <ul>
+    <li><strong>Step 1 — Word wrap:</strong> Break text into lines at word boundaries to fit within cell width</li>
+    <li><strong>Step 2 — Shrink font:</strong> If wrapped lines don't fit vertically, reduce font from 9pt down to 5pt (was 6pt)</li>
+    <li><strong>Step 3 — Break words:</strong> If a single word is still too wide at minimum font, break it mid-word with a hyphen (e.g. "Super-stition")</li>
+    <li><strong>Step 4 — Truncate:</strong> Only as absolute last resort, truncate with "…" — should almost never happen in landscape</li>
+    <li><strong>Card 5 above</strong> shows how longer names like "Sabrina Carpenter" and "Earth, Wind & Fire" scale down slightly to fit</li>
+  </ul>
+</div>
+
+</body>
+</html>

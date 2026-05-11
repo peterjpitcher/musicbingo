@@ -1,0 +1,78 @@
+<h2>What should a "brand" include?</h2>
+<p class="subtitle">Everything the audit found that's currently hardcoded. Select all that should be customisable per brand.</p>
+
+<div class="options" data-multiselect>
+
+  <div class="option" data-choice="logos" onclick="toggleSelect(this)">
+    <div class="letter">1</div>
+    <div class="content">
+      <h3>Logos</h3>
+      <p><strong>Currently:</strong> <code>the-anchor-pub-logo-white-transparent.png</code> and black variant, plus <code>event_logo.jpeg</code> for PDFs</p>
+      <p>Logo appears in: App header, guest screen header, PDF bingo cards (left + right logos)</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="colours" onclick="toggleSelect(this)">
+    <div class="letter">2</div>
+    <div class="content">
+      <h3>Colour Palette</h3>
+      <p><strong>Currently:</strong> brand-green <code>#003f27</code>, brand-green-light <code>#0f6846</code>, brand-gold <code>#a57626</code>, brand-gold-light <code>#c4952f</code></p>
+      <p>Used in: Buttons, headers, guest background gradient, QR code foreground colour, borders, badges</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="guest-bg" onclick="toggleSelect(this)">
+    <div class="letter">3</div>
+    <div class="content">
+      <h3>Guest Screen Background</h3>
+      <p><strong>Currently:</strong> Multi-layer radial gradient using brand green + gold dust effect</p>
+      <p>The full-screen projection background guests see on the big screen</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="messaging" onclick="toggleSelect(this)">
+    <div class="letter">4</div>
+    <div class="content">
+      <h3>Venue-Specific Messaging</h3>
+      <p><strong>Currently hardcoded:</strong></p>
+      <ul style="margin:0.5rem 0;padding-left:1.2rem;font-size:0.85rem">
+        <li>"🍺 Head to the bar! Kitchen is open until 9pm."</li>
+        <li>"Ask the bar team about the next Music Bingo date."</li>
+        <li>"🍺 Drinks &amp; food orders at the bar — kitchen open until 9pm."</li>
+      </ul>
+      <p>Break screen, end screen messaging</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="metadata" onclick="toggleSelect(this)">
+    <div class="letter">5</div>
+    <div class="content">
+      <h3>Page Metadata</h3>
+      <p><strong>Currently:</strong> Title "Music Bingo", description "Generate music bingo cards..."</p>
+      <p>Browser tab title, favicon, OG tags</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="pdf-style" onclick="toggleSelect(this)">
+    <div class="letter">6</div>
+    <div class="content">
+      <h3>PDF Card Styling</h3>
+      <p><strong>Currently:</strong> Black-only grid lines, Helvetica font, monochrome logos</p>
+      <p>Could include: coloured grid borders, branded header bar, custom fonts</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="font" onclick="toggleSelect(this)">
+    <div class="letter">7</div>
+    <div class="content">
+      <h3>Font / Typography</h3>
+      <p><strong>Currently:</strong> Inter (web), Helvetica (PDF)</p>
+      <p>Custom Google Font per brand, or keep consistent across all brands</p>
+    </div>
+  </div>
+
+</div>
+
+<div class="section" style="margin-top:1.5rem;padding:1rem;border-radius:8px;background:rgba(255,255,255,0.05)">
+  <p style="margin:0;font-size:0.85rem;opacity:0.7">💡 Click all that should be customisable. Items you don't select will stay consistent across all brands (simpler to maintain).</p>
+</div>

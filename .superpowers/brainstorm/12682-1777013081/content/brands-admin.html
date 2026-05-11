@@ -1,0 +1,180 @@
+<h2>Brand Admin Page — /brands</h2>
+<p class="subtitle">Layout and functionality for the brand management screen</p>
+
+<div class="mockup">
+  <div class="mockup-header">Brand Management — /brands</div>
+  <div class="mockup-body" style="padding:0;background:#f8fafc">
+
+    <!-- Header bar -->
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 24px;border-bottom:1px solid #e2e8f0">
+      <div>
+        <div style="font-size:1.2rem;font-weight:800;text-transform:uppercase;letter-spacing:0.05em">Brand Management</div>
+        <div style="font-size:0.75rem;color:#64748b;margin-top:2px">Create and manage venue brands</div>
+      </div>
+      <button class="mock-button" style="background:#a57626;color:white;border:none;padding:8px 20px;border-radius:10px;font-weight:600">+ New Brand</button>
+    </div>
+
+    <!-- Brand cards grid -->
+    <div style="padding:24px;display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:20px">
+
+      <!-- The Anchor (default) -->
+      <div style="background:white;border-radius:16px;border:2px solid #a57626;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08)">
+        <div style="background:#003f27;padding:20px;display:flex;align-items:center;gap:14px">
+          <div style="width:48px;height:48px;background:rgba(255,255,255,0.15);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:0.6rem;color:white">LOGO</div>
+          <div>
+            <div style="color:white;font-weight:700;font-size:1rem">The Anchor Pub</div>
+            <div style="color:rgba(255,255,255,0.6);font-size:0.7rem;margin-top:2px">⭐ Default brand</div>
+          </div>
+        </div>
+        <div style="padding:16px">
+          <div style="display:flex;gap:6px;margin-bottom:12px">
+            <div style="width:28px;height:28px;border-radius:6px;background:#003f27" title="Primary"></div>
+            <div style="width:28px;height:28px;border-radius:6px;background:#0f6846" title="Primary Light"></div>
+            <div style="width:28px;height:28px;border-radius:6px;background:#a57626" title="Accent"></div>
+            <div style="width:28px;height:28px;border-radius:6px;background:#c4952f" title="Accent Light"></div>
+          </div>
+          <div style="font-size:0.75rem;color:#64748b;margin-bottom:4px">Font: Inter (default)</div>
+          <div style="font-size:0.75rem;color:#64748b">Break msg: "🍺 Head to the bar!..."</div>
+          <div style="display:flex;gap:8px;margin-top:14px">
+            <button class="mock-button" style="font-size:0.75rem;padding:6px 14px;border-radius:8px;background:#f1f5f9;border:1px solid #e2e8f0;color:#334155">Edit</button>
+            <button class="mock-button" style="font-size:0.75rem;padding:6px 14px;border-radius:8px;background:#f1f5f9;border:1px solid #e2e8f0;color:#334155">Preview</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dukes Head example -->
+      <div style="background:white;border-radius:16px;border:1px solid #e2e8f0;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08)">
+        <div style="background:#1a1a2e;padding:20px;display:flex;align-items:center;gap:14px">
+          <div style="width:48px;height:48px;background:rgba(255,255,255,0.15);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:0.6rem;color:white">LOGO</div>
+          <div>
+            <div style="color:white;font-weight:700;font-size:1rem">The Dukes Head</div>
+            <div style="color:rgba(255,255,255,0.6);font-size:0.7rem;margin-top:2px">2 sessions</div>
+          </div>
+        </div>
+        <div style="padding:16px">
+          <div style="display:flex;gap:6px;margin-bottom:12px">
+            <div style="width:28px;height:28px;border-radius:6px;background:#1a1a2e"></div>
+            <div style="width:28px;height:28px;border-radius:6px;background:#2d2d4a"></div>
+            <div style="width:28px;height:28px;border-radius:6px;background:#c9a84c"></div>
+            <div style="width:28px;height:28px;border-radius:6px;background:#d4b85e"></div>
+          </div>
+          <div style="font-size:0.75rem;color:#64748b;margin-bottom:4px">Font: Playfair Display</div>
+          <div style="font-size:0.75rem;color:#64748b">Break msg: "Grab a drink at the bar!"</div>
+          <div style="display:flex;gap:8px;margin-top:14px">
+            <button class="mock-button" style="font-size:0.75rem;padding:6px 14px;border-radius:8px;background:#f1f5f9;border:1px solid #e2e8f0;color:#334155">Edit</button>
+            <button class="mock-button" style="font-size:0.75rem;padding:6px 14px;border-radius:8px;background:#f1f5f9;border:1px solid #e2e8f0;color:#334155">Preview</button>
+            <button class="mock-button" style="font-size:0.75rem;padding:6px 14px;border-radius:8px;background:#f1f5f9;border:1px solid #e2e8f0;color:#94a3b8">Delete</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Add new brand card -->
+      <div style="background:white;border-radius:16px;border:2px dashed #cbd5e1;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:220px;cursor:pointer">
+        <div style="font-size:2rem;color:#94a3b8">+</div>
+        <div style="font-size:0.85rem;color:#64748b;margin-top:4px">Add New Brand</div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:24px">
+  <h3>Brand Editor (modal or separate page)</h3>
+  <p class="subtitle">Opens when clicking Edit or + New Brand</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">Edit Brand — The Anchor Pub</div>
+  <div class="mockup-body" style="padding:24px;background:#f8fafc">
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+      <!-- Left column -->
+      <div>
+        <div style="margin-bottom:20px">
+          <label style="font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#475569;display:block;margin-bottom:6px">Brand Name</label>
+          <input class="mock-input" value="The Anchor Pub" style="width:100%;padding:8px 12px;border-radius:8px">
+        </div>
+
+        <div style="margin-bottom:20px">
+          <label style="font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#475569;display:block;margin-bottom:6px">Colours</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div style="width:32px;height:32px;border-radius:6px;background:#003f27;border:1px solid #e2e8f0"></div>
+              <div><div style="font-size:0.7rem;color:#64748b">Primary</div><div style="font-size:0.75rem;font-family:monospace">#003f27</div></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <div style="width:32px;height:32px;border-radius:6px;background:#0f6846;border:1px solid #e2e8f0"></div>
+              <div><div style="font-size:0.7rem;color:#64748b">Primary Light</div><div style="font-size:0.75rem;font-family:monospace">#0f6846</div></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <div style="width:32px;height:32px;border-radius:6px;background:#a57626;border:1px solid #e2e8f0"></div>
+              <div><div style="font-size:0.7rem;color:#64748b">Accent</div><div style="font-size:0.75rem;font-family:monospace">#a57626</div></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <div style="width:32px;height:32px;border-radius:6px;background:#c4952f;border:1px solid #e2e8f0"></div>
+              <div><div style="font-size:0.7rem;color:#64748b">Accent Light</div><div style="font-size:0.75rem;font-family:monospace">#c4952f</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-bottom:20px">
+          <label style="font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#475569;display:block;margin-bottom:6px">Font Family</label>
+          <select class="mock-input" style="width:100%;padding:8px 12px;border-radius:8px">
+            <option>Inter (default)</option>
+            <option>Playfair Display</option>
+            <option>Poppins</option>
+            <option>Montserrat</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Right column -->
+      <div>
+        <div style="margin-bottom:20px">
+          <label style="font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#475569;display:block;margin-bottom:6px">Logo (Dark Background)</label>
+          <div style="border:2px dashed #cbd5e1;border-radius:12px;padding:20px;text-align:center;background:white">
+            <div style="background:#003f27;border-radius:8px;padding:12px;display:inline-block;margin-bottom:8px">
+              <div style="color:white;font-size:0.7rem">logo-white.png</div>
+            </div>
+            <div style="font-size:0.75rem;color:#64748b">Drop file or click to upload</div>
+          </div>
+        </div>
+
+        <div style="margin-bottom:20px">
+          <label style="font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#475569;display:block;margin-bottom:6px">Logo (Light Background)</label>
+          <div style="border:2px dashed #cbd5e1;border-radius:12px;padding:20px;text-align:center;background:white">
+            <div style="background:#f8fafc;border-radius:8px;padding:12px;display:inline-block;margin-bottom:8px;border:1px solid #e2e8f0">
+              <div style="color:#1e293b;font-size:0.7rem">logo-black.png</div>
+            </div>
+            <div style="font-size:0.75rem;color:#64748b">Drop file or click to upload</div>
+          </div>
+        </div>
+
+        <div style="margin-bottom:20px">
+          <label style="font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#475569;display:block;margin-bottom:6px">Break Screen Message</label>
+          <textarea class="mock-input" rows="2" style="width:100%;padding:8px 12px;border-radius:8px;resize:vertical;font-size:0.85rem">🍺 Head to the bar! Kitchen is open until 9pm.</textarea>
+        </div>
+
+        <div style="margin-bottom:20px">
+          <label style="font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#475569;display:block;margin-bottom:6px">End Screen Message</label>
+          <textarea class="mock-input" rows="2" style="width:100%;padding:8px 12px;border-radius:8px;resize:vertical;font-size:0.85rem">🍺 Drinks & food orders at the bar — kitchen open until 9pm.</textarea>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;padding-top:16px;border-top:1px solid #e2e8f0">
+      <label style="display:flex;align-items:center;gap:8px;font-size:0.85rem;color:#475569">
+        <input type="checkbox" checked> Set as default brand
+      </label>
+      <div style="display:flex;gap:10px">
+        <button class="mock-button" style="padding:8px 20px;border-radius:10px;background:#f1f5f9;border:1px solid #e2e8f0;color:#334155">Cancel</button>
+        <button class="mock-button" style="padding:8px 20px;border-radius:10px;background:#a57626;color:white;border:none;font-weight:600">Save Brand</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div style="margin-top:16px;padding:12px 16px;border-radius:8px;background:rgba(255,255,255,0.05)">
+  <p style="margin:0;font-size:0.8rem;opacity:0.7">Key behaviours: Preview button on brand cards opens a mock guest screen with that brand applied. Delete is blocked for the default brand and for brands in use by sessions.</p>
+</div>

@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Events Back Page — Design</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  body {
+    background: #111;
+    margin: 0;
+    padding: 30px;
+    font-family: 'DM Sans', sans-serif;
+    color: #eee;
+  }
+
+  .designs {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 40px;
+  }
+  .design-label {
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #999;
+    margin-bottom: 6px;
+    text-align: center;
+  }
+  .design-desc {
+    font-size: 12px;
+    color: #666;
+    text-align: center;
+    margin-bottom: 10px;
+  }
+
+  /* A4 Landscape at 75% */
+  .a4 {
+    width: 631px;
+    height: 446px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+  }
+
+  /* ========== OPTION A: EDITORIAL ========== */
+  .opt-a {
+    background: #faf8f5;
+    color: #1a1a1a;
+  }
+  .opt-a .page-inner {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    padding: 20px 24px 16px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Header strip */
+  .opt-a .masthead {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 2.5px solid #003f27;
+    padding-bottom: 8px;
+    margin-bottom: 10px;
+  }
+  .opt-a .masthead-left {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+  }
+  .opt-a .masthead h1 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 22px;
+    color: #003f27;
+    margin: 0;
+    letter-spacing: 0.5px;
+  }
+  .opt-a .masthead .tagline {
+    font-size: 8px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #a57626;
+    font-weight: 600;
+  }
+  .opt-a .masthead .website {
+    font-size: 8px;
+    color: #888;
+    letter-spacing: 0.5px;
+  }
+
+  /* Events timeline */
+  .opt-a .events-body {
+    flex: 1;
+    display: flex;
+    gap: 16px;
+    min-height: 0;
+  }
+
+  /* Left column: featured event */
+  .opt-a .featured {
+    width: 200px;
+    flex-shrink: 0;
+    background: #003f27;
+    color: #faf8f5;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+  .opt-a .featured::after {
+    content: '';
+    position: absolute;
+    top: 0; right: 0;
+    width: 40px; height: 40px;
+    background: #a57626;
+    clip-path: polygon(100% 0, 0 0, 100% 100%);
+  }
+  .opt-a .featured .f-label {
+    font-size: 6.5px;
+    text-transform: uppercase;
+    letter-spacing: 2.5px;
+    color: #c4952f;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .opt-a .featured .f-name {
+    font-family: 'DM Serif Display', serif;
+    font-size: 16px;
+    line-height: 1.2;
+    margin-bottom: 6px;
+  }
+  .opt-a .featured .f-date {
+    font-size: 8px;
+    color: #a8d5c0;
+    margin-bottom: 4px;
+    font-weight: 500;
+  }
+  .opt-a .featured .f-price {
+    font-size: 7.5px;
+    color: #c4952f;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .opt-a .featured .f-desc {
+    font-size: 7px;
+    line-height: 1.5;
+    color: #d0e8dc;
+    flex: 1;
+  }
+  .opt-a .featured .f-qr {
+    width: 44px; height: 44px;
+    background: #fff;
+    margin-top: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 5px;
+    color: #003f27;
+  }
+  .opt-a .featured .f-qr-label {
+    font-size: 6px;
+    color: #a8d5c0;
+    margin-top: 3px;
+  }
+
+  /* Right: event list */
+  .opt-a .event-list {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .opt-a .event-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 0;
+    border-bottom: 1px solid #e5e0d8;
+  }
+  .opt-a .event-row:last-child { border-bottom: none; }
+
+  .opt-a .ev-date-block {
+    width: 42px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  .opt-a .ev-day {
+    font-family: 'DM Serif Display', serif;
+    font-size: 18px;
+    color: #003f27;
+    line-height: 1;
+  }
+  .opt-a .ev-month {
+    font-size: 6.5px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: #a57626;
+    font-weight: 600;
+  }
+  .opt-a .ev-dow {
+    font-size: 6px;
+    color: #999;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .opt-a .ev-divider {
+    width: 1px;
+    align-self: stretch;
+    background: #d8d3ca;
+    flex-shrink: 0;
+  }
+
+  .opt-a .ev-details {
+    flex: 1;
+    min-width: 0;
+  }
+  .opt-a .ev-name {
+    font-size: 8.5px;
+    font-weight: 700;
+    color: #1a1a1a;
+    line-height: 1.2;
+  }
+  .opt-a .ev-meta {
+    font-size: 6.5px;
+    color: #777;
+    margin-top: 1px;
+  }
+  .opt-a .ev-desc {
+    font-size: 6.5px;
+    color: #555;
+    line-height: 1.35;
+    margin-top: 2px;
+  }
+
+  .opt-a .ev-qr {
+    width: 26px; height: 26px;
+    border: 1px solid #d8d3ca;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 5px;
+    color: #999;
+  }
+
+  /* Footer */
+  .opt-a .page-foot {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    padding-top: 6px;
+    border-top: 1px solid #e5e0d8;
+    margin-top: 6px;
+    flex-shrink: 0;
+  }
+  .opt-a .page-foot span {
+    font-size: 6.5px;
+    color: #999;
+    letter-spacing: 0.5px;
+  }
+
+  /* ========== OPTION B: DARK ANCHOR ========== */
+  .opt-b {
+    background: #0c1f17;
+    color: #f0ebe3;
+  }
+  .opt-b .page-inner {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    padding: 18px 24px 14px;
+    display: flex;
+    flex-direction: column;
+    background:
+      radial-gradient(ellipse at 20% 80%, rgba(15,104,70,0.15) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 20%, rgba(165,118,38,0.08) 0%, transparent 50%),
+      #0c1f17;
+  }
+
+  .opt-b .masthead {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 8px;
+    margin-bottom: 10px;
+    border-bottom: 1px solid rgba(196,149,47,0.3);
+  }
+  .opt-b .masthead h1 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 20px;
+    color: #c4952f;
+    margin: 0;
+  }
+  .opt-b .masthead .pipes {
+    font-size: 7px;
+    color: rgba(240,235,227,0.4);
+    letter-spacing: 1px;
+  }
+
+  .opt-b .events-grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 8px;
+    min-height: 0;
+  }
+
+  .opt-b .ev-card {
+    border: 1px solid rgba(196,149,47,0.2);
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    background: rgba(255,255,255,0.02);
+  }
+  .opt-b .ev-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 3px;
+    height: 100%;
+    background: linear-gradient(180deg, #c4952f 0%, #0f6846 100%);
+  }
+
+  .opt-b .ev-card .ev-date {
+    font-size: 6px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #c4952f;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .opt-b .ev-card .ev-name {
+    font-family: 'DM Serif Display', serif;
+    font-size: 10px;
+    color: #f0ebe3;
+    line-height: 1.2;
+    margin-bottom: 3px;
+  }
+  .opt-b .ev-card .ev-time-price {
+    font-size: 6.5px;
+    color: rgba(240,235,227,0.5);
+    margin-bottom: 4px;
+  }
+  .opt-b .ev-card .ev-desc {
+    font-size: 6.5px;
+    color: rgba(240,235,227,0.6);
+    line-height: 1.4;
+    flex: 1;
+  }
+  .opt-b .ev-card .ev-qr {
+    width: 24px; height: 24px;
+    border: 1px solid rgba(196,149,47,0.3);
+    margin-top: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 5px;
+    color: #666;
+    align-self: flex-end;
+  }
+
+  .opt-b .page-foot {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(196,149,47,0.15);
+    margin-top: 8px;
+    flex-shrink: 0;
+  }
+  .opt-b .page-foot span {
+    font-size: 6.5px;
+    color: rgba(240,235,227,0.35);
+    letter-spacing: 0.5px;
+  }
+</style>
+</head>
+<body>
+
+<div class="designs">
+
+  <!-- OPTION A -->
+  <div>
+    <div class="design-label">A — Editorial</div>
+    <div class="design-desc">Magazine-style layout with featured next event + date-driven timeline. Clean, warm, print-friendly.</div>
+    <div class="a4 opt-a">
+      <div class="page-inner">
+        <div class="masthead">
+          <div class="masthead-left">
+            <h1>What's On</h1>
+            <span class="tagline">at The Anchor</span>
+          </div>
+          <span class="website">the-anchor.pub</span>
+        </div>
+
+        <div class="events-body">
+          <div class="featured">
+            <div class="f-label">Next Event</div>
+            <div class="f-name">Open Mic Night</div>
+            <div class="f-date">Saturday 25 April · 8:00 pm</div>
+            <div class="f-price">Free entry</div>
+            <div class="f-desc">Come down for a relaxed night of local performers, good vibes and live music at The Anchor. All welcome — whether you want to perform or just enjoy the atmosphere.</div>
+            <div class="f-qr">QR</div>
+            <div class="f-qr-label">Scan to book</div>
+          </div>
+
+          <div class="event-list">
+            <div class="event-row">
+              <div class="ev-date-block"><div class="ev-dow">Wed</div><div class="ev-day">29</div><div class="ev-month">Apr</div></div>
+              <div class="ev-divider"></div>
+              <div class="ev-details">
+                <div class="ev-name">Cash Bingo</div>
+                <div class="ev-meta">7:00 pm · £3 per person</div>
+                <div class="ev-desc">10 games, loads of prizes and a final jackpot that gets bigger the more people play.</div>
+              </div>
+              <div class="ev-qr">QR</div>
+            </div>
+
+            <div class="event-row">
+              <div class="ev-date-block"><div class="ev-dow">Wed</div><div class="ev-day">6</div><div class="ev-month">May</div></div>
+              <div class="ev-divider"></div>
+              <div class="ev-details">
+                <div class="ev-name">Quiz Night</div>
+                <div class="ev-meta">7:00 pm · £3 per person</div>
+                <div class="ev-desc">Fun rounds, spot prizes and a £25 bar voucher for the winners.</div>
+              </div>
+              <div class="ev-qr">QR</div>
+            </div>
+
+            <div class="event-row">
+              <div class="ev-date-block"><div class="ev-dow">Wed</div><div class="ev-day">13</div><div class="ev-month">May</div></div>
+              <div class="ev-divider"></div>
+              <div class="ev-details">
+                <div class="ev-name">Music Bingo</div>
+                <div class="ev-meta">7:00 pm · Free entry</div>
+                <div class="ev-desc">Bring your singing voice and get ready for another brilliant night of tunes, laughs and prizes.</div>
+              </div>
+              <div class="ev-qr">QR</div>
+            </div>
+
+            <div class="event-row">
+              <div class="ev-date-block"><div class="ev-dow">Fri</div><div class="ev-day">15</div><div class="ev-month">May</div></div>
+              <div class="ev-divider"></div>
+              <div class="ev-details">
+                <div class="ev-name">Gavin & Stacey Quiz Night</div>
+                <div class="ev-meta">7:00 pm · £3 per person</div>
+                <div class="ev-desc">Brush up on your Barry Island knowledge and come ready for a tidy night.</div>
+              </div>
+              <div class="ev-qr">QR</div>
+            </div>
+
+            <div class="event-row">
+              <div class="ev-date-block"><div class="ev-dow">Sat</div><div class="ev-day">17</div><div class="ev-month">May</div></div>
+              <div class="ev-divider"></div>
+              <div class="ev-details">
+                <div class="ev-name">Live Music: The Retros</div>
+                <div class="ev-meta">8:30 pm · Free entry</div>
+                <div class="ev-desc">Classic rock and pop covers from one of Surrey's best party bands.</div>
+              </div>
+              <div class="ev-qr">QR</div>
+            </div>
+
+            <div class="event-row">
+              <div class="ev-date-block"><div class="ev-dow">Sun</div><div class="ev-day">18</div><div class="ev-month">May</div></div>
+              <div class="ev-divider"></div>
+              <div class="ev-details">
+                <div class="ev-name">Sunday Roast & Jazz</div>
+                <div class="ev-meta">12:00 pm · Menu prices</div>
+                <div class="ev-desc">Enjoy a classic Sunday roast with live jazz from 1pm.</div>
+              </div>
+              <div class="ev-qr">QR</div>
+            </div>
+
+            <div class="event-row">
+              <div class="ev-date-block"><div class="ev-dow">Mon</div><div class="ev-day">26</div><div class="ev-month">May</div></div>
+              <div class="ev-divider"></div>
+              <div class="ev-details">
+                <div class="ev-name">Bank Holiday BBQ</div>
+                <div class="ev-meta">2:00 pm · Free entry</div>
+                <div class="ev-desc">Beer garden BBQ with drinks offers, kids activities and live acoustic music.</div>
+              </div>
+              <div class="ev-qr">QR</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="page-foot">
+          <span>the-anchor.pub</span>
+          <span>·</span>
+          <span>@theanchorleatherhead</span>
+          <span>·</span>
+          <span>01onal 372 881</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- OPTION B -->
+  <div>
+    <div class="design-label">B — Dark Anchor</div>
+    <div class="design-desc">Brand-coloured dark theme with gold accents and gradient edge strips. Rich, atmospheric, premium feel.</div>
+    <div class="a4 opt-b">
+      <div class="page-inner">
+        <div class="masthead">
+          <h1>What's On at The Anchor</h1>
+          <span class="pipes">the-anchor.pub</span>
+        </div>
+
+        <div class="events-grid">
+          <div class="ev-card">
+            <div class="ev-date">Sat 25 Apr</div>
+            <div class="ev-name">Open Mic Night</div>
+            <div class="ev-time-price">8:00 pm · Free entry</div>
+            <div class="ev-desc">Come down for a relaxed night of local performers, good vibes and live music. All welcome.</div>
+            <div class="ev-qr">QR</div>
+          </div>
+
+          <div class="ev-card">
+            <div class="ev-date">Wed 29 Apr</div>
+            <div class="ev-name">Cash Bingo</div>
+            <div class="ev-time-price">7:00 pm · £3pp</div>
+            <div class="ev-desc">10 games, loads of prizes and a final jackpot that gets bigger the more people play.</div>
+            <div class="ev-qr">QR</div>
+          </div>
+
+          <div class="ev-card">
+            <div class="ev-date">Wed 6 May</div>
+            <div class="ev-name">Quiz Night</div>
+            <div class="ev-time-price">7:00 pm · £3pp</div>
+            <div class="ev-desc">Fun rounds, spot prizes and a £25 bar voucher for the winners.</div>
+            <div class="ev-qr">QR</div>
+          </div>
+
+          <div class="ev-card">
+            <div class="ev-date">Wed 13 May</div>
+            <div class="ev-name">Music Bingo</div>
+            <div class="ev-time-price">7:00 pm · Free</div>
+            <div class="ev-desc">Bring your singing voice and get ready for tunes, laughs and prizes.</div>
+            <div class="ev-qr">QR</div>
+          </div>
+
+          <div class="ev-card">
+            <div class="ev-date">Fri 15 May</div>
+            <div class="ev-name">Gavin & Stacey Quiz</div>
+            <div class="ev-time-price">7:00 pm · £3pp</div>
+            <div class="ev-desc">Brush up on your Barry Island knowledge and come ready for a tidy night.</div>
+            <div class="ev-qr">QR</div>
+          </div>
+
+          <div class="ev-card">
+            <div class="ev-date">Sat 17 May</div>
+            <div class="ev-name">Live: The Retros</div>
+            <div class="ev-time-price">8:30 pm · Free</div>
+            <div class="ev-desc">Classic rock and pop covers from one of Surrey's best party bands.</div>
+            <div class="ev-qr">QR</div>
+          </div>
+
+          <div class="ev-card">
+            <div class="ev-date">Sun 18 May</div>
+            <div class="ev-name">Roast & Jazz</div>
+            <div class="ev-time-price">12:00 pm · Menu</div>
+            <div class="ev-desc">Enjoy a classic Sunday roast with live jazz from 1pm. Book your table.</div>
+            <div class="ev-qr">QR</div>
+          </div>
+
+          <div class="ev-card">
+            <div class="ev-date">Mon 26 May</div>
+            <div class="ev-name">Bank Holiday BBQ</div>
+            <div class="ev-time-price">2:00 pm · Free</div>
+            <div class="ev-desc">Beer garden BBQ with drinks offers, kids activities and live acoustic music.</div>
+            <div class="ev-qr">QR</div>
+          </div>
+        </div>
+
+        <div class="page-foot">
+          <span>the-anchor.pub</span>
+          <span>·</span>
+          <span>@theanchorleatherhead</span>
+          <span>·</span>
+          <span>01372 372 881</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

@@ -337,7 +337,7 @@ export default function GuestDisplayPage() {
 
         {showRunning && runtime.currentTrack ? (
           <div className="w-[min(1400px,96vw)] flex flex-col gap-5">
-            {/* Intro layout takes priority over challenge banner */}
+            {/* Intro layout takes priority */}
             {runtime.isIntroSong ? (
               activeGame?.gameNumber === 2 ? (
                 /* ── Sing Along intro (Game 2) ── */
@@ -350,8 +350,6 @@ export default function GuestDisplayPage() {
                       Sing Along!
                     </h2>
                   </div>
-
-                  {/* Song title EXTRA LARGE - the main focus */}
                   <div className="text-center">
                     <h3 className="m-0 text-[clamp(2rem,5vw,5rem)] uppercase font-black tracking-wide text-white">
                       {runtime.currentTrack.title}
@@ -360,8 +358,6 @@ export default function GuestDisplayPage() {
                       {runtime.currentTrack.artist}
                     </p>
                   </div>
-
-                  {/* Album art - secondary, smaller */}
                   {runtime.currentTrack.albumImageUrl && (
                     <img
                       src={runtime.currentTrack.albumImageUrl}
@@ -381,8 +377,6 @@ export default function GuestDisplayPage() {
                       Dance Along!
                     </h2>
                   </div>
-
-                  {/* Large album art */}
                   {runtime.currentTrack.albumImageUrl && (
                     <img
                       src={runtime.currentTrack.albumImageUrl}
@@ -390,8 +384,6 @@ export default function GuestDisplayPage() {
                       className="w-[min(60vh,80vw)] max-w-[500px] aspect-square rounded-[22px] border-4 border-white/90 shadow-2xl object-cover bg-black"
                     />
                   )}
-
-                  {/* Song info - shown immediately, no reveal phases */}
                   <div className="text-center">
                     <h3 className="m-0 text-[clamp(1.4rem,3.5vw,3rem)] uppercase font-black tracking-wide text-white">
                       {runtime.currentTrack.title}

@@ -1,0 +1,5 @@
+{"type":"server-started","port":55888,"host":"127.0.0.1","url_host":"localhost","url":"http://localhost:55888","screen_dir":"/Users/peterpitcher/Cursor/OJ-MusicBingo/.superpowers/brainstorm/12682-1777013081/content","state_dir":"/Users/peterpitcher/Cursor/OJ-MusicBingo/.superpowers/brainstorm/12682-1777013081/state"}
+{"type":"screen-added","file":"/Users/peterpitcher/Cursor/OJ-MusicBingo/.superpowers/brainstorm/12682-1777013081/content/brand-anatomy.html"}
+{"type":"screen-added","file":"/Users/peterpitcher/Cursor/OJ-MusicBingo/.superpowers/brainstorm/12682-1777013081/content/brands-admin.html"}
+{"type":"screen-added","file":"/Users/peterpitcher/Cursor/OJ-MusicBingo/.superpowers/brainstorm/12682-1777013081/content/pdf-branding.html"}
+{"type":"server-stopped","reason":"idle timeout"}

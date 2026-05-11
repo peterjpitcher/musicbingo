@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Double-Sided Print Layout</title>
+<style>
+  body {
+    background: #1a1a1a;
+    margin: 0;
+    padding: 20px;
+    font-family: Helvetica, Arial, sans-serif;
+    color: #eee;
+  }
+  h1 { text-align: center; font-size: 20px; margin-bottom: 4px; }
+  .subtitle { text-align: center; color: #999; font-size: 13px; margin-bottom: 24px; }
+
+  .sheet {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    align-items: flex-start;
+    margin-bottom: 30px;
+  }
+  .sheet-label {
+    text-align: center;
+    font-size: 12px;
+    color: #888;
+    margin-bottom: 6px;
+  }
+  .page-label {
+    text-align: center;
+    font-size: 11px;
+    font-weight: bold;
+    color: #aaa;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .a4 {
+    width: 631px;  /* 842 * 0.75 */
+    height: 446px; /* 595 * 0.75 */
+    background: #fff;
+    color: #000;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  .page-inner {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 16px 20px 10px 20px;
+  }
+
+  /* FRONT PAGE STYLES */
+  .page-header {
+    text-align: center;
+    padding-bottom: 4px;
+    border-bottom: 1.5px solid #333;
+    flex-shrink: 0;
+    margin-bottom: 6px;
+  }
+  .page-header-row { display: flex; align-items: center; justify-content: space-between; }
+  .logo-ph { width: 36px; height: 26px; border: 1px dashed #ccc; font-size: 5px; color: #999; display: flex; align-items: center; justify-content: center; }
+  .hdr-title { font-size: 14px; font-weight: bold; letter-spacing: 1px; }
+  .hdr-theme { font-size: 9px; font-weight: bold; color: #555; margin-top: 1px; }
+  .hdr-date { font-size: 7.5px; color: #666; margin-top: 1px; }
+
+  .cards-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 8px 10px;
+    flex: 1;
+    min-height: 0;
+  }
+  .card-table { width: 100%; border-collapse: collapse; table-layout: fixed; height: 100%; }
+  .card-table td {
+    border: 1.2px solid #333;
+    text-align: center;
+    vertical-align: middle;
+    padding: 2px 3px;
+    font-size: 7.5px;
+    line-height: 1.15;
+  }
+  .blank { background: #f0f0f0; }
+  .card-id-line { text-align: right; font-size: 5px; color: #999; margin-top: 2px; flex-shrink: 0; }
+
+  /* BACK PAGE STYLES */
+  .events-header {
+    text-align: center;
+    padding-bottom: 5px;
+    border-bottom: 1.5px solid #333;
+    flex-shrink: 0;
+    margin-bottom: 8px;
+  }
+  .events-header-row { display: flex; align-items: center; justify-content: space-between; }
+  .events-title { font-size: 14px; font-weight: bold; letter-spacing: 1px; }
+  .events-subtitle { font-size: 8px; color: #555; margin-top: 1px; }
+
+  .events-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 14px;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .event-card {
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    padding: 6px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    overflow: hidden;
+  }
+  .event-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  .event-info { flex: 1; min-width: 0; }
+  .event-name { font-size: 8.5px; font-weight: bold; line-height: 1.2; }
+  .event-date { font-size: 7px; color: #555; margin-top: 1px; }
+  .event-price { font-size: 7px; color: #333; font-weight: bold; margin-top: 1px; }
+  .event-desc { font-size: 6.5px; color: #444; line-height: 1.3; margin-top: 2px; }
+  .event-qr {
+    width: 28px;
+    height: 28px;
+    border: 1px dashed #ccc;
+    font-size: 5px;
+    color: #999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .events-footer {
+    text-align: center;
+    font-size: 7px;
+    color: #888;
+    padding-top: 4px;
+    border-top: 1px solid #eee;
+    flex-shrink: 0;
+    margin-top: 6px;
+  }
+
+  .arrow {
+    display: flex;
+    align-items: center;
+    font-size: 28px;
+    color: #555;
+    padding: 0 4px;
+  }
+
+  .print-sequence {
+    text-align: center;
+    max-width: 700px;
+    margin: 0 auto 20px;
+    padding: 12px 20px;
+    background: #252525;
+    border-radius: 8px;
+    font-size: 12px;
+    color: #bbb;
+    line-height: 1.6;
+  }
+  .print-sequence strong { color: #eee; }
+</style>
+</head>
+<body>
+
+<h1>Double-Sided Print Layout</h1>
+<p class="subtitle">Front: 6 game cards — Back: upcoming events with QR booking links</p>
+
+<div class="print-sequence">
+  <strong>PDF page order:</strong> Cards p1 → Events → Cards p2 → Events → Cards p3 → Events → …<br>
+  Print double-sided → each sheet has game cards on front, events on back
+</div>
+
+<!-- Sheet 1 -->
+<div class="sheet-label">Sheet 1 of many</div>
+<div class="sheet">
+  <!-- FRONT -->
+  <div>
+    <div class="page-label">Front — Game Cards</div>
+    <div class="a4">
+      <div class="page-inner">
+        <div class="page-header">
+          <div class="page-header-row">
+            <div class="logo-ph">Logo</div>
+            <div>
+              <div class="hdr-title">MUSIC BINGO</div>
+              <div class="hdr-theme">The best of the 70's to today!</div>
+              <div class="hdr-date">Friday, April 24th 2026</div>
+            </div>
+            <div class="logo-ph">Logo</div>
+          </div>
+        </div>
+
+        <div class="cards-grid">
+          <div><table class="card-table">
+            <tr><td>Chappell Roan</td><td>Believe</td><td class="blank"></td><td>September</td><td>Dancing Queen</td></tr>
+            <tr><td>Shake It Off</td><td>Outkast</td><td>Firework</td><td class="blank"></td><td>Lady Gaga</td></tr>
+            <tr><td class="blank"></td><td>Wonderwall</td><td>Ed Sheeran</td><td>Mr. Brightside</td><td>Cher</td></tr>
+          </table></div>
+          <div><table class="card-table">
+            <tr><td>Hey Ya!</td><td class="blank"></td><td>Rihanna</td><td>Jolene</td><td>ABBA</td></tr>
+            <tr><td>Taylor Swift</td><td>Bad Romance</td><td>Oasis</td><td class="blank"></td><td>Flowers</td></tr>
+            <tr><td>Katy Perry</td><td>The Best</td><td class="blank"></td><td>Spice Girls</td><td>Angels</td></tr>
+          </table></div>
+          <div><table class="card-table">
+            <tr><td>Robbie Williams</td><td>Like a Prayer</td><td>Madonna</td><td class="blank"></td><td>Superstition</td></tr>
+            <tr><td class="blank"></td><td>Queen</td><td>Espresso</td><td>Go Your Own Way</td><td>Dolly Parton</td></tr>
+            <tr><td>Pink Pony Club</td><td>Avicii</td><td>Wannabe</td><td>Bon Jovi</td><td class="blank"></td></tr>
+          </table></div>
+          <div><table class="card-table">
+            <tr><td>Fleetwood Mac</td><td class="blank"></td><td>Happy</td><td>Rick Astley</td><td>We Found Love</td></tr>
+            <tr><td>I Will Survive</td><td>Miley Cyrus</td><td>Steps</td><td>Uptown Funk</td><td class="blank"></td></tr>
+            <tr><td>Crocodile Rock</td><td>The Weeknd</td><td class="blank"></td><td>Like a Prayer</td><td>Cyndi Lauper</td></tr>
+          </table></div>
+          <div><table class="card-table">
+            <tr><td>Britney Spears</td><td>Wake Me Up</td><td>Harry Styles</td><td class="blank"></td><td>Shape of You</td></tr>
+            <tr><td class="blank"></td><td style="font-size:6.5px;">Don't Stop Me Now</td><td style="font-size:6.5px;">Sabrina Carpenter</td><td style="font-size:7px;">Blinding Lights</td><td>Tina Turner</td></tr>
+            <tr><td style="font-size:6.5px;">Livin' on a Prayer</td><td style="font-size:6px;">Earth, Wind & Fire</td><td class="blank"></td><td>House of Pain</td><td style="font-size:7px;">Don't Start Now</td></tr>
+          </table></div>
+          <div><table class="card-table">
+            <tr><td>Elton John</td><td>Dreamer</td><td>Kings of Leon</td><td>Valerie</td><td class="blank"></td></tr>
+            <tr><td>Bee Gees</td><td class="blank"></td><td>Jump Around</td><td>Wham!</td><td>Crazy in Love</td></tr>
+            <tr><td>5, 6, 7, 8</td><td style="font-size:6.5px;">Backstreet Boys</td><td style="font-size:6.5px;">Stevie Wonder</td><td class="blank"></td><td>Le Freak</td></tr>
+          </table></div>
+        </div>
+        <div class="card-id-line">Card 001–006</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow">→</div>
+
+  <!-- BACK -->
+  <div>
+    <div class="page-label">Back — Upcoming Events</div>
+    <div class="a4">
+      <div class="page-inner">
+        <div class="events-header">
+          <div class="events-header-row">
+            <div class="logo-ph">Logo</div>
+            <div>
+              <div class="events-title">WHAT'S ON AT THE ANCHOR</div>
+              <div class="events-subtitle">Scan a QR code to book your spot</div>
+            </div>
+            <div class="logo-ph">Logo</div>
+          </div>
+        </div>
+
+        <div class="events-grid">
+          <div class="event-card">
+            <div class="event-top">
+              <div class="event-info">
+                <div class="event-name">Open Mic Night</div>
+                <div class="event-date">Saturday 25 April · 8:00 pm</div>
+                <div class="event-price">Free entry</div>
+              </div>
+              <div class="event-qr">QR</div>
+            </div>
+            <div class="event-desc">Come down for a relaxed night of local performers, good vibes and live music at The Anchor.</div>
+          </div>
+
+          <div class="event-card">
+            <div class="event-top">
+              <div class="event-info">
+                <div class="event-name">Cash Bingo</div>
+                <div class="event-date">Wednesday 29 April · 7:00 pm</div>
+                <div class="event-price">£3 per person</div>
+              </div>
+              <div class="event-qr">QR</div>
+            </div>
+            <div class="event-desc">10 games, loads of prizes and a final jackpot that gets bigger the more people play.</div>
+          </div>
+
+          <div class="event-card">
+            <div class="event-top">
+              <div class="event-info">
+                <div class="event-name">Quiz Night</div>
+                <div class="event-date">Wednesday 6 May · 7:00 pm</div>
+                <div class="event-price">£3 per person</div>
+              </div>
+              <div class="event-qr">QR</div>
+            </div>
+            <div class="event-desc">Fun rounds, spot prizes and a £25 bar voucher for the winners.</div>
+          </div>
+
+          <div class="event-card">
+            <div class="event-top">
+              <div class="event-info">
+                <div class="event-name">Music Bingo</div>
+                <div class="event-date">Wednesday 13 May · 7:00 pm</div>
+                <div class="event-price">Free entry</div>
+              </div>
+              <div class="event-qr">QR</div>
+            </div>
+            <div class="event-desc">Bring your singing voice and get ready for another brilliant night of tunes, laughs and prizes.</div>
+          </div>
+
+          <div class="event-card">
+            <div class="event-top">
+              <div class="event-info">
+                <div class="event-name">Gavin & Stacey Quiz Night</div>
+                <div class="event-date">Friday 15 May · 7:00 pm</div>
+                <div class="event-price">£3 per person</div>
+              </div>
+              <div class="event-qr">QR</div>
+            </div>
+            <div class="event-desc">Brush up on your Barry Island knowledge and come ready for a tidy night.</div>
+          </div>
+
+          <div class="event-card">
+            <div class="event-top">
+              <div class="event-info">
+                <div class="event-name">Live Music: The Retros</div>
+                <div class="event-date">Saturday 17 May · 8:30 pm</div>
+                <div class="event-price">Free entry</div>
+              </div>
+              <div class="event-qr">QR</div>
+            </div>
+            <div class="event-desc">Classic rock and pop covers from one of Surrey's best party bands.</div>
+          </div>
+
+          <div class="event-card">
+            <div class="event-top">
+              <div class="event-info">
+                <div class="event-name">Sunday Roast & Jazz</div>
+                <div class="event-date">Sunday 18 May · 12:00 pm</div>
+                <div class="event-price">Menu prices</div>
+              </div>
+              <div class="event-qr">QR</div>
+            </div>
+            <div class="event-desc">Enjoy a classic Sunday roast with live jazz from 1pm. Book your table to avoid disappointment.</div>
+          </div>
+
+          <div class="event-card">
+            <div class="event-top">
+              <div class="event-info">
+                <div class="event-name">Bank Holiday BBQ</div>
+                <div class="event-date">Monday 26 May · 2:00 pm</div>
+                <div class="event-price">Free entry</div>
+              </div>
+              <div class="event-qr">QR</div>
+            </div>
+            <div class="event-desc">Beer garden BBQ with drinks offers, kids activities and live acoustic music all afternoon.</div>
+          </div>
+        </div>
+
+        <div class="events-footer">
+          the-anchor.pub · @theaborleatherhead · 01onal 123 456
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
