@@ -388,10 +388,10 @@ export default function GuestDisplayPage() {
               /* ── Challenge banner (non-intro) ── */
               <div className="w-full bg-brand-gold/90 border-2 border-white/60 rounded-2xl py-4 px-6 text-center">
                 <p className="m-0 uppercase tracking-[0.2em] text-white/80 text-[clamp(0.65rem,1.2vw,0.9rem)]">
-                  {activeGame?.gameNumber === 1 ? "Dancing Challenge" : "Sing-Along Challenge"}
+                  {runtime.challengeType === 'dance-along' ? "Dancing Challenge" : "Sing-Along Challenge"}
                 </p>
                 <h2 className="m-0 mt-1 uppercase font-black text-white text-[clamp(1.6rem,4vw,3.5rem)] leading-none tracking-wide">
-                  {activeGame?.gameNumber === 1 ? "Get Up and Dance!" : "Sing Along!"}
+                  {runtime.challengeType === 'dance-along' ? "Get Up and Dance!" : "Sing Along!"}
                 </h2>
               </div>
             ) : null}
@@ -478,9 +478,6 @@ export default function GuestDisplayPage() {
         <div className="text-right">
           <p className="m-0 text-[clamp(0.85rem,1.4vw,1.2rem)] text-white/92">
             Progress: {formatSeconds(interpolatedProgress)}
-          </p>
-          <p className="m-0 text-[clamp(0.85rem,1.4vw,1.2rem)] text-white/92">
-            Updated: {new Date(runtime.updatedAtMs).toLocaleTimeString()}
           </p>
         </div>
       </footer>

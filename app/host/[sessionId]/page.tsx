@@ -36,22 +36,23 @@ import {
   type RevealConfig,
 } from "@/lib/live/types";
 
-/** True if the Spotify track matches any of the game's challenge songs (case-insensitive contains). */
-function matchesChallengeSong(
+/** Returns the matching challenge song type, or null if no match. */
+function matchChallengeSong(
   track: { title: string; artist: string } | null,
   game: LiveGameConfig | null | undefined
-): boolean {
-  if (!track || !game) return false;
+): 'sing-along' | 'dance-along' | null {
+  if (!track || !game) return null;
   const songs = getChallengeSongs(game);
-  if (songs.length === 0) return false;
+  if (songs.length === 0) return null;
   const norm = (s: string) => s.trim().toLowerCase();
   const t = norm(track.title);
   const a = norm(track.artist);
-  return songs.some((cs) => {
+  const match = songs.find((cs) => {
     const ct = norm(cs.title);
     const ca = norm(cs.artist);
     return (t.includes(ct) || ct.includes(t)) && (a.includes(ca) || ca.includes(a));
   });
+  return match?.type ?? null;
 }
 
 function getRevealConfig(
@@ -62,7 +63,7 @@ function getRevealConfig(
   const game = activeGameNumber
     ? session.games.find((g) => g.gameNumber === activeGameNumber) ?? null
     : null;
-  return matchesChallengeSong(track, game) ? CHALLENGE_REVEAL_CONFIG : session.revealConfig;
+  return matchChallengeSong(track, game) ? CHALLENGE_REVEAL_CONFIG : session.revealConfig;
 }
 
 type LiveStatusResponse = {
@@ -331,16 +332,20 @@ export default function HostSessionControllerPage() {
         // Always try both detection methods: ID-based first, then text-based fallback.
         // This handles the case where the playlist loaded but a particular challenge
         // song wasn't matched by the fuzzy ID resolution.
-        const detectChallenge = (t: typeof track): boolean => {
-          if (!t) return false;
-          if (challengeTrackIdsRef.current.has(t.trackId ?? "")) return true;
-          return matchesChallengeSong(t, game);
+        const detectChallengeType = (t: typeof track): 'sing-along' | 'dance-along' | null => {
+          if (!t) return null;
+          if (challengeTrackIdsRef.current.has(t.trackId ?? "")) {
+            return matchChallengeSong(t, game) ?? 'sing-along';
+          }
+          return matchChallengeSong(t, game);
         };
-        const isChallengeSong = isIntroSong
-          ? false
+        const detectedType = isIntroSong
+          ? null
           : trackChanged
-            ? detectChallenge(track)
-            : (prev.isChallengeSong || detectChallenge(track));
+            ? detectChallengeType(track)
+            : (prev.challengeType ?? detectChallengeType(track));
+        const isChallengeSong = detectedType !== null;
+        const challengeType = detectedType;
         const baseCfg = isChallengeSong ? CHALLENGE_REVEAL_CONFIG : session.revealConfig;
         const extensionMs = trackChanged ? 0 : prev.extensionMs;
         const cfg = extensionMs > 0 ? { ...baseCfg, nextMs: baseCfg.nextMs + extensionMs } : baseCfg;
@@ -360,6 +365,7 @@ export default function HostSessionControllerPage() {
           currentTrack: track,
           revealState,
           isChallengeSong,
+          challengeType,
           isIntroSong,
           introPlayed,
           extensionMs,
@@ -814,7 +820,7 @@ export default function HostSessionControllerPage() {
     ? session?.games.find((g) => g.gameNumber === runtime.activeGameNumber) ?? null
     : null;
 
-  const isChallenge = matchesChallengeSong(runtime.currentTrack, activeGame);
+  const isChallenge = runtime.isChallengeSong;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -1040,6 +1046,7 @@ export default function HostSessionControllerPage() {
                           revealState: { showAlbum: false, showTitle: false, showArtist: false, shouldAdvance: false },
                           advanceTriggeredForTrackId: null,
                           isChallengeSong: false,
+                          challengeType: null,
                           isIntroSong: false,
                           introPlayed: false,
                           extensionMs: 0,
@@ -1090,7 +1097,7 @@ export default function HostSessionControllerPage() {
               )}
               {isChallenge && !runtime.isIntroSong && runtime.mode !== "break" && (
                 <span className="ml-2 inline-flex items-center rounded-full bg-amber-100 border border-brand-gold px-2 py-0.5 text-xs font-bold text-amber-800">
-                  CHALLENGE SONG
+                  {runtime.challengeType === 'dance-along' ? 'DANCE CHALLENGE' : 'SING-ALONG CHALLENGE'}
                 </span>
               )}
             </p>

@@ -175,6 +175,9 @@ export function validateRuntimeState(input: unknown): LiveRuntimeState | null {
         : null,
     warningMessage,
     isChallengeSong: Boolean(input.isChallengeSong),
+    challengeType: input.challengeType === 'sing-along' || input.challengeType === 'dance-along'
+      ? input.challengeType
+      : null,
     preBreakTrackId:
       typeof input.preBreakTrackId === "string" && input.preBreakTrackId.trim()
         ? input.preBreakTrackId.trim()

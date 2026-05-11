@@ -123,6 +123,8 @@ export type LiveRuntimeState = {
   warningMessage: string | null;
   /** True when the currently playing track is the challenge song for the active game. */
   isChallengeSong: boolean;
+  /** The type of challenge when isChallengeSong is true. Null when not a challenge song. */
+  challengeType: 'sing-along' | 'dance-along' | null;
   /** Track ID stored before going to break, so resume can restart it from the beginning. */
   preBreakTrackId: string | null;
   /** Playlist ID stored before going to break, so resume can restart in the right context. */
@@ -180,6 +182,7 @@ export function makeEmptyRuntimeState(sessionId: string): LiveRuntimeState {
     advanceTriggeredForTrackId: null,
     warningMessage: null,
     isChallengeSong: false,
+    challengeType: null,
     preBreakTrackId: null,
     preBreakPlaylistId: null,
     extensionMs: 0,
