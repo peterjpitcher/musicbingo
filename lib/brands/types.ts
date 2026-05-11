@@ -30,6 +30,7 @@ export const brandSchema = z.object({
   qr_items: z.array(qrItemSchema).max(4).nullable(),
   event_feed_type: z.enum(["anchor_management", "baronshub", "none"]).default("none"),
   event_feed_base_url: z.string().url().nullable().or(z.literal("")),
+  event_feed_venue_id: z.string().max(100).nullable().or(z.literal("")),
   event_feed_has_key: z.boolean(),
   created_at: z.string(),
   updated_at: z.string(),
@@ -55,6 +56,7 @@ export type BrandConfig = Pick<
   | "qr_items"
   | "event_feed_type"
   | "event_feed_base_url"
+  | "event_feed_venue_id"
   | "event_feed_has_key"
 >;
 
@@ -64,6 +66,7 @@ export type BrandFeedConfig = {
   baseUrl: string | null;
   apiKey: string | null;
   websiteUrl: string | null;
+  venueId: string | null;
 };
 
 /** Schema for creating/updating a brand (no id, timestamps auto-generated). */

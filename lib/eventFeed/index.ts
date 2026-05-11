@@ -52,6 +52,7 @@ export async function fetchEventsForBrand(
       baseUrl: feedConfig.baseUrl ?? "",
       apiKey: feedConfig.apiKey ?? "",
       websiteUrl: feedConfig.websiteUrl ?? "",
+      venueId: feedConfig.venueId ?? null,
     };
     const adapter = createEventFeedAdapter(config);
     return await adapter.fetchUpcomingEvents({

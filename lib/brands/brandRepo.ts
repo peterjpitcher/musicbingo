@@ -19,6 +19,7 @@ type BrandRow = {
   qr_items: unknown;
   event_feed_type: string;
   event_feed_base_url: string | null;
+  event_feed_venue_id: string | null;
   event_feed_api_key: string | null;
   created_at: string;
   updated_at: string;
@@ -42,6 +43,7 @@ function rowToBrand(row: BrandRow): Brand {
     qr_items: Array.isArray(row.qr_items) ? (row.qr_items as Brand["qr_items"]) : null,
     event_feed_type: row.event_feed_type as Brand["event_feed_type"],
     event_feed_base_url: row.event_feed_base_url,
+    event_feed_venue_id: row.event_feed_venue_id,
     event_feed_has_key: Boolean(row.event_feed_api_key),
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -113,6 +115,7 @@ function brandToBrandConfig(brand: Brand): BrandConfig {
     qr_items: brand.qr_items,
     event_feed_type: brand.event_feed_type,
     event_feed_base_url: brand.event_feed_base_url,
+    event_feed_venue_id: brand.event_feed_venue_id,
     event_feed_has_key: brand.event_feed_has_key,
   };
 }
@@ -144,6 +147,7 @@ type CreateBrandInput = {
   qr_items?: Brand["qr_items"];
   event_feed_type?: string;
   event_feed_base_url?: string | null;
+  event_feed_venue_id?: string | null;
   event_feed_api_key?: string | null;
 };
 
@@ -196,7 +200,7 @@ export async function getBrandFeedConfig(brandId: string): Promise<BrandFeedConf
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from("brands")
-    .select("event_feed_type, event_feed_base_url, event_feed_api_key, website_url")
+    .select("event_feed_type, event_feed_base_url, event_feed_venue_id, event_feed_api_key, website_url")
     .eq("id", brandId)
     .maybeSingle();
 
@@ -206,7 +210,7 @@ export async function getBrandFeedConfig(brandId: string): Promise<BrandFeedConf
   const feedType = (data.event_feed_type ?? "none") as BrandFeedConfig["type"];
 
   if (feedType === "none") {
-    return { type: "none", baseUrl: null, apiKey: null, websiteUrl: null };
+    return { type: "none", baseUrl: null, apiKey: null, websiteUrl: null, venueId: null };
   }
 
   let baseUrl: string | null = data.event_feed_base_url;
@@ -229,7 +233,7 @@ export async function getBrandFeedConfig(brandId: string): Promise<BrandFeedConf
     }
   }
 
-  return { type: feedType, baseUrl, apiKey, websiteUrl };
+  return { type: feedType, baseUrl, apiKey, websiteUrl, venueId: data.event_feed_venue_id ?? null };
 }
 
 export async function deleteBrand(id: string): Promise<void> {

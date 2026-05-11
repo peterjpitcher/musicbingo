@@ -170,6 +170,9 @@ export function createBaronsHubAdapter(config: EventFeedConfig): EventFeedAdapte
       url.searchParams.set("from", fromIso);
       url.searchParams.set("limit", String(limit));
       url.searchParams.set("endsAfter", fromIso);
+      if (config.venueId) {
+        url.searchParams.set("venueId", config.venueId);
+      }
 
       const res = await fetch(url.toString(), {
         headers: {
