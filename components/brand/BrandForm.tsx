@@ -67,6 +67,7 @@ export function BrandForm({ brand, onSaved }: BrandFormProps): React.ReactElemen
     brand?.event_feed_type ?? "none"
   );
   const [eventFeedBaseUrl, setEventFeedBaseUrl] = useState(brand?.event_feed_base_url ?? "");
+  const [eventFeedVenueId, setEventFeedVenueId] = useState(brand?.event_feed_venue_id ?? "");
   const [eventFeedApiKey, setEventFeedApiKey] = useState("");
   const [eventFeedApiKeyTouched, setEventFeedApiKeyTouched] = useState(false);
 
@@ -166,6 +167,7 @@ export function BrandForm({ brand, onSaved }: BrandFormProps): React.ReactElemen
         qr_items: validQrItems.length > 0 ? validQrItems : null,
         event_feed_type: eventFeedType,
         event_feed_base_url: eventFeedType !== "none" ? (eventFeedBaseUrl.trim() || null) : null,
+        event_feed_venue_id: eventFeedType !== "none" ? (eventFeedVenueId.trim() || null) : null,
       };
 
       // Build body with optional API key (outside Zod schema for security)
@@ -562,6 +564,25 @@ export function BrandForm({ brand, onSaved }: BrandFormProps): React.ReactElemen
                     required
                   />
                 </label>
+
+                {eventFeedType === "baronshub" && (
+                  <label className="block mb-4">
+                    <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                      Venue ID
+                    </span>
+                    <input
+                      type="text"
+                      value={eventFeedVenueId}
+                      onChange={(e) => setEventFeedVenueId(e.target.value)}
+                      placeholder="Leave blank for all venues"
+                      className="mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm
+                        focus:outline-none focus:ring-2 focus:ring-brand-gold focus:border-brand-gold"
+                    />
+                    <p className="mt-1 text-xs text-slate-400">
+                      UUID of the venue to filter events for. Leave blank to show events from all venues.
+                    </p>
+                  </label>
+                )}
 
                 <label className="block">
                   <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">

@@ -43,4 +43,5 @@ export interface EventFeedConfig {
   baseUrl: string;
   apiKey: string;
   websiteUrl: string;
+  venueId: string | null;
 }
