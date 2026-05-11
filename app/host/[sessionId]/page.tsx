@@ -22,6 +22,7 @@ import {
   updateControlHeartbeat,
   writeRuntimeState,
 } from "@/lib/live/storage";
+import { matchChallengeSong } from "@/lib/live/challenge";
 import {
   CHALLENGE_REVEAL_CONFIG,
   DEFAULT_REVEAL_CONFIG,
@@ -29,31 +30,11 @@ import {
   getChallengeSongs,
   getIntroSongs,
   makeEmptyRuntimeState,
-  type LiveGameConfig,
   type LiveRuntimeState,
   type LiveSessionV1,
   type LiveTrackSnapshot,
   type RevealConfig,
 } from "@/lib/live/types";
-
-/** Returns the matching challenge song type, or null if no match. */
-function matchChallengeSong(
-  track: { title: string; artist: string } | null,
-  game: LiveGameConfig | null | undefined
-): 'sing-along' | 'dance-along' | null {
-  if (!track || !game) return null;
-  const songs = getChallengeSongs(game);
-  if (songs.length === 0) return null;
-  const norm = (s: string) => s.trim().toLowerCase();
-  const t = norm(track.title);
-  const a = norm(track.artist);
-  const match = songs.find((cs) => {
-    const ct = norm(cs.title);
-    const ca = norm(cs.artist);
-    return (t.includes(ct) || ct.includes(t)) && (a.includes(ca) || ca.includes(a));
-  });
-  return match?.type ?? null;
-}
 
 function getRevealConfig(
   session: LiveSessionV1,
@@ -334,10 +315,10 @@ export default function HostSessionControllerPage() {
         // song wasn't matched by the fuzzy ID resolution.
         const detectChallengeType = (t: typeof track): 'sing-along' | 'dance-along' | null => {
           if (!t) return null;
-          if (challengeTrackIdsRef.current.has(t.trackId ?? "")) {
-            return matchChallengeSong(t, game) ?? 'sing-along';
-          }
-          return matchChallengeSong(t, game);
+          const idHit = challengeTrackIdsRef.current.has(t.trackId ?? "");
+          const textHit = matchChallengeSong(t, game);
+          if (idHit) return textHit ?? 'sing-along';
+          return textHit;
         };
         const detectedType = isIntroSong
           ? null
@@ -346,6 +327,24 @@ export default function HostSessionControllerPage() {
             : (prev.challengeType ?? detectChallengeType(track));
         const isChallengeSong = detectedType !== null;
         const challengeType = detectedType;
+        if (trackChanged && track) {
+          const songs = game ? getChallengeSongs(game) : [];
+          console.log("[music-bingo] challenge detection", {
+            trackTitle: track.title,
+            trackArtist: track.artist,
+            trackId: track.trackId,
+            gameNumber: prev.activeGameNumber,
+            gameFound: !!game,
+            challengeSongsCount: songs.length,
+            challengeSongs: songs.map((s) => `${s.artist} — ${s.title}`),
+            idSetSize: challengeTrackIdsRef.current.size,
+            idHit: challengeTrackIdsRef.current.has(track.trackId ?? ""),
+            textHit: matchChallengeSong(track, game),
+            isIntroSong,
+            detectedType,
+            isChallengeSong,
+          });
+        }
         const baseCfg = isChallengeSong ? CHALLENGE_REVEAL_CONFIG : session.revealConfig;
         const extensionMs = trackChanged ? 0 : prev.extensionMs;
         const cfg = extensionMs > 0 ? { ...baseCfg, nextMs: baseCfg.nextMs + extensionMs } : baseCfg;
