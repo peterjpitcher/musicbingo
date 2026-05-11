@@ -405,7 +405,7 @@ export async function renderEventsPage(
   // --- Footer ---
   const footerText = opts.brandConfig?.qr_items?.length
     ? opts.brandConfig.qr_items.map((item) => item.label).join("  \u00b7  ")
-    : "the-anchor.pub  \u00b7  @theanchor.pub  \u00b7  01753 682707  \u00b7  #theanchor";
+    : opts.brandConfig?.website_url || "the-anchor.pub";
   const footerSize = 7;
   const footerRuleY = contentBottom + 14;
   page.drawLine({
