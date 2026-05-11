@@ -157,18 +157,18 @@ function toNormalisedEvent(
 export function createBaronsHubAdapter(config: EventFeedConfig): EventFeedAdapter {
   return {
     async fetchUpcomingEvents(opts) {
-      const { afterDate, limit } = opts;
+      const { afterDate, limit, sessionDate } = opts;
 
-      // Convert afterDate (YYYY-MM-DD) to midnight London time ISO.
-      // We use noon UTC as a safe approximation that avoids DST edge cases,
-      // then format back to the date boundary in London timezone.
-      const fromDate = new Date(`${afterDate}T00:00:00Z`);
-      if (Number.isNaN(fromDate.getTime())) return [];
-      const fromIso = fromDate.toISOString();
+      // Use day-after the session date so we exclude the event being hosted.
+      const effectiveDate = sessionDate ?? afterDate;
+      const dayAfter = new Date(`${effectiveDate}T12:00:00Z`);
+      dayAfter.setUTCDate(dayAfter.getUTCDate() + 1);
+      if (Number.isNaN(dayAfter.getTime())) return [];
+      const fromIso = dayAfter.toISOString();
 
       const url = new URL("/api/v1/events", config.baseUrl);
       url.searchParams.set("from", fromIso);
-      url.searchParams.set("limit", String(limit));
+      url.searchParams.set("limit", String(Math.max(limit, 24)));
       url.searchParams.set("endsAfter", fromIso);
       if (config.venueId) {
         url.searchParams.set("venueId", config.venueId);
