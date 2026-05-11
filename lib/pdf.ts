@@ -6,7 +6,7 @@ import { PDFDocument, PDFFont, StandardFonts, rgb } from "pdf-lib";
 import sharp from "sharp";
 
 import type { Card, FooterQrItem } from "@/lib/types";
-import type { EventDetail } from "@/lib/managementApi";
+import type { NormalisedEvent } from "@/lib/eventFeed";
 import type { BrandConfig } from "@/lib/brands/types";
 import { sanitizeFilenamePart } from "@/lib/utils";
 
@@ -337,7 +337,7 @@ export async function renderCardsPdf(cards: Card[], opts: RenderOptions): Promis
 // ---------------------------------------------------------------------------
 
 type EventsPageOptions = {
-  events: EventDetail[];
+  events: NormalisedEvent[];
   logoLeftPngBytes?: Uint8Array | null;
   logoRightPngBytes?: Uint8Array | null;
   brandConfig?: BrandConfig | null;

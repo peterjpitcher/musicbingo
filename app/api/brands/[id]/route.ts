@@ -4,6 +4,7 @@ import { getBrand, updateBrand, deleteBrand } from "@/lib/brands/brandRepo";
 import { getBrandLogoPublicUrl } from "@/lib/brands/brandStorage";
 import { brandInputSchema } from "@/lib/brands/types";
 import type { Brand } from "@/lib/brands/types";
+import { validateEventFeedUrl } from "@/lib/brands/validation";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -37,7 +38,71 @@ export async function PUT(request: NextRequest, { params }: RouteParams): Promis
         { status: 400 }
       );
     }
-    const brand = await updateBrand(id, parsed.data);
+
+    const existingBrand = await getBrand(id);
+    if (!existingBrand) {
+      return NextResponse.json({ error: "Brand not found" }, { status: 404 });
+    }
+
+    const feedType = parsed.data.event_feed_type;
+    const feedUrl = parsed.data.event_feed_base_url;
+    const rawApiKey = typeof body.event_feed_api_key === "string" ? body.event_feed_api_key.trim() : null;
+
+    // Validate event feed URL when provided
+    const effectiveFeedType = feedType ?? existingBrand.event_feed_type;
+    if (effectiveFeedType !== "none" && feedUrl) {
+      const urlError = validateEventFeedUrl(feedUrl);
+      if (urlError) {
+        return NextResponse.json(
+          { error: `event_feed_base_url: ${urlError}` },
+          { status: 400 }
+        );
+      }
+    }
+
+    if (rawApiKey && rawApiKey.length > 500) {
+      return NextResponse.json(
+        { error: "event_feed_api_key must be 500 characters or fewer" },
+        { status: 400 }
+      );
+    }
+
+    // Completeness: non-anchor feeds require both URL and key
+    if (effectiveFeedType !== "none" && effectiveFeedType !== "anchor_management") {
+      const effectiveUrl = feedUrl ?? existingBrand.event_feed_base_url;
+      const effectiveHasKey = rawApiKey || existingBrand.event_feed_has_key;
+      if (!effectiveUrl?.trim()) {
+        return NextResponse.json(
+          { error: "event_feed_base_url is required for this feed type" },
+          { status: 400 }
+        );
+      }
+      if (!effectiveHasKey) {
+        return NextResponse.json(
+          { error: "event_feed_api_key is required for this feed type" },
+          { status: 400 }
+        );
+      }
+    }
+
+    const dbInput: Parameters<typeof updateBrand>[1] = { ...parsed.data };
+
+    // Include API key if explicitly provided
+    if (rawApiKey) {
+      dbInput.event_feed_api_key = rawApiKey;
+    }
+
+    // Clear stale key when feed is disabled or provider changes
+    if (feedType) {
+      const providerChanged = feedType !== existingBrand.event_feed_type;
+      if (feedType === "none" && providerChanged) {
+        dbInput.event_feed_api_key = null;
+      } else if (providerChanged && !rawApiKey) {
+        dbInput.event_feed_api_key = null;
+      }
+    }
+
+    const brand = await updateBrand(id, dbInput);
     return NextResponse.json(resolveLogoUrls(brand));
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });

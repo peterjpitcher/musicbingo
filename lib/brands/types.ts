@@ -7,6 +7,12 @@ export const qrItemSchema = z.object({
   url: z.string().url(),
 });
 
+/** Validates that an event feed base URL uses HTTPS. */
+export const eventFeedBaseUrlSchema = z.string().url().refine(
+  (url) => url.startsWith("https://"),
+  { message: "Must be an HTTPS URL" }
+);
+
 export const brandSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1).max(100),
@@ -22,6 +28,9 @@ export const brandSchema = z.object({
   end_message: z.string().max(500).nullable(),
   website_url: z.string().max(200).nullable().or(z.literal("")),
   qr_items: z.array(qrItemSchema).max(4).nullable(),
+  event_feed_type: z.enum(["anchor_management", "baronshub", "none"]).default("none"),
+  event_feed_base_url: z.string().url().nullable().or(z.literal("")),
+  event_feed_has_key: z.boolean(),
   created_at: z.string(),
   updated_at: z.string(),
 });
@@ -44,13 +53,25 @@ export type BrandConfig = Pick<
   | "end_message"
   | "website_url"
   | "qr_items"
+  | "event_feed_type"
+  | "event_feed_base_url"
+  | "event_feed_has_key"
 >;
+
+/** Server-only type for event feed configuration (includes secret API key). */
+export type BrandFeedConfig = {
+  type: "anchor_management" | "baronshub" | "none";
+  baseUrl: string | null;
+  apiKey: string | null;
+  websiteUrl: string | null;
+};
 
 /** Schema for creating/updating a brand (no id, timestamps auto-generated). */
 export const brandInputSchema = brandSchema.omit({
   id: true,
   created_at: true,
   updated_at: true,
+  event_feed_has_key: true,
 });
 
 export type BrandInput = z.infer<typeof brandInputSchema>;

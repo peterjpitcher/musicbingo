@@ -1,6 +1,6 @@
 ---
 generated: true
-last_updated: 2026-05-10T00:00:00Z
+last_updated: 2026-05-11T00:00:00Z
 source: session-setup
 project: music-bingo
 ---
@@ -13,42 +13,60 @@ project: music-bingo
 
 ### live_sessions
 
-Created in: `supabase/migrations/20260225101214_create_live_sessions.sql`
-Extended in: `supabase/migrations/20260311000000_add_runtime_data.sql`, `20260424120001_add_brand_id_to_sessions.sql`
+The primary table for game sessions. Stores session metadata and the full game state as JSONB in the `data` column. Runtime state (current track, reveal index) is stored separately.
 
-| Column (inferred) | Usage |
-|-------------------|-------|
-| id | Primary key (UUID) |
-| data | JSONB game session payload |
-| runtime_data | JSONB runtime state (added later) |
-| brand_id | FK to brands table (added later) |
-| updated_at | Timestamp for ordering |
+**Accessed by:** [[server-actions#Session Repository|sessionRepo]] functions, [[routes#Sessions|session API routes]]
+
+**Key columns (from migration files):**
+- `id` (text, PK)
+- `name` (text)
+- `event_date` (text)
+- `data` (jsonb) -- full `LiveSessionV1` object
+- `brand_id` (uuid, FK to brands)
+- `runtime` (jsonb) -- `LiveRuntimeState`
+- `created_at` (timestamptz)
+- `updated_at` (timestamptz)
 
 ### brands
 
-Created in: `supabase/migrations/20260424120000_create_brands.sql`
+Brand configuration for white-labelling bingo cards. Each brand stores colours, logos, messages, and QR code items.
 
-| Column (inferred) | Usage |
-|-------------------|-------|
-| id | Primary key (UUID) |
-| name | Brand display name |
-| is_default | Boolean flag for default brand |
-| (other fields) | Brand configuration (colours, etc.) |
+**Accessed by:** [[server-actions#Brand Repository|brandRepo]] functions, [[routes#Brands|brand API routes]]
+
+**Key columns (from migration `20260424120000_create_brands.sql`):**
+- `id` (uuid, PK, auto-generated)
+- `name` (text)
+- `is_default` (boolean, unique constraint: at most one true)
+- `logo_dark_url` (text)
+- `logo_light_url` (text)
+- `color_primary`, `color_primary_light`, `color_accent`, `color_accent_light` (text, hex format)
+- `font_family` (text, nullable)
+- `break_message`, `end_message` (text, nullable)
+- `website_url` (text, nullable)
+- `qr_items` (jsonb, nullable)
+- `created_at`, `updated_at` (timestamptz)
 
 ## Storage Buckets
 
-### brand-assets
+### brand-logos
 
-Created in: `supabase/migrations/20260424120002_create_brand_assets_bucket.sql`
+Supabase Storage bucket for brand logo images (PNG). Accessed via `lib/brands/brandStorage.ts`.
 
-Used for storing brand logo images. Accessed via `lib/brands/brandStorage.ts`.
+## Migrations
+
+Located in `supabase/migrations/`:
+
+| Timestamp | Description |
+|-----------|-------------|
+| `20250424000000` | Create `live_sessions` table |
+| `20250424000001` | Add `runtime` JSONB column |
+| `20250424000002` | Create `session_events` table |
+| `20260424120000` | Create `brands` table |
+| `20260504193000` | Add `brand_id` column to `live_sessions` |
+| `20260504195000` | Create `brand-logos` storage bucket |
 
 ## Notes
 
-- Full schema details should be queried from the live database using:
-  ```sql
-  SELECT column_name, data_type FROM information_schema.columns
-  WHERE table_name IN ('live_sessions', 'brands') ORDER BY ordinal_position;
-  ```
-- The `data` column in `live_sessions` stores the entire game state as JSONB (tracks, cards, configuration).
-- The `runtime_data` column stores transient game runtime state (current track index, reveals, etc.).
+- The `session_events` table exists in migrations but no code references it -- it may be unused or reserved for future analytics.
+- All Supabase access uses the service-role client (no RLS enforcement at the application level).
+- See [[relationships]] for which routes and functions touch each table.

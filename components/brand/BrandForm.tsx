@@ -62,6 +62,14 @@ export function BrandForm({ brand, onSaved }: BrandFormProps): React.ReactElemen
     brand?.qr_items?.map((item) => ({ label: item.label, url: item.url })) ?? []
   );
 
+  // Event feed state
+  const [eventFeedType, setEventFeedType] = useState<"anchor_management" | "baronshub" | "none">(
+    brand?.event_feed_type ?? "none"
+  );
+  const [eventFeedBaseUrl, setEventFeedBaseUrl] = useState(brand?.event_feed_base_url ?? "");
+  const [eventFeedApiKey, setEventFeedApiKey] = useState("");
+  const [eventFeedApiKeyTouched, setEventFeedApiKeyTouched] = useState(false);
+
   // Logo upload state
   const [logoDarkFile, setLogoDarkFile] = useState<File | null>(null);
   const [logoLightFile, setLogoLightFile] = useState<File | null>(null);
@@ -126,6 +134,17 @@ export function BrandForm({ brand, onSaved }: BrandFormProps): React.ReactElemen
       return;
     }
 
+    if (eventFeedType !== "none" && eventFeedType !== "anchor_management") {
+      if (!eventFeedBaseUrl.trim()) {
+        setError("API base URL is required when an event feed is configured.");
+        return;
+      }
+      if (!brand?.event_feed_has_key && !eventFeedApiKey.trim()) {
+        setError("API key is required for new event feed configurations.");
+        return;
+      }
+    }
+
     setSaving(true);
     try {
       // Filter out empty QR items
@@ -145,7 +164,15 @@ export function BrandForm({ brand, onSaved }: BrandFormProps): React.ReactElemen
         end_message: endMessage.trim() || null,
         website_url: websiteUrl.trim() || null,
         qr_items: validQrItems.length > 0 ? validQrItems : null,
+        event_feed_type: eventFeedType,
+        event_feed_base_url: eventFeedType !== "none" ? (eventFeedBaseUrl.trim() || null) : null,
       };
+
+      // Build body with optional API key (outside Zod schema for security)
+      const body: Record<string, unknown> = { ...payload };
+      if (eventFeedType !== "none" && eventFeedApiKey.trim()) {
+        body.event_feed_api_key = eventFeedApiKey.trim();
+      }
 
       let savedBrand: Brand;
 
@@ -154,7 +181,7 @@ export function BrandForm({ brand, onSaved }: BrandFormProps): React.ReactElemen
         const res = await fetch("/api/brands", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+          body: JSON.stringify(body),
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
@@ -166,7 +193,7 @@ export function BrandForm({ brand, onSaved }: BrandFormProps): React.ReactElemen
         const res = await fetch(`/api/brands/${brand.id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+          body: JSON.stringify(body),
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
@@ -495,6 +522,70 @@ export function BrandForm({ brand, onSaved }: BrandFormProps): React.ReactElemen
                   focus:outline-none focus:ring-2 focus:ring-brand-gold focus:border-brand-gold"
               />
             </label>
+          </Card>
+
+          {/* Event Feed Configuration */}
+          <Card>
+            <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-4">
+              Event Feed Configuration
+            </h2>
+
+            <label className="block mb-4">
+              <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                Feed Type
+              </span>
+              <select
+                value={eventFeedType}
+                onChange={(e) => setEventFeedType(e.target.value as "anchor_management" | "baronshub" | "none")}
+                className="mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm
+                  focus:outline-none focus:ring-2 focus:ring-brand-gold focus:border-brand-gold"
+              >
+                <option value="none">None</option>
+                <option value="anchor_management">Anchor Management API</option>
+                <option value="baronshub">BaronsHub API</option>
+              </select>
+            </label>
+
+            {eventFeedType !== "none" && (
+              <>
+                <label className="block mb-4">
+                  <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                    API Base URL *
+                  </span>
+                  <input
+                    type="url"
+                    value={eventFeedBaseUrl}
+                    onChange={(e) => setEventFeedBaseUrl(e.target.value)}
+                    placeholder="https://api.example.com"
+                    className="mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm
+                      focus:outline-none focus:ring-2 focus:ring-brand-gold focus:border-brand-gold"
+                    required
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                    API Key {!brand?.event_feed_has_key && "*"}
+                  </span>
+                  <input
+                    type="password"
+                    value={eventFeedApiKey}
+                    onChange={(e) => {
+                      setEventFeedApiKey(e.target.value);
+                      setEventFeedApiKeyTouched(true);
+                    }}
+                    placeholder={brand?.event_feed_has_key ? "Key stored securely" : "Enter API key"}
+                    className="mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm
+                      focus:outline-none focus:ring-2 focus:ring-brand-gold focus:border-brand-gold"
+                  />
+                  {brand?.event_feed_has_key && !eventFeedApiKeyTouched && (
+                    <p className="mt-1 text-xs text-slate-400">
+                      Leave blank to keep the existing key.
+                    </p>
+                  )}
+                </label>
+              </>
+            )}
           </Card>
         </div>
       </div>
