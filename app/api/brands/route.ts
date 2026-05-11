@@ -4,6 +4,7 @@ import { listBrands, createBrand } from "@/lib/brands/brandRepo";
 import { getBrandLogoPublicUrl } from "@/lib/brands/brandStorage";
 import { brandInputSchema } from "@/lib/brands/types";
 import type { Brand } from "@/lib/brands/types";
+import { validateEventFeedUrl } from "@/lib/brands/validation";
 
 function resolveLogoUrls(brand: Brand): Brand & { logo_dark_public_url: string; logo_light_public_url: string } {
   return {
@@ -32,7 +33,52 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         { status: 400 }
       );
     }
-    const brand = await createBrand(parsed.data);
+
+    // Validate event feed configuration
+    const { event_feed_type, event_feed_base_url } = parsed.data;
+    const rawApiKey = typeof body.event_feed_api_key === "string" ? body.event_feed_api_key.trim() : null;
+
+    if (event_feed_type && event_feed_type !== "none") {
+      if (event_feed_base_url) {
+        const urlError = validateEventFeedUrl(event_feed_base_url);
+        if (urlError) {
+          return NextResponse.json(
+            { error: `event_feed_base_url: ${urlError}` },
+            { status: 400 }
+          );
+        }
+      }
+
+      // Non-anchor feeds require both URL and key (mirrors DB CHECK constraint)
+      if (event_feed_type !== "anchor_management") {
+        if (!event_feed_base_url?.trim()) {
+          return NextResponse.json(
+            { error: "event_feed_base_url is required for this feed type" },
+            { status: 400 }
+          );
+        }
+        if (!rawApiKey) {
+          return NextResponse.json(
+            { error: "event_feed_api_key is required for this feed type" },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
+    if (rawApiKey && rawApiKey.length > 500) {
+      return NextResponse.json(
+        { error: "event_feed_api_key must be 500 characters or fewer" },
+        { status: 400 }
+      );
+    }
+
+    const dbInput: Parameters<typeof createBrand>[0] = {
+      ...parsed.data,
+      event_feed_api_key: rawApiKey || null,
+    };
+
+    const brand = await createBrand(dbInput);
     return NextResponse.json(resolveLogoUrls(brand), { status: 201 });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });

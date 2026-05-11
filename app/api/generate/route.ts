@@ -9,8 +9,8 @@ import {
   resolveChallengeSong,
   resolveChallengeSongs,
 } from "@/lib/gameInput";
-import { fetchUpcomingEventDetails } from "@/lib/managementApi";
-import type { EventDetail } from "@/lib/managementApi";
+import { fetchEventsForBrand } from "@/lib/eventFeed";
+import type { NormalisedEvent } from "@/lib/eventFeed";
 import {
   loadDefaultEventLogoPngBytes,
   loadDefaultLogoPngBytes,
@@ -26,7 +26,7 @@ import {
 } from "@/lib/spotifyWeb";
 import type { Card, ParseResult, Song } from "@/lib/types";
 import { sanitizeFilenamePart } from "@/lib/utils";
-import { resolveBrandConfig } from "@/lib/brands/brandRepo";
+import { resolveBrandConfig, getBrandFeedConfig } from "@/lib/brands/brandRepo";
 import { fetchBrandLogoPngBytes } from "@/lib/brands/brandStorage";
 import type { BrandConfig } from "@/lib/brands/types";
 
@@ -143,7 +143,7 @@ async function renderGamePdfWithEvents(params: {
   theme: string;
   logoLeftPngBytes: Uint8Array | null;
   logoRightPngBytes: Uint8Array | null;
-  events: EventDetail[];
+  events: NormalisedEvent[];
   brandConfig: BrandConfig | null;
 }): Promise<Uint8Array> {
   const cardsPdfBytes = await renderCardsPdf(params.cards, {
@@ -325,7 +325,8 @@ export async function POST(request: Request) {
     const brandId = asString(form.get("brand_id")).trim() || null;
     const brandConfig = await resolveBrandConfig(brandId);
 
-    const upcomingEvents = await fetchUpcomingEventDetails({ eventDateDisplay: eventDateInput });
+    const feedConfig = brandConfig ? await getBrandFeedConfig(brandConfig.id) : null;
+    const upcomingEvents = feedConfig ? await fetchEventsForBrand(feedConfig, eventDateInput) : [];
 
     let logoRightPngBytes: Uint8Array | null = null;
     let logoLeftPngBytes: Uint8Array | null = null;

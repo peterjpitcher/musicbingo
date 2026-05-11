@@ -2,7 +2,7 @@ import { Document, Packer, Paragraph, TextRun } from "docx";
 
 import { formatEventDateWithWeekdayDisplay } from "@/lib/eventDate";
 import { normalizeGameTheme } from "@/lib/gameInput";
-import type { EventDetail } from "@/lib/managementApi";
+import type { NormalisedEvent } from "@/lib/eventFeed";
 import type { Song } from "@/lib/types";
 
 type IntroSongEntry = {
@@ -24,7 +24,7 @@ type RenderClipboardDocxParams = {
   eventDateInput: string;
   game1: ClipboardGame;
   game2: ClipboardGame;
-  upcomingEvents?: EventDetail[];
+  upcomingEvents?: NormalisedEvent[];
 };
 
 function songLabel(song: Song): string {
@@ -90,7 +90,7 @@ function songsBlock(songs: Song[]): Paragraph[] {
   return out;
 }
 
-function eventParagraphs(events?: EventDetail[]): Paragraph[] {
+function eventParagraphs(events?: NormalisedEvent[]): Paragraph[] {
   if (!events || events.length === 0) {
     return [
       bullet("** Update this section before printing — add the next 3–4 upcoming events with dates, times, and short descriptions. **"),
