@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { matchChallengeSong } from "@/lib/live/challenge";
 import { subscribeLiveChannel } from "@/lib/live/channel";
 import { getLiveSession } from "@/lib/live/sessionApi";
 import { readRuntimeState, validateRuntimeState } from "@/lib/live/storage";
@@ -197,7 +198,11 @@ export default function GuestDisplayPage() {
     ? session?.games.find((game) => game.gameNumber === runtime.activeGameNumber) ?? null
     : null;
 
-  const effectiveCfg: RevealConfig = runtime.isChallengeSong
+  const localChallengeType = matchChallengeSong(runtime.currentTrack, activeGame);
+  const isChallenge = runtime.isChallengeSong || localChallengeType !== null;
+  const challengeType = runtime.challengeType ?? localChallengeType;
+
+  const effectiveCfg: RevealConfig = isChallenge
     ? CHALLENGE_REVEAL_CONFIG
     : (session?.revealConfig ?? DEFAULT_REVEAL_CONFIG);
 
@@ -217,12 +222,25 @@ export default function GuestDisplayPage() {
   const showPaused = runtime.mode === "paused";
   const showEnded = runtime.mode === "ended";
   const showRunning = runtime.mode === "running" && Boolean(runtime.currentTrack);
+  const challengeActive = showRunning && !runtime.isIntroSong && isChallenge;
 
   return (
     <BrandProvider brand={brand}>
-    <div className="guest-projection-shell min-h-screen w-screen text-white flex flex-col overflow-x-hidden">
+    <div
+      className={[
+        "guest-projection-shell min-h-screen w-screen text-white flex flex-col overflow-x-hidden",
+        challengeActive ? "challenge-projection-shell" : "",
+      ].join(" ")}
+    >
       {/* Header */}
-      <header className="flex items-center justify-between gap-5 px-6 py-4 border-b border-brand-gold/50 bg-brand-green/90 backdrop-blur-sm">
+      <header
+        className={[
+          "flex items-center justify-between gap-5 px-6 py-4 border-b backdrop-blur-sm",
+          challengeActive
+            ? "border-yellow-200/60 bg-amber-800/90"
+            : "border-brand-gold/50 bg-brand-green/90",
+        ].join(" ")}
+      >
         <div className="flex items-center gap-3.5">
           <img
             src={brand?.logo_dark_url ?? "/the-anchor-pub-logo-white-transparent.png"}
@@ -384,86 +402,141 @@ export default function GuestDisplayPage() {
                   </div>
                 </div>
               )
-            ) : runtime.isChallengeSong ? (
-              /* ── Challenge banner (non-intro) ── */
-              <div className="w-full bg-brand-gold/90 border-2 border-white/60 rounded-2xl py-4 px-6 text-center">
-                <p className="m-0 uppercase tracking-[0.2em] text-white/80 text-[clamp(0.65rem,1.2vw,0.9rem)]">
-                  {runtime.challengeType === 'dance-along' ? "Dancing Challenge" : "Sing-Along Challenge"}
-                </p>
-                <h2 className="m-0 mt-1 uppercase font-black text-white text-[clamp(1.6rem,4vw,3.5rem)] leading-none tracking-wide">
-                  {runtime.challengeType === 'dance-along' ? "Get Up and Dance!" : "Sing Along!"}
-                </h2>
-              </div>
-            ) : null}
-
-            {/* Normal running layout (album art + metadata grid) — hidden during intro */}
-            {!runtime.isIntroSong && (
-          <div className="grid grid-cols-1 lg:[grid-template-columns:minmax(260px,560px)_minmax(0,1fr)] gap-7 items-center">
-            {/* Album art */}
-            <div className="flex items-center justify-center">
-              {(runtime.isIntroSong || runtime.freePlay || localRevealState.showAlbum) ? (
-                runtime.currentTrack.albumImageUrl ? (
-                  <img
-                    src={runtime.currentTrack.albumImageUrl}
-                    alt="Album cover"
-                    className="w-[min(68vh,88vw)] max-w-[560px] aspect-square rounded-[22px] border-4 border-white/90 shadow-2xl object-cover bg-black"
-                  />
-                ) : (
-                  <div className="w-[min(68vh,88vw)] max-w-[560px] aspect-square rounded-[22px] border-4 border-white/90 flex items-center justify-center text-[clamp(1rem,2vw,1.7rem)] uppercase tracking-[0.08em] bg-brand-green/72">
-                    Album Cover
-                  </div>
-                )
-              ) : (
-                <div className="w-[min(68vh,88vw)] max-w-[560px] aspect-square rounded-[22px] border-4 border-dashed border-white/50 flex items-center justify-center text-[clamp(1rem,2vw,1.7rem)] uppercase tracking-[0.08em] bg-brand-green/72 opacity-50">
-                  Album reveals at {Math.floor(effectiveCfg.albumMs / 1000)}s
+            ) : isChallenge ? (
+              <div className="w-full min-h-[60vh] flex flex-col items-center justify-center gap-6 text-center py-4">
+                <div>
+                  <p className="m-0 uppercase tracking-[0.28em] text-yellow-100 text-[clamp(0.9rem,2vw,1.5rem)] font-black">
+                    {challengeType === "dance-along" ? "Dance Challenge" : "Sing Challenge"}
+                  </p>
+                  <h2 className="m-0 mt-3 uppercase font-black text-white text-[clamp(3rem,9vw,8rem)] leading-[0.88] tracking-wide drop-shadow-[0_6px_20px_rgba(0,0,0,0.35)]">
+                    {challengeType === "dance-along" ? (
+                      <>
+                        <span className="block">Get Up</span>
+                        <span className="block">And Dance</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="block">Sing</span>
+                        <span className="block">Along</span>
+                      </>
+                    )}
+                  </h2>
                 </div>
-              )}
-            </div>
 
-            {/* Track metadata */}
-            <div className="grid gap-3.5 lg:text-left text-center">
-              {(runtime.isIntroSong || runtime.freePlay || localRevealState.showTitle) ? (
-                <h2 className="m-0 text-[clamp(1.6rem,4.5vw,4.2rem)] uppercase font-black tracking-wide text-white">
-                  {runtime.currentTrack.title || "Unknown Title"}
-                </h2>
-              ) : (
-                <h2 className="m-0 text-[clamp(1.6rem,4.5vw,4.2rem)] uppercase font-black tracking-wide text-white/75">
-                  Title reveals at {Math.floor(effectiveCfg.titleMs / 1000)}s
-                </h2>
-              )}
+                <p className="m-0 max-w-4xl text-white/95 text-[clamp(1.2rem,2.6vw,2.4rem)] font-bold">
+                  {challengeType === "dance-along"
+                    ? "This is a dancing challenge song."
+                    : "This is a singing challenge song."}
+                </p>
 
-              {(runtime.isIntroSong || runtime.freePlay || localRevealState.showArtist) ? (
-                <p className="m-0 text-[clamp(1.3rem,3vw,2.8rem)] font-bold text-white">
-                  {runtime.currentTrack.artist || "Unknown Artist"}
-                </p>
-              ) : (
-                <p className="m-0 text-[clamp(1.3rem,3vw,2.8rem)] font-bold text-white/75">
-                  Artist reveals at {Math.floor(effectiveCfg.artistMs / 1000)}s
-                </p>
-              )}
+                <div className="flex flex-col items-center gap-4">
+                  {(runtime.freePlay || localRevealState.showAlbum) && runtime.currentTrack.albumImageUrl ? (
+                    <img
+                      src={runtime.currentTrack.albumImageUrl}
+                      alt="Album cover"
+                      className="w-[min(42vh,58vw)] max-w-[380px] aspect-square rounded-[22px] border-4 border-yellow-200/90 shadow-2xl object-cover bg-black"
+                    />
+                  ) : null}
+                  {(runtime.freePlay || localRevealState.showTitle) && (
+                    <h3 className="m-0 text-[clamp(1.5rem,3.6vw,3.4rem)] uppercase font-black tracking-wide text-white">
+                      {runtime.currentTrack.title || "Unknown Title"}
+                    </h3>
+                  )}
+                  {(runtime.freePlay || localRevealState.showArtist) && (
+                    <p className="m-0 text-[clamp(1.1rem,2.4vw,2.2rem)] font-bold text-white/90">
+                      {runtime.currentTrack.artist || "Unknown Artist"}
+                    </p>
+                  )}
+                </div>
 
-              {runtime.freePlay ? (
-                <p className="mt-1.5 text-white/70 text-[clamp(1rem,2vw,1.7rem)] uppercase tracking-[0.05em]">
-                  Free Play
-                </p>
-              ) : localRevealState.shouldAdvance ? (
-                <p className="mt-1.5 text-white/90 text-[clamp(1rem,2vw,1.7rem)] uppercase tracking-[0.05em]">
-                  Advancing to next song...
-                </p>
-              ) : (
-                <p className="mt-1.5 text-white/90 text-[clamp(1rem,2vw,1.7rem)] uppercase tracking-[0.05em]">
-                  Next song at {Math.floor((effectiveCfg.nextMs + runtime.extensionMs) / 1000)}s
-                </p>
-              )}
-            </div>
-          </div>
+                {runtime.freePlay ? (
+                  <p className="mt-1 text-white/80 text-[clamp(1rem,2vw,1.7rem)] uppercase tracking-[0.05em]">
+                    Free Play
+                  </p>
+                ) : localRevealState.shouldAdvance ? (
+                  <p className="mt-1 text-white/95 text-[clamp(1rem,2vw,1.7rem)] uppercase tracking-[0.05em]">
+                    Advancing to next song...
+                  </p>
+                ) : (
+                  <p className="mt-1 text-white/95 text-[clamp(1rem,2vw,1.7rem)] uppercase tracking-[0.05em]">
+                    Next song at {Math.floor((effectiveCfg.nextMs + runtime.extensionMs) / 1000)}s
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 lg:[grid-template-columns:minmax(260px,560px)_minmax(0,1fr)] gap-7 items-center">
+                {/* Album art */}
+                <div className="flex items-center justify-center">
+                  {(runtime.freePlay || localRevealState.showAlbum) ? (
+                    runtime.currentTrack.albumImageUrl ? (
+                      <img
+                        src={runtime.currentTrack.albumImageUrl}
+                        alt="Album cover"
+                        className="w-[min(68vh,88vw)] max-w-[560px] aspect-square rounded-[22px] border-4 border-white/90 shadow-2xl object-cover bg-black"
+                      />
+                    ) : (
+                      <div className="w-[min(68vh,88vw)] max-w-[560px] aspect-square rounded-[22px] border-4 border-white/90 flex items-center justify-center text-[clamp(1rem,2vw,1.7rem)] uppercase tracking-[0.08em] bg-brand-green/72">
+                        Album Cover
+                      </div>
+                    )
+                  ) : (
+                    <div className="w-[min(68vh,88vw)] max-w-[560px] aspect-square rounded-[22px] border-4 border-dashed border-white/50 flex items-center justify-center text-[clamp(1rem,2vw,1.7rem)] uppercase tracking-[0.08em] bg-brand-green/72 opacity-50">
+                      Album reveals at {Math.floor(effectiveCfg.albumMs / 1000)}s
+                    </div>
+                  )}
+                </div>
+
+                {/* Track metadata */}
+                <div className="grid gap-3.5 lg:text-left text-center">
+                  {(runtime.freePlay || localRevealState.showTitle) ? (
+                    <h2 className="m-0 text-[clamp(1.6rem,4.5vw,4.2rem)] uppercase font-black tracking-wide text-white">
+                      {runtime.currentTrack.title || "Unknown Title"}
+                    </h2>
+                  ) : (
+                    <h2 className="m-0 text-[clamp(1.6rem,4.5vw,4.2rem)] uppercase font-black tracking-wide text-white/75">
+                      Title reveals at {Math.floor(effectiveCfg.titleMs / 1000)}s
+                    </h2>
+                  )}
+
+                  {(runtime.freePlay || localRevealState.showArtist) ? (
+                    <p className="m-0 text-[clamp(1.3rem,3vw,2.8rem)] font-bold text-white">
+                      {runtime.currentTrack.artist || "Unknown Artist"}
+                    </p>
+                  ) : (
+                    <p className="m-0 text-[clamp(1.3rem,3vw,2.8rem)] font-bold text-white/75">
+                      Artist reveals at {Math.floor(effectiveCfg.artistMs / 1000)}s
+                    </p>
+                  )}
+
+                  {runtime.freePlay ? (
+                    <p className="mt-1.5 text-white/70 text-[clamp(1rem,2vw,1.7rem)] uppercase tracking-[0.05em]">
+                      Free Play
+                    </p>
+                  ) : localRevealState.shouldAdvance ? (
+                    <p className="mt-1.5 text-white/90 text-[clamp(1rem,2vw,1.7rem)] uppercase tracking-[0.05em]">
+                      Advancing to next song...
+                    </p>
+                  ) : (
+                    <p className="mt-1.5 text-white/90 text-[clamp(1rem,2vw,1.7rem)] uppercase tracking-[0.05em]">
+                      Next song at {Math.floor((effectiveCfg.nextMs + runtime.extensionMs) / 1000)}s
+                    </p>
+                  )}
+                </div>
+              </div>
             )}
           </div>
         ) : null}
       </section>
 
       {/* Footer */}
-      <footer className="flex justify-between items-center gap-4 px-6 py-4 border-t border-brand-green-light/60 bg-brand-green/94">
+      <footer
+        className={[
+          "flex justify-between items-center gap-4 px-6 py-4 border-t",
+          challengeActive
+            ? "border-yellow-200/60 bg-amber-800/90"
+            : "border-brand-green-light/60 bg-brand-green/94",
+        ].join(" ")}
+      >
         <div>
           <p className="m-0 text-[clamp(0.85rem,1.4vw,1.2rem)] text-white/92">
             Mode: {runtime.mode.toUpperCase()}

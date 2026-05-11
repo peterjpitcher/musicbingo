@@ -17,3 +17,10 @@
     radial-gradient(circle at 90% 10%, rgb(var(--brand-primary-light-rgb) / 0.22), transparent 50%),
     linear-gradient(180deg, rgb(var(--brand-primary-rgb)) 0%, rgb(var(--brand-primary-rgb) / 0.85) 100%);
 }
+
+.challenge-projection-shell {
+  background:
+    radial-gradient(circle at 20% 15%, rgb(254 240 138 / 0.35), transparent 34%),
+    radial-gradient(circle at 80% 0%, rgb(251 191 36 / 0.35), transparent 38%),
+    linear-gradient(180deg, rgb(245 158 11) 0%, rgb(217 119 6) 48%, rgb(146 64 14) 100%);
+}

@@ -22,6 +22,7 @@ import {
   updateControlHeartbeat,
   writeRuntimeState,
 } from "@/lib/live/storage";
+import { matchChallengeSong } from "@/lib/live/challenge";
 import {
   CHALLENGE_REVEAL_CONFIG,
   DEFAULT_REVEAL_CONFIG,
@@ -29,31 +30,11 @@ import {
   getChallengeSongs,
   getIntroSongs,
   makeEmptyRuntimeState,
-  type LiveGameConfig,
   type LiveRuntimeState,
   type LiveSessionV1,
   type LiveTrackSnapshot,
   type RevealConfig,
 } from "@/lib/live/types";
-
-/** Returns the matching challenge song type, or null if no match. */
-function matchChallengeSong(
-  track: { title: string; artist: string } | null,
-  game: LiveGameConfig | null | undefined
-): 'sing-along' | 'dance-along' | null {
-  if (!track || !game) return null;
-  const songs = getChallengeSongs(game);
-  if (songs.length === 0) return null;
-  const norm = (s: string) => s.trim().toLowerCase();
-  const t = norm(track.title);
-  const a = norm(track.artist);
-  const match = songs.find((cs) => {
-    const ct = norm(cs.title);
-    const ca = norm(cs.artist);
-    return (t.includes(ct) || ct.includes(t)) && (a.includes(ca) || ca.includes(a));
-  });
-  return match?.type ?? null;
-}
 
 function getRevealConfig(
   session: LiveSessionV1,
@@ -168,7 +149,7 @@ export default function HostSessionControllerPage() {
   const fetchingPlaylistIdRef = useRef<string | null>(null);
   const [playlistLoadError, setPlaylistLoadError] = useState<boolean>(false);
   const [playlistRetryCount, setPlaylistRetryCount] = useState<number>(0);
-  // Resolved Spotify track IDs for all challenge songs of the active game (exact match, no text guessing).
+  // Resolved Spotify track IDs for all challenge songs of the active game.
   const challengeTrackIdsRef = useRef<Set<string>>(new Set());
   // Resolved Spotify track ID for the intro song (first track in playlist when introSongArtist is set).
   const introTrackIdRef = useRef<string | null>(null);
@@ -232,21 +213,14 @@ export default function HostSessionControllerPage() {
         loadedPlaylistIdRef.current = playlistId;
         fetchingPlaylistIdRef.current = null;
         setPlaylistTracks(data.tracks);
-        // Resolve all challenge song track IDs by fuzzy-matching stored title/artist against
-        // actual Spotify metadata. This is done once so runtime detection uses exact track IDs.
+        // Resolve all challenge song track IDs against Spotify metadata using the same
+        // matcher as runtime detection, including legacy swapped title/artist data.
         if (game) {
-          const songs = getChallengeSongs(game);
-          const norm = (s: string) => s.trim().toLowerCase();
           const matched = new Set<string>();
-          for (const cs of songs) {
-            const ct = norm(cs.title);
-            const ca = norm(cs.artist);
-            const match = data.tracks.find((t) => {
-              const tt = norm(t.title);
-              const ta = norm(t.artist);
-              return (tt.includes(ct) || ct.includes(tt)) && (ta.includes(ca) || ca.includes(ta));
-            });
-            if (match?.trackId) matched.add(match.trackId);
+          for (const playlistTrack of data.tracks) {
+            if (playlistTrack.trackId && matchChallengeSong(playlistTrack, game)) {
+              matched.add(playlistTrack.trackId);
+            }
           }
           challengeTrackIdsRef.current = matched;
         }
@@ -820,7 +794,9 @@ export default function HostSessionControllerPage() {
     ? session?.games.find((g) => g.gameNumber === runtime.activeGameNumber) ?? null
     : null;
 
-  const isChallenge = runtime.isChallengeSong;
+  const localChallengeType = matchChallengeSong(runtime.currentTrack, activeGame);
+  const isChallenge = runtime.isChallengeSong || localChallengeType !== null;
+  const challengeType = runtime.challengeType ?? localChallengeType;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -1097,7 +1073,7 @@ export default function HostSessionControllerPage() {
               )}
               {isChallenge && !runtime.isIntroSong && runtime.mode !== "break" && (
                 <span className="ml-2 inline-flex items-center rounded-full bg-amber-100 border border-brand-gold px-2 py-0.5 text-xs font-bold text-amber-800">
-                  {runtime.challengeType === 'dance-along' ? 'DANCE CHALLENGE' : 'SING-ALONG CHALLENGE'}
+                  {challengeType === 'dance-along' ? 'DANCE CHALLENGE' : 'SING-ALONG CHALLENGE'}
                 </span>
               )}
             </p>
