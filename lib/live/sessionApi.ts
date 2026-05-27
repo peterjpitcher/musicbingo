@@ -1,16 +1,50 @@
 import type { LiveSessionV1 } from "@/lib/live/types";
+import {
+  getLiveSession as getStoredLiveSession,
+  listLiveSessions as listStoredLiveSessions,
+} from "@/lib/live/storage";
+
+function readStoredSessionsFallback(): LiveSessionV1[] {
+  if (typeof window === "undefined") return [];
+  return listStoredLiveSessions();
+}
+
+function readStoredSessionFallback(id: string): LiveSessionV1 | null {
+  if (typeof window === "undefined") return null;
+  return getStoredLiveSession(id);
+}
 
 export async function listLiveSessions(): Promise<LiveSessionV1[]> {
-  const res = await fetch("/api/sessions", { cache: "no-store" });
-  if (!res.ok) throw new Error("Failed to load sessions.");
-  return res.json() as Promise<LiveSessionV1[]>;
+  try {
+    const res = await fetch("/api/sessions", { cache: "no-store" });
+    if (!res.ok) {
+      const stored = readStoredSessionsFallback();
+      if (stored.length > 0) return stored;
+      throw new Error("Failed to load sessions.");
+    }
+    return res.json() as Promise<LiveSessionV1[]>;
+  } catch (err) {
+    const stored = readStoredSessionsFallback();
+    if (stored.length > 0) return stored;
+    throw err;
+  }
 }
 
 export async function getLiveSession(id: string): Promise<LiveSessionV1 | null> {
-  const res = await fetch(`/api/sessions/${encodeURIComponent(id)}`, { cache: "no-store" });
-  if (res.status === 404) return null;
-  if (!res.ok) throw new Error("Failed to load session.");
-  return res.json() as Promise<LiveSessionV1>;
+  try {
+    const res = await fetch(`/api/sessions/${encodeURIComponent(id)}`, { cache: "no-store" });
+    if (res.status === 404) return readStoredSessionFallback(id);
+    if (!res.ok) {
+      const stored = readStoredSessionFallback(id);
+      if (stored) return stored;
+      throw new Error("Failed to load session.");
+    }
+    return res.json() as Promise<LiveSessionV1>;
+  } catch (err) {
+    const stored = readStoredSessionFallback(id);
+    if (stored) return stored;
+    throw err;
+  }
 }
 
 export async function upsertLiveSession(session: LiveSessionV1): Promise<LiveSessionV1> {

@@ -197,6 +197,18 @@ async function installSpotifyLiveMocks(context, options = {}) {
     ],
   };
 
+  await context.route("**/api/spotify/playlist/*/tracks", async (route) => {
+    const parts = new URL(route.request().url()).pathname.split("/");
+    const playlistId = parts.at(-2) ?? "";
+    const gameNumber = playlistId.includes("2") ? 2 : 1;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      headers: { "Cache-Control": "no-store" },
+      body: JSON.stringify({ tracks: tracksByGame[gameNumber] ?? tracksByGame[1] }),
+    });
+  });
+
   const currentTrack = () => {
     const tracks = tracksByGame[state.activeGame] ?? tracksByGame[1];
     return tracks[state.trackIndex % tracks.length];
@@ -317,10 +329,145 @@ async function installSpotifyLiveMocks(context, options = {}) {
   return state;
 }
 
-async function fillValidGameInputs(page, game1Songs, game2Songs) {
-  const textareas = page.locator("textarea");
-  await textareas.nth(0).fill(game1Songs);
-  await textareas.nth(1).fill(game2Songs);
+async function installAppDataMocks(context, options = {}) {
+  const sessions = new Map((options.sessions ?? []).map((session) => [session.id, session]));
+  const runtimes = new Map();
+  const jsonHeaders = { "Cache-Control": "no-store" };
+
+  await context.route(
+    (url) => url.pathname === "/api/brands",
+    async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        headers: jsonHeaders,
+        body: JSON.stringify([]),
+      });
+    }
+  );
+
+  await context.route(
+    (url) => url.pathname === "/api/sessions",
+    async (route) => {
+      const method = route.request().method();
+      if (method === "GET") {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          headers: jsonHeaders,
+          body: JSON.stringify([...sessions.values()]),
+        });
+        return;
+      }
+      if (method === "PUT") {
+        const payload = route.request().postDataJSON?.();
+        if (payload?.id) sessions.set(payload.id, payload);
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          headers: jsonHeaders,
+          body: JSON.stringify(payload ?? {}),
+        });
+        return;
+      }
+      await route.fulfill({ status: 405, body: "Method not allowed" });
+    }
+  );
+
+  await context.route(
+    (url) => /^\/api\/sessions\/[^/]+$/.test(url.pathname),
+    async (route) => {
+      const url = new URL(route.request().url());
+      const sessionId = decodeURIComponent(url.pathname.split("/").at(-1) ?? "");
+      const method = route.request().method();
+      if (method === "GET") {
+        const session = sessions.get(sessionId);
+        await route.fulfill({
+          status: session ? 200 : 404,
+          contentType: "application/json",
+          headers: jsonHeaders,
+          body: JSON.stringify(session ? { ...session, brand: null } : { error: "Session not found." }),
+        });
+        return;
+      }
+      if (method === "DELETE") {
+        sessions.delete(sessionId);
+        runtimes.delete(sessionId);
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          headers: jsonHeaders,
+          body: JSON.stringify({ ok: true }),
+        });
+        return;
+      }
+      await route.fulfill({ status: 405, body: "Method not allowed" });
+    }
+  );
+
+  await context.route(
+    (url) => /^\/api\/sessions\/[^/]+\/runtime$/.test(url.pathname),
+    async (route) => {
+      const parts = new URL(route.request().url()).pathname.split("/");
+      const sessionId = decodeURIComponent(parts.at(-2) ?? "");
+      const method = route.request().method();
+      if (method === "GET") {
+        const runtime = runtimes.get(sessionId);
+        await route.fulfill({
+          status: runtime ? 200 : 404,
+          contentType: "application/json",
+          headers: jsonHeaders,
+          body: JSON.stringify(runtime ?? { error: "Runtime state not found." }),
+        });
+        return;
+      }
+      if (method === "PUT") {
+        const payload = route.request().postDataJSON?.();
+        if (payload) runtimes.set(sessionId, payload);
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          headers: jsonHeaders,
+          body: JSON.stringify({ ok: true }),
+        });
+        return;
+      }
+      await route.fulfill({ status: 405, body: "Method not allowed" });
+    }
+  );
+}
+
+async function openPrep(page) {
+  await page.goto(`${BASE_URL}/prep`, { waitUntil: "networkidle" });
+  await page.getByRole("heading", { name: "Event Setup" }).waitFor();
+}
+
+async function fillCurrentGameStep(page, songs) {
+  await page.locator("textarea").fill(songs);
+  await page.locator("text=Songs: 26/50").waitFor();
+  await page.locator("text=Unique pool items: 52").waitFor();
+
+  const selects = page.locator("select");
+  assert.equal(await selects.nth(0).isDisabled(), false, "Challenge type should be enabled after songs");
+  assert.equal(await selects.nth(1).isDisabled(), false, "Challenge song should be enabled after songs");
+  assert.notEqual(await selects.nth(1).inputValue(), "", "Challenge song should auto-select a song");
+}
+
+async function fillPrepWizardToGenerate(page, game1Songs, game2Songs) {
+  await openPrep(page);
+
+  await page.getByRole("button", { name: /Next: Game 1/i }).click();
+  await page.getByRole("heading", { name: /Game 1/i }).waitFor();
+  await fillCurrentGameStep(page, game1Songs);
+  await waitUntilEnabled(page.getByRole("button", { name: /Next: Game 2/i }));
+  await page.getByRole("button", { name: /Next: Game 2/i }).click();
+
+  await page.getByRole("heading", { name: /Game 2/i }).waitFor();
+  await fillCurrentGameStep(page, game2Songs);
+  await waitUntilEnabled(page.getByRole("button", { name: /Next: Generate/i }));
+  await page.getByRole("button", { name: /Next: Generate/i }).click();
+
+  await page.getByRole("heading", { name: "Spotify" }).waitFor();
 }
 
 async function runFlow(results, name, fn) {
@@ -434,101 +581,117 @@ async function main() {
     browser = await chromium.launch({ headless: true });
 
     const flow123Context = await browser.newContext({ acceptDownloads: true });
+    await installAppDataMocks(flow123Context);
     const spotifyFlow123 = await installSpotifyMocks(flow123Context, { initialConnected: false });
     const flow123Page = await flow123Context.newPage();
 
-    await runFlow(flowResults, "Flow 1: Initial load shows gated submit", async () => {
-      await flow123Page.goto(BASE_URL, { waitUntil: "networkidle" });
-      await flow123Page.getByRole("heading", { name: "Music Bingo" }).waitFor();
+    await runFlow(flowResults, "Flow 1: Empty game step blocks progression", async () => {
+      await openPrep(flow123Page);
+      await flow123Page.getByRole("button", { name: /Next: Game 1/i }).click();
+      await flow123Page.getByRole("heading", { name: /Game 1/i }).waitFor();
 
-      const submitButton = flow123Page.locator("button[type='submit']");
-      assert.equal(await submitButton.isDisabled(), true, "Submit should be disabled on first load");
-
-      const selects = flow123Page.locator("select");
-      assert.equal(await selects.nth(0).isDisabled(), true, "Game 1 challenge should be disabled initially");
-      assert.equal(await selects.nth(1).isDisabled(), true, "Game 2 challenge should be disabled initially");
-    });
-
-    await runFlow(flowResults, "Flow 2: Valid songs parse and challenge picks auto-populate", async () => {
-      await fillValidGameInputs(flow123Page, songListA, songListB);
-
-      await flow123Page.locator("text=Parsed songs: 26/50").first().waitFor();
-      const parsedCounts = flow123Page.locator("text=Parsed songs: 26/50");
-      assert.equal(await parsedCounts.count(), 2, "Both game parsed counters should show 26/50");
-
-      const uniqueCounts = flow123Page.locator("text=Unique artists/titles: 26/26");
-      assert.equal(await uniqueCounts.count(), 2, "Both games should have 26 unique artists and titles");
+      const nextButton = flow123Page.getByRole("button", { name: /Next: Game 2/i });
+      assert.equal(await nextButton.isDisabled(), true, "Game 1 next button should be disabled before songs");
 
       const selects = flow123Page.locator("select");
-      assert.equal(await selects.nth(0).isDisabled(), false, "Game 1 challenge should be enabled after songs");
-      assert.equal(await selects.nth(1).isDisabled(), false, "Game 2 challenge should be enabled after songs");
-      assert.notEqual(await selects.nth(0).inputValue(), "", "Game 1 challenge should auto-select a song");
-      assert.notEqual(await selects.nth(1).inputValue(), "", "Game 2 challenge should auto-select a song");
-
-      const submitButton = flow123Page.locator("button[type='submit']");
-      await waitUntilEnabled(submitButton);
+      assert.equal(await selects.nth(0).isDisabled(), true, "Challenge type should be disabled initially");
+      assert.equal(await selects.nth(1).isDisabled(), true, "Challenge song should be disabled initially");
     });
 
-    await runFlow(flowResults, "Flow 3: Full generate flow returns a valid event-pack zip", async () => {
+    await runFlow(flowResults, "Flow 2: Valid songs parse through the prep wizard", async () => {
+      await fillCurrentGameStep(flow123Page, songListA);
+
+      await waitUntilEnabled(flow123Page.getByRole("button", { name: /Next: Game 2/i }));
+      await flow123Page.getByRole("button", { name: /Next: Game 2/i }).click();
+
+      await flow123Page.getByRole("heading", { name: /Game 2/i }).waitFor();
+      await fillCurrentGameStep(flow123Page, songListB);
+
+      await waitUntilEnabled(flow123Page.getByRole("button", { name: /Next: Generate/i }));
+      await flow123Page.getByRole("button", { name: /Next: Generate/i }).click();
+
+      await flow123Page.getByRole("heading", { name: "Spotify" }).waitFor();
+      assert.equal(
+        await flow123Page.getByRole("button", { name: "Create Spotify Playlists" }).isDisabled(),
+        true,
+        "Spotify playlist creation should require connection first"
+      );
+      await waitUntilEnabled(flow123Page.getByRole("button", { name: /Download Only/i }));
+    });
+
+    await runFlow(flowResults, "Flow 3: Spotify playlist and event-pack flow succeeds", async () => {
       await mkdir(OUTPUT_DIR, { recursive: true });
       await rm(DOWNLOAD_PATH, { force: true });
 
-      const submitButton = flow123Page.locator("button[type='submit']");
+      await flow123Page.getByRole("button", { name: "Connect Spotify" }).click();
+      await flow123Page.getByRole("button", { name: "Disconnect Spotify" }).waitFor({ timeout: 10_000 });
+      assert.equal(spotifyFlow123.authorizeCalls, 1, "Connect flow should trigger exactly one Spotify auth popup");
+
+      const createButton = flow123Page.getByRole("button", { name: "Create Spotify Playlists" });
+      await waitUntilEnabled(createButton);
+      await createButton.click();
+      await flow123Page.getByRole("link", { name: /Open in Spotify/i }).first().waitFor({ timeout: 10_000 });
+      assert.equal(spotifyFlow123.createCalls, 1, "Playlist creation request should be called once");
+
+      const matchedRows = flow123Page.getByText(/26\/26 tracks matched/);
+      await matchedRows.first().waitFor({ timeout: 10_000 });
+      assert.ok(await matchedRows.count() >= 2, "Expected playlist summary for both games");
+
+      const generateButton = flow123Page.getByRole("button", { name: "Generate Event Pack" });
       const [download] = await Promise.all([
         flow123Page.waitForEvent("download", { timeout: 120_000 }),
-        submitButton.click(),
+        generateButton.click(),
       ]);
 
       await download.saveAs(DOWNLOAD_PATH);
       await validateDownloadedBundle(DOWNLOAD_PATH);
-
-      await flow123Page.locator("text=Open in Spotify").first().waitFor({ timeout: 10_000 });
-      const addedRows = flow123Page.locator("text=added 26/26");
-      assert.ok(await addedRows.count() >= 2, "Expected playlist summary for both games");
-
-      assert.equal(spotifyFlow123.authorizeCalls, 1, "Submit flow should trigger exactly one Spotify auth popup");
-      assert.equal(spotifyFlow123.createCalls, 1, "Submit flow should trigger exactly one playlist creation request");
     });
 
     await flow123Context.close();
 
     const flow4Context = await browser.newContext();
-    await installSpotifyMocks(flow4Context, { initialConnected: true });
+    await installAppDataMocks(flow4Context);
+    await installSpotifyMocks(flow4Context, { initialConnected: false });
     const flow4Page = await flow4Context.newPage();
 
     await runFlow(flowResults, "Flow 4: Invalid inputs keep generation blocked", async () => {
-      await flow4Page.goto(BASE_URL, { waitUntil: "networkidle" });
+      await openPrep(flow4Page);
 
-      const textareas = flow4Page.locator("textarea");
       const countInput = flow4Page.locator("input[type='number']");
-      const submitButton = flow4Page.locator("button[type='submit']");
+      const setupNext = flow4Page.getByRole("button", { name: /Next: Game 1/i });
 
-      await textareas.nth(0).fill("Invalid Song Format\nStill Invalid");
-      await textareas.nth(1).fill(songListB);
-
-      await flow4Page.locator("text=Parsed songs: 0/50").first().waitFor();
-      assert.equal(await submitButton.isDisabled(), true, "Submit should stay disabled with malformed game input");
-
-      await textareas.nth(0).fill(songListA);
       await countInput.fill("1001");
       await sleep(200);
-      assert.equal(await submitButton.isDisabled(), true, "Submit should stay disabled when card count is out of range");
+      assert.equal(await setupNext.isDisabled(), true, "Setup next should stay disabled when page count is out of range");
 
       await countInput.fill("40");
-      await waitUntilEnabled(submitButton);
+      await waitUntilEnabled(setupNext);
+      await setupNext.click();
+
+      const textarea = flow4Page.locator("textarea");
+      const gameNext = flow4Page.getByRole("button", { name: /Next: Game 2/i });
+      await textarea.fill("Invalid Song Format\nStill Invalid");
+      await flow4Page.locator("text=Songs: 0/50").waitFor();
+      assert.equal(await gameNext.isDisabled(), true, "Game next should stay disabled with malformed song input");
+
+      await textarea.fill(songListA);
+      await waitUntilEnabled(gameNext);
     });
 
     await flow4Context.close();
 
     const flow5Context = await browser.newContext();
-    const spotifyFlow5 = await installSpotifyMocks(flow5Context, { initialConnected: true });
+    await installAppDataMocks(flow5Context);
+    const spotifyFlow5 = await installSpotifyMocks(flow5Context, { initialConnected: false });
     const flow5Page = await flow5Context.newPage();
 
     await runFlow(flowResults, "Flow 5: Connected Spotify user can disconnect", async () => {
-      await flow5Page.goto(BASE_URL, { waitUntil: "networkidle" });
+      await fillPrepWizardToGenerate(flow5Page, songListA, songListB);
 
-      const disconnectButton = flow5Page.getByRole("button", { name: "Disconnect" });
-      await disconnectButton.waitFor({ timeout: 10_000 });
+      await flow5Page.getByRole("button", { name: "Connect Spotify" }).click();
+      await flow5Page.getByRole("button", { name: "Disconnect Spotify" }).waitFor({ timeout: 10_000 });
+
+      const disconnectButton = flow5Page.getByRole("button", { name: "Disconnect Spotify" });
       await disconnectButton.click();
 
       await flow5Page.getByRole("button", { name: "Connect Spotify" }).waitFor({ timeout: 10_000 });
@@ -538,6 +701,7 @@ async function main() {
     await flow5Context.close();
 
     const flow6Context = await browser.newContext();
+    await installAppDataMocks(flow6Context, { sessions: [makeLiveSessionFixture("flow-live-session")] });
     await installSpotifyLiveMocks(flow6Context, { canControlPlayback: true });
     await flow6Context.addInitScript((payload) => {
       window.localStorage.setItem("music-bingo-live-sessions-v1", JSON.stringify([payload]));
@@ -546,17 +710,18 @@ async function main() {
     const flow6GuestPage = await flow6Context.newPage();
 
     await runFlow(flowResults, "Flow 6: Host and guest live screens sync with reveal progression", async () => {
-      await flow6HostPage.goto(`${BASE_URL}/host/flow-live-session`, { waitUntil: "networkidle" });
+      await flow6HostPage.goto(`${BASE_URL}/host/flow-live-session`, { waitUntil: "domcontentloaded" });
       await flow6HostPage.getByRole("heading", { name: /Flow Live Session/i }).waitFor();
 
-      const hostStyles = await flow6HostPage.evaluate(() => {
-        const shell = document.querySelector(".music-live-shell");
-        const title = document.querySelector(".music-live-title");
-        const cardTitle = document.querySelector(".music-live-card-title");
+      await flow6GuestPage.goto(`${BASE_URL}/guest/flow-live-session`, { waitUntil: "domcontentloaded" });
+      await flow6GuestPage.getByRole("heading", { name: /Flow Live Session/i }).waitFor();
+
+      const guestStyles = await flow6GuestPage.evaluate(() => {
+        const shell = document.querySelector(".guest-projection-shell");
+        const title = shell?.querySelector("h1");
         const shellRect = shell?.getBoundingClientRect();
         const shellStyles = shell ? getComputedStyle(shell) : null;
         const titleStyles = title ? getComputedStyle(title) : null;
-        const cardTitleStyles = cardTitle ? getComputedStyle(cardTitle) : null;
 
         return {
           viewportWidth: window.innerWidth,
@@ -564,24 +729,19 @@ async function main() {
           shellMaxWidth: shellStyles?.maxWidth ?? "",
           titleTextFill: titleStyles?.webkitTextFillColor ?? "",
           titleColor: titleStyles?.color ?? "",
-          cardTitleColor: cardTitleStyles?.color ?? "",
         };
       });
 
       assert.ok(
-        hostStyles.shellWidth >= hostStyles.viewportWidth - 1,
-        `Host shell should be full-bleed (shell ${hostStyles.shellWidth}, viewport ${hostStyles.viewportWidth})`
+        guestStyles.shellWidth >= guestStyles.viewportWidth - 1,
+        `Guest projection shell should be full-bleed (shell ${guestStyles.shellWidth}, viewport ${guestStyles.viewportWidth})`
       );
       assert.ok(
-        hostStyles.shellMaxWidth === "none" || hostStyles.shellMaxWidth === "",
-        `Host shell should not inherit prep max-width (got ${hostStyles.shellMaxWidth})`
+        guestStyles.shellMaxWidth === "none" || guestStyles.shellMaxWidth === "",
+        `Guest projection shell should not inherit prep max-width (got ${guestStyles.shellMaxWidth})`
       );
-      assert.notEqual(hostStyles.titleTextFill, "rgba(0, 0, 0, 0)", "Live title should not be transparent text-fill");
-      assert.equal(hostStyles.titleColor, "rgb(255, 255, 255)", "Live title color should be white");
-      assert.equal(hostStyles.cardTitleColor, "rgb(255, 255, 255)", "Live card title color should be white");
-
-      await flow6GuestPage.goto(`${BASE_URL}/guest/flow-live-session`, { waitUntil: "networkidle" });
-      await flow6GuestPage.getByRole("heading", { name: /Flow Live Session/i }).waitFor();
+      assert.notEqual(guestStyles.titleTextFill, "rgba(0, 0, 0, 0)", "Guest title should not be transparent text-fill");
+      assert.equal(guestStyles.titleColor, "rgb(255, 255, 255)", "Guest title color should be white");
 
       await flow6HostPage.getByRole("button", { name: "Start Game 1" }).click();
 
@@ -593,6 +753,7 @@ async function main() {
     await flow6Context.close();
 
     const flow7Context = await browser.newContext();
+    await installAppDataMocks(flow7Context, { sessions: [makeLiveSessionFixture("flow-live-fallback")] });
     await installSpotifyLiveMocks(flow7Context, { canControlPlayback: false });
     await flow7Context.addInitScript((payload) => {
       window.localStorage.setItem("music-bingo-live-sessions-v1", JSON.stringify([payload]));
@@ -601,11 +762,11 @@ async function main() {
     const flow7GuestPage = await flow7Context.newPage();
 
     await runFlow(flowResults, "Flow 7: Live fallback warning appears when Spotify control is unavailable", async () => {
-      await flow7HostPage.goto(`${BASE_URL}/host/flow-live-fallback`, { waitUntil: "networkidle" });
+      await flow7HostPage.goto(`${BASE_URL}/host/flow-live-fallback`, { waitUntil: "domcontentloaded" });
       await flow7HostPage.getByRole("button", { name: "Start Game 1" }).click();
       await flow7HostPage.locator("text=Manual host control mode").first().waitFor({ timeout: 15_000 });
 
-      await flow7GuestPage.goto(`${BASE_URL}/guest/flow-live-fallback`, { waitUntil: "networkidle" });
+      await flow7GuestPage.goto(`${BASE_URL}/guest/flow-live-fallback`, { waitUntil: "domcontentloaded" });
       await flow7GuestPage.locator("text=Manual host control mode").first().waitFor({ timeout: 10_000 });
     });
 

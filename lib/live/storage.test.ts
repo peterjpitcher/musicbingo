@@ -9,6 +9,7 @@ import {
 import {
   DEFAULT_REVEAL_CONFIG,
   LIVE_SESSION_VERSION,
+  makeEmptyRuntimeState,
   type LiveSessionV1,
 } from "@/lib/live/types";
 
@@ -73,6 +74,11 @@ test("validateLiveSession rejects wrong schema", () => {
 
 test("storage helpers are safe when localStorage is unavailable", () => {
   assert.deepEqual(listLiveSessions(), []);
+});
+
+test("empty runtime starts at timestamp zero so fetched host state can win first load", () => {
+  const runtime = makeEmptyRuntimeState("session-123");
+  assert.equal(runtime.updatedAtMs, 0);
 });
 
 test("isControlLockStale uses timeout window", () => {
