@@ -14,6 +14,7 @@ import type { EventFeedAdapter, EventFeedConfig, NormalisedEvent } from "./types
 type BaronsHubEvent = {
   id: string;
   slug: string;
+  seoSlug: string | null;
   title: string;
   teaser: string | null;
   highlights: string[];
@@ -25,6 +26,8 @@ type BaronsHubEvent = {
   bookingType: string | null;
   ticketPrice: number | null;
   bookingUrl: string | null;
+  bookingEnabled?: boolean | null;
+  bookingPageUrl?: string | null;
   eventImageUrl: string | null;
   venue: {
     id: string;
@@ -75,24 +78,40 @@ function isHttpsUrl(url: string): boolean {
   }
 }
 
-function resolveEventUrl(
-  bookingUrl: string | null,
-  websiteUrl: string,
-  slug: string,
-): string | null {
-  if (bookingUrl && isHttpsUrl(bookingUrl)) return bookingUrl;
+function normaliseHttpsUrl(url: string | null | undefined): string | null {
+  const trimmed = url?.trim();
+  if (!trimmed || !isHttpsUrl(trimmed)) return null;
+  return trimmed;
+}
 
-  // Construct from websiteUrl + slug.
-  if (websiteUrl && slug) {
-    const base = websiteUrl.replace(/\/+$/, "");
-    const cleanSlug = slug.replace(/^\/+|\/+$/g, "");
-    if (cleanSlug) {
-      const constructed = `${base}/events/${cleanSlug}`;
-      if (isHttpsUrl(constructed)) return constructed;
-    }
+function buildApiLandingUrl(apiBaseUrl: string, seoSlug: string | null | undefined): string | null {
+  const cleanSlug = seoSlug?.trim();
+  if (!cleanSlug) return null;
+
+  try {
+    const url = new URL(`/l/${encodeURIComponent(cleanSlug)}`, apiBaseUrl);
+    return url.protocol === "https:" ? url.toString() : null;
+  } catch {
+    return null;
   }
+}
 
-  return null;
+export function resolveBaronsHubEventUrl(params: {
+  bookingUrl: string | null | undefined;
+  bookingPageUrl?: string | null;
+  bookingEnabled?: boolean | null;
+  seoSlug?: string | null;
+  apiBaseUrl: string;
+}): string | null {
+  const bookingUrl = normaliseHttpsUrl(params.bookingUrl);
+  if (bookingUrl) return bookingUrl;
+
+  const bookingPageUrl = normaliseHttpsUrl(params.bookingPageUrl);
+  if (bookingPageUrl) return bookingPageUrl;
+
+  if (params.bookingUrl?.trim() || params.bookingEnabled === false) return null;
+
+  return buildApiLandingUrl(params.apiBaseUrl, params.seoSlug);
 }
 
 // ---------------------------------------------------------------------------
@@ -101,7 +120,7 @@ function resolveEventUrl(
 
 function toNormalisedEvent(
   event: BaronsHubEvent,
-  websiteUrl: string,
+  apiBaseUrl: string,
 ): NormalisedEvent | null {
   const name = event.title?.trim();
   if (!name) return null;
@@ -146,7 +165,13 @@ function toNormalisedEvent(
           .map((h) => (typeof h === "string" ? h.trim() : ""))
           .filter((h) => h.length > 0)
       : [],
-    eventUrl: resolveEventUrl(event.bookingUrl, websiteUrl, event.slug),
+    eventUrl: resolveBaronsHubEventUrl({
+      bookingUrl: event.bookingUrl,
+      bookingPageUrl: event.bookingPageUrl,
+      bookingEnabled: event.bookingEnabled,
+      seoSlug: event.seoSlug,
+      apiBaseUrl,
+    }),
   };
 }
 
@@ -192,7 +217,7 @@ export function createBaronsHubAdapter(config: EventFeedConfig): EventFeedAdapte
       const events = json?.data ?? [];
 
       return events
-        .map((e) => toNormalisedEvent(e, config.websiteUrl))
+        .map((e) => toNormalisedEvent(e, config.baseUrl))
         .filter((d): d is NormalisedEvent => d !== null)
         .sort((a, b) => a.date.getTime() - b.date.getTime())
         .slice(0, limit);
