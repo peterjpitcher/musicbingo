@@ -8,6 +8,11 @@ import { StepIndicator } from "@/components/ui/StepIndicator";
 import { formatEventDateDisplay } from "@/lib/eventDate";
 import { DEFAULT_GAME_THEME, MAX_SONGS_PER_GAME, makeSongSelectionValue } from "@/lib/gameInput";
 import { exportLiveSessionJson, upsertLiveSession } from "@/lib/live/sessionApi";
+import {
+  formatSecondsInput,
+  getDefaultRevealConfigForSongInput,
+  parseRevealConfigInputs,
+} from "@/lib/live/timing";
 import { DEFAULT_REVEAL_CONFIG, LIVE_SESSION_VERSION, type IntroSong, type LiveSessionV1 } from "@/lib/live/types";
 import { parseSongListText } from "@/lib/parser";
 import type { Song } from "@/lib/types";
@@ -83,6 +88,18 @@ export default function PrepPage() {
   // Step 0 fields
   const [eventDate, setEventDate] = useState<string>(todayIso());
   const [countInput, setCountInput] = useState<string>("40");
+  const [songPlaySecondsInput, setSongPlaySecondsInput] = useState<string>(
+    formatSecondsInput(DEFAULT_REVEAL_CONFIG.nextMs)
+  );
+  const [albumRevealSecondsInput, setAlbumRevealSecondsInput] = useState<string>(
+    formatSecondsInput(DEFAULT_REVEAL_CONFIG.albumMs)
+  );
+  const [titleRevealSecondsInput, setTitleRevealSecondsInput] = useState<string>(
+    formatSecondsInput(DEFAULT_REVEAL_CONFIG.titleMs)
+  );
+  const [artistRevealSecondsInput, setArtistRevealSecondsInput] = useState<string>(
+    formatSecondsInput(DEFAULT_REVEAL_CONFIG.artistMs)
+  );
   const [liveSessionName, setLiveSessionName] = useState<string>("");
   const [liveSessionNameDirty, setLiveSessionNameDirty] = useState<boolean>(false);
   const [breakPlaylistId, setBreakPlaylistId] = useState<string>("");
@@ -126,6 +143,15 @@ export default function PrepPage() {
 
   const parsedGame1 = useMemo(() => parseSongListText(game1SongsText), [game1SongsText]);
   const parsedGame2 = useMemo(() => parseSongListText(game2SongsText), [game2SongsText]);
+  const normalSongSeconds = Number(songPlaySecondsInput);
+
+  function resetRevealTimingDefaults() {
+    const revealConfig = getDefaultRevealConfigForSongInput(songPlaySecondsInput);
+    setSongPlaySecondsInput(formatSecondsInput(revealConfig.nextMs));
+    setAlbumRevealSecondsInput(formatSecondsInput(revealConfig.albumMs));
+    setTitleRevealSecondsInput(formatSecondsInput(revealConfig.titleMs));
+    setArtistRevealSecondsInput(formatSecondsInput(revealConfig.artistMs));
+  }
 
   useEffect(() => {
     setSpotifyCallbackUrl(`${window.location.origin}/api/spotify/callback`);
@@ -237,6 +263,7 @@ export default function PrepPage() {
   function buildBaseFormData(): FormData {
     const form = new FormData();
     form.set("event_date", eventDate);
+    form.set("song_play_seconds", songPlaySecondsInput);
     form.set("game1_theme", game1Theme);
     form.set("game2_theme", game2Theme);
     form.set("game1_songs", game1SongsText);
@@ -279,6 +306,15 @@ export default function PrepPage() {
     const sessionName = liveSessionName.trim() || `Music Bingo - ${eventDateDisplay}`;
     const { game1, game2 } = livePlaylistByGame;
     const count = Number.parseInt(countInput, 10);
+    const revealConfig = parseRevealConfigInputs({
+      albumSeconds: albumRevealSecondsInput,
+      titleSeconds: titleRevealSecondsInput,
+      artistSeconds: artistRevealSecondsInput,
+      songPlaySeconds: songPlaySecondsInput,
+    });
+    if (!revealConfig) {
+      throw new Error("Song timing must be ordered as album, title, artist, next song.");
+    }
     return {
       version: LIVE_SESSION_VERSION,
       id: makeSessionId(),
@@ -286,7 +322,7 @@ export default function PrepPage() {
       createdAt: new Date().toISOString(),
       eventDateInput: eventDate,
       eventDateDisplay,
-      revealConfig: DEFAULT_REVEAL_CONFIG,
+      revealConfig,
       breakPlaylistId: breakPlaylistId.trim(),
       games: [
         {
@@ -719,6 +755,15 @@ export default function PrepPage() {
             onEventDate={setEventDate}
             countInput={countInput}
             onCountInput={setCountInput}
+            songPlaySecondsInput={songPlaySecondsInput}
+            onSongPlaySecondsInput={setSongPlaySecondsInput}
+            albumRevealSecondsInput={albumRevealSecondsInput}
+            onAlbumRevealSecondsInput={setAlbumRevealSecondsInput}
+            titleRevealSecondsInput={titleRevealSecondsInput}
+            onTitleRevealSecondsInput={setTitleRevealSecondsInput}
+            artistRevealSecondsInput={artistRevealSecondsInput}
+            onArtistRevealSecondsInput={setArtistRevealSecondsInput}
+            onResetRevealDefaults={resetRevealTimingDefaults}
             sessionName={liveSessionName}
             onSessionName={(v) => {
               setLiveSessionName(v);
@@ -746,6 +791,7 @@ export default function PrepPage() {
             onIntroSongsChange={setGame1IntroSongs}
             spotifyConnected={spotifyConnected}
             parsed={parsedGame1}
+            normalSongSeconds={normalSongSeconds}
             onBack={() => goToStep(0)}
             onNext={() => goToStep(2)}
             nextLabel="Next: Game 2 →"
@@ -766,6 +812,7 @@ export default function PrepPage() {
             onIntroSongsChange={setGame2IntroSongs}
             spotifyConnected={spotifyConnected}
             parsed={parsedGame2}
+            normalSongSeconds={normalSongSeconds}
             onBack={() => goToStep(1)}
             onNext={() => goToStep(3)}
             nextLabel="Next: Generate →"

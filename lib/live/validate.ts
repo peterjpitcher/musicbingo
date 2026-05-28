@@ -19,7 +19,7 @@ export function asNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-function validateRevealConfig(input: unknown): RevealConfig | null {
+export function validateRevealConfig(input: unknown): RevealConfig | null {
   if (!isObject(input)) return null;
 
   const albumMs = asNumber(input.albumMs);

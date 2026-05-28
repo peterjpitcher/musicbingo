@@ -4,12 +4,23 @@ import { BrandSelector } from "@/components/brand/BrandSelector";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { helpClass, inputClass, labelClass } from "@/components/ui/formStyles";
+import { parseRevealConfigInputs } from "@/lib/live/timing";
+import { MAX_SONG_PLAY_MS, MIN_SONG_PLAY_MS } from "@/lib/live/types";
 
 type StepEventSetupProps = {
   eventDate: string;
   onEventDate: (v: string) => void;
   countInput: string;
   onCountInput: (v: string) => void;
+  songPlaySecondsInput: string;
+  onSongPlaySecondsInput: (v: string) => void;
+  albumRevealSecondsInput: string;
+  onAlbumRevealSecondsInput: (v: string) => void;
+  titleRevealSecondsInput: string;
+  onTitleRevealSecondsInput: (v: string) => void;
+  artistRevealSecondsInput: string;
+  onArtistRevealSecondsInput: (v: string) => void;
+  onResetRevealDefaults: () => void;
   sessionName: string;
   onSessionName: (v: string) => void;
   breakPlaylistId: string;
@@ -24,6 +35,15 @@ export function StepEventSetup({
   onEventDate,
   countInput,
   onCountInput,
+  songPlaySecondsInput,
+  onSongPlaySecondsInput,
+  albumRevealSecondsInput,
+  onAlbumRevealSecondsInput,
+  titleRevealSecondsInput,
+  onTitleRevealSecondsInput,
+  artistRevealSecondsInput,
+  onArtistRevealSecondsInput,
+  onResetRevealDefaults,
   sessionName,
   onSessionName,
   breakPlaylistId,
@@ -33,11 +53,19 @@ export function StepEventSetup({
   onNext,
 }: StepEventSetupProps) {
   const count = Number.parseInt(countInput, 10);
+  const revealConfig = parseRevealConfigInputs({
+    albumSeconds: albumRevealSecondsInput,
+    titleSeconds: titleRevealSecondsInput,
+    artistSeconds: artistRevealSecondsInput,
+    songPlaySeconds: songPlaySecondsInput,
+  });
+  const timingValid = revealConfig !== null;
   const canNext =
     eventDate.trim() !== "" &&
     Number.isFinite(count) &&
     count >= 1 &&
-    count <= 1000;
+    count <= 1000 &&
+    timingValid;
 
   return (
     <Card>
@@ -65,6 +93,67 @@ export function StepEventSetup({
           />
           <p className={helpClass}>6 cards per page — 40 pages = 240 cards</p>
         </div>
+      </div>
+      <div className="mb-5">
+        <div className="flex items-center justify-between gap-3 mb-2">
+          <label className={labelClass}>Normal Song Timing</label>
+          <Button variant="secondary" size="sm" onClick={onResetRevealDefaults}>
+            Use Default Reveals
+          </Button>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div>
+            <label className={`${labelClass} text-sm`}>Song length</label>
+            <input
+              type="number"
+              className={inputClass}
+              min={Math.floor(MIN_SONG_PLAY_MS / 1000)}
+              max={Math.floor(MAX_SONG_PLAY_MS / 1000)}
+              step={0.25}
+              value={songPlaySecondsInput}
+              onChange={(e) => onSongPlaySecondsInput(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className={`${labelClass} text-sm`}>Album reveal</label>
+            <input
+              type="number"
+              className={inputClass}
+              min={0}
+              max={Math.floor(MAX_SONG_PLAY_MS / 1000)}
+              step={0.25}
+              value={albumRevealSecondsInput}
+              onChange={(e) => onAlbumRevealSecondsInput(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className={`${labelClass} text-sm`}>Title reveal</label>
+            <input
+              type="number"
+              className={inputClass}
+              min={0}
+              max={Math.floor(MAX_SONG_PLAY_MS / 1000)}
+              step={0.25}
+              value={titleRevealSecondsInput}
+              onChange={(e) => onTitleRevealSecondsInput(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className={`${labelClass} text-sm`}>Artist reveal</label>
+            <input
+              type="number"
+              className={inputClass}
+              min={0}
+              max={Math.floor(MAX_SONG_PLAY_MS / 1000)}
+              step={0.25}
+              value={artistRevealSecondsInput}
+              onChange={(e) => onArtistRevealSecondsInput(e.target.value)}
+            />
+          </div>
+        </div>
+        <p className={timingValid ? helpClass : `${helpClass} text-red-600`}>
+          Defaults scale to song length; custom reveal times must stay in order before the next song.
+        </p>
       </div>
       <div className="mb-5">
         <label className={labelClass}>Session Name</label>

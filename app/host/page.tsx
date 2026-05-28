@@ -169,6 +169,7 @@ export default function HostDashboardPage() {
 
       const form = new FormData();
       form.set("event_date", session.eventDateInput);
+      form.set("song_play_seconds", String(Math.round(session.revealConfig.nextMs / 1000)));
       form.set("game1_playlist_id", game1.playlistId);
       form.set("game2_playlist_id", game2.playlistId);
       if (session.brandId) {

@@ -196,6 +196,11 @@ export async function POST(request: Request) {
     const count = pages * CARDS_PER_PAGE;
 
     const seed = asString(form.get("seed")).trim();
+    const songPlaySecondsRaw = Number(asString(form.get("song_play_seconds")).trim());
+    const normalSongSeconds =
+      Number.isFinite(songPlaySecondsRaw) && songPlaySecondsRaw > 0
+        ? songPlaySecondsRaw
+        : undefined;
     const game1SongsText = asString(form.get("game1_songs"));
     const game2SongsText = asString(form.get("game2_songs"));
     const game1Theme = normalizeGameTheme(asString(form.get("game1_theme")));
@@ -383,6 +388,7 @@ export async function POST(request: Request) {
           introSongs: g2IntroSongs.length > 0 ? g2IntroSongs : undefined,
         },
         upcomingEvents,
+        normalSongSeconds,
       }),
     ]);
 

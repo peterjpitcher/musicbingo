@@ -12,7 +12,14 @@ import { Card } from "@/components/ui/Card";
 import { Notice } from "@/components/ui/Notice";
 import { publishLiveMessage } from "@/lib/live/channel";
 import { computeRevealState, shouldTriggerNextForTrack, updateAdvanceTrackMarker } from "@/lib/live/reveal";
-import { getLiveSession } from "@/lib/live/sessionApi";
+import { getLiveSession, upsertLiveSession } from "@/lib/live/sessionApi";
+import {
+  formatSecondsInput,
+  formatTimingMs,
+  getDefaultRevealConfigForSongInput,
+  parseRevealConfigInputs,
+  revealConfigsEqual,
+} from "@/lib/live/timing";
 import {
   acquireControlLock,
   isControlLockStale,
@@ -26,7 +33,11 @@ import { matchChallengeSong } from "@/lib/live/challenge";
 import {
   CHALLENGE_REVEAL_CONFIG,
   DEFAULT_REVEAL_CONFIG,
+  MAX_SONG_EXTENSION_MS,
+  MAX_SONG_PLAY_MS,
+  MIN_SONG_PLAY_MS,
   LIVE_RUNTIME_VERSION,
+  getRevealConfigWithExtension,
   getChallengeSongs,
   getIntroSongs,
   makeEmptyRuntimeState,
@@ -39,12 +50,13 @@ import {
 function getRevealConfig(
   session: LiveSessionV1,
   activeGameNumber: 1 | 2 | null,
-  track: { title: string; artist: string } | null
+  track: { title: string; artist: string } | null,
+  normalRevealConfig: RevealConfig = session.revealConfig
 ): RevealConfig {
   const game = activeGameNumber
     ? session.games.find((g) => g.gameNumber === activeGameNumber) ?? null
     : null;
-  return matchChallengeSong(track, game) ? CHALLENGE_REVEAL_CONFIG : session.revealConfig;
+  return matchChallengeSong(track, game) ? CHALLENGE_REVEAL_CONFIG : normalRevealConfig;
 }
 
 type LiveStatusResponse = {
@@ -149,6 +161,11 @@ export default function HostSessionControllerPage() {
   const fetchingPlaylistIdRef = useRef<string | null>(null);
   const [playlistLoadError, setPlaylistLoadError] = useState<boolean>(false);
   const [playlistRetryCount, setPlaylistRetryCount] = useState<number>(0);
+  const [songPlaySecondsInput, setSongPlaySecondsInput] = useState<string>("");
+  const [albumRevealSecondsInput, setAlbumRevealSecondsInput] = useState<string>("");
+  const [titleRevealSecondsInput, setTitleRevealSecondsInput] = useState<string>("");
+  const [artistRevealSecondsInput, setArtistRevealSecondsInput] = useState<string>("");
+  const [timingSaving, setTimingSaving] = useState<boolean>(false);
   // Resolved Spotify track IDs for all challenge songs of the active game.
   const challengeTrackIdsRef = useRef<Set<string>>(new Set());
   // Resolved Spotify track ID for the intro song (first track in playlist when introSongArtist is set).
@@ -161,6 +178,14 @@ export default function HostSessionControllerPage() {
   useEffect(() => {
     playlistTracksRef.current = playlistTracks;
   }, [playlistTracks]);
+
+  useEffect(() => {
+    if (!session) return;
+    setSongPlaySecondsInput(formatSecondsInput(session.revealConfig.nextMs));
+    setAlbumRevealSecondsInput(formatSecondsInput(session.revealConfig.albumMs));
+    setTitleRevealSecondsInput(formatSecondsInput(session.revealConfig.titleMs));
+    setArtistRevealSecondsInput(formatSecondsInput(session.revealConfig.artistMs));
+  }, [session]);
 
   // Track which song IDs have been played so far.
   // When the playlist is loaded, mark all tracks up to and including the current one
@@ -338,14 +363,22 @@ export default function HostSessionControllerPage() {
             isChallengeSong,
           });
         }
-        const baseCfg = isChallengeSong ? CHALLENGE_REVEAL_CONFIG : session.revealConfig;
+        const baseCfg = isChallengeSong ? CHALLENGE_REVEAL_CONFIG : (prev.revealConfig ?? session.revealConfig);
         const extensionMs = trackChanged ? 0 : prev.extensionMs;
-        const cfg = extensionMs > 0 ? { ...baseCfg, nextMs: baseCfg.nextMs + extensionMs } : baseCfg;
+        const cfg = getRevealConfigWithExtension(baseCfg, extensionMs);
 
         // When intro or free play is active, show all metadata immediately (no timed reveal).
-        const revealState = (isIntroSong || prev.freePlay)
+        const computedRevealState = (isIntroSong || prev.freePlay)
           ? { showAlbum: true, showTitle: true, showArtist: true, shouldAdvance: false }
           : computeRevealState(track?.progressMs ?? 0, cfg);
+        const revealState = trackChanged
+          ? computedRevealState
+          : {
+            showAlbum: prev.revealState.showAlbum || computedRevealState.showAlbum,
+            showTitle: prev.revealState.showTitle || computedRevealState.showTitle,
+            showArtist: prev.revealState.showArtist || computedRevealState.showArtist,
+            shouldAdvance: computedRevealState.shouldAdvance,
+          };
         const marker = updateAdvanceTrackMarker({
           trackId: track?.trackId ?? null,
           advanceTriggeredForTrackId: prev.advanceTriggeredForTrackId,
@@ -356,6 +389,7 @@ export default function HostSessionControllerPage() {
           spotifyControlAvailable: Boolean(payload.canControlPlayback),
           currentTrack: track,
           revealState,
+          revealConfig: prev.revealConfig ?? session.revealConfig,
           isChallengeSong,
           challengeType,
           isIntroSong,
@@ -413,7 +447,10 @@ export default function HostSessionControllerPage() {
         setSession(loaded);
         setError("");
         const persistedRuntime = readRuntimeState(sessionId);
-        const initial = persistedRuntime ?? makeEmptyRuntimeState(sessionId);
+        const initial = {
+          ...(persistedRuntime ?? makeEmptyRuntimeState(sessionId)),
+          revealConfig: loaded.revealConfig,
+        };
         setRuntime(initial);
         runtimeRef.current = initial;
         acquireLock(false);
@@ -495,9 +532,14 @@ export default function HostSessionControllerPage() {
 
       if (runtimeRef.current.mode !== "running") return;
       const track = normalizeTrackSnapshot(data.playback);
-      const baseCfg = getRevealConfig(session, runtimeRef.current.activeGameNumber, track);
+      const baseCfg = getRevealConfig(
+        session,
+        runtimeRef.current.activeGameNumber,
+        track,
+        runtimeRef.current.revealConfig ?? session.revealConfig
+      );
       const extensionMs = runtimeRef.current.extensionMs;
-      const cfg = extensionMs > 0 ? { ...baseCfg, nextMs: baseCfg.nextMs + extensionMs } : baseCfg;
+      const cfg = getRevealConfigWithExtension(baseCfg, extensionMs);
       const revealState = computeRevealState(track?.progressMs ?? 0, cfg);
 
       if (
@@ -736,7 +778,12 @@ export default function HostSessionControllerPage() {
     const gamePlaylistId = runtimeRef.current.activeGameNumber
       ? session?.games.find((g) => g.gameNumber === runtimeRef.current.activeGameNumber)?.playlistId ?? null
       : null;
-    commitRuntime((prev) => ({ ...prev, extensionMs: 0 }));
+    commitRuntime((prev) => ({
+      ...prev,
+      extensionMs: 0,
+      revealState: { showAlbum: false, showTitle: false, showArtist: false, shouldAdvance: false },
+      advanceTriggeredForTrackId: null,
+    }));
     void sendCommand(
       "resume_from_track",
       {
@@ -745,6 +792,51 @@ export default function HostSessionControllerPage() {
       },
       { modeOnSuccess: "running" }
     );
+  }
+
+  async function saveSongTiming() {
+    if (!session || !isController) return;
+    const revealConfig = parseRevealConfigInputs({
+      albumSeconds: albumRevealSecondsInput,
+      titleSeconds: titleRevealSecondsInput,
+      artistSeconds: artistRevealSecondsInput,
+      songPlaySeconds: songPlaySecondsInput,
+    });
+    if (!revealConfig) {
+      setError(
+        `Timing must be ordered as album, title, artist, next song, with song play time between ${Math.floor(MIN_SONG_PLAY_MS / 1000)} and ${Math.floor(MAX_SONG_PLAY_MS / 1000)} seconds.`
+      );
+      return;
+    }
+    const updatedSession: LiveSessionV1 = {
+      ...session,
+      revealConfig,
+    };
+    setTimingSaving(true);
+    setError("");
+    try {
+      await upsertLiveSession(updatedSession);
+      setSession(updatedSession);
+      commitRuntime((prev) => ({
+        ...prev,
+        revealConfig,
+      }));
+      setNoticeVariant("success");
+      setNotice(`Song play time updated to ${formatTimingMs(revealConfig.nextMs)}.`);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to update song timing.");
+    } finally {
+      setTimingSaving(false);
+    }
+  }
+
+  function resetRevealTimingToDefaults() {
+    const fallback = runtimeRef.current.revealConfig ?? session?.revealConfig ?? DEFAULT_REVEAL_CONFIG;
+    const revealConfig = getDefaultRevealConfigForSongInput(songPlaySecondsInput, fallback);
+    setSongPlaySecondsInput(formatSecondsInput(revealConfig.nextMs));
+    setAlbumRevealSecondsInput(formatSecondsInput(revealConfig.albumMs));
+    setTitleRevealSecondsInput(formatSecondsInput(revealConfig.titleMs));
+    setArtistRevealSecondsInput(formatSecondsInput(revealConfig.artistMs));
   }
 
   async function reconnectSpotify() {
@@ -815,6 +907,15 @@ export default function HostSessionControllerPage() {
   const localChallengeType = matchChallengeSong(runtime.currentTrack, activeGame);
   const isChallenge = runtime.isChallengeSong || localChallengeType !== null;
   const challengeType = runtime.challengeType ?? localChallengeType;
+  const normalRevealConfig = runtime.revealConfig ?? session?.revealConfig ?? DEFAULT_REVEAL_CONFIG;
+  const parsedRevealConfig = parseRevealConfigInputs({
+    albumSeconds: albumRevealSecondsInput,
+    titleSeconds: titleRevealSecondsInput,
+    artistSeconds: artistRevealSecondsInput,
+    songPlaySeconds: songPlaySecondsInput,
+  });
+  const timingInputInvalid = parsedRevealConfig === null;
+  const songTimingChanged = parsedRevealConfig !== null && !revealConfigsEqual(parsedRevealConfig, normalRevealConfig);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -1077,6 +1178,83 @@ export default function HostSessionControllerPage() {
                   : "Manual host control mode"}
               </strong>
             </p>
+            <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <label className="text-sm font-semibold text-slate-700">
+                  Song length
+                  <input
+                    type="number"
+                    min={Math.floor(MIN_SONG_PLAY_MS / 1000)}
+                    max={Math.floor(MAX_SONG_PLAY_MS / 1000)}
+                    step={0.25}
+                    value={songPlaySecondsInput}
+                    onChange={(event) => setSongPlaySecondsInput(event.target.value)}
+                    className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-brand-gold focus:outline-none focus:ring-2 focus:ring-brand-gold/20"
+                    disabled={!isController || timingSaving}
+                  />
+                </label>
+                <label className="text-sm font-semibold text-slate-700">
+                  Album reveal
+                  <input
+                    type="number"
+                    min={0}
+                    max={Math.floor(MAX_SONG_PLAY_MS / 1000)}
+                    step={0.25}
+                    value={albumRevealSecondsInput}
+                    onChange={(event) => setAlbumRevealSecondsInput(event.target.value)}
+                    className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-brand-gold focus:outline-none focus:ring-2 focus:ring-brand-gold/20"
+                    disabled={!isController || timingSaving}
+                  />
+                </label>
+                <label className="text-sm font-semibold text-slate-700">
+                  Title reveal
+                  <input
+                    type="number"
+                    min={0}
+                    max={Math.floor(MAX_SONG_PLAY_MS / 1000)}
+                    step={0.25}
+                    value={titleRevealSecondsInput}
+                    onChange={(event) => setTitleRevealSecondsInput(event.target.value)}
+                    className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-brand-gold focus:outline-none focus:ring-2 focus:ring-brand-gold/20"
+                    disabled={!isController || timingSaving}
+                  />
+                </label>
+                <label className="text-sm font-semibold text-slate-700">
+                  Artist reveal
+                  <input
+                    type="number"
+                    min={0}
+                    max={Math.floor(MAX_SONG_PLAY_MS / 1000)}
+                    step={0.25}
+                    value={artistRevealSecondsInput}
+                    onChange={(event) => setArtistRevealSecondsInput(event.target.value)}
+                    className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-brand-gold focus:outline-none focus:ring-2 focus:ring-brand-gold/20"
+                    disabled={!isController || timingSaving}
+                  />
+                </label>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={!isController || timingSaving || timingInputInvalid || !songTimingChanged}
+                  onClick={() => void saveSongTiming()}
+                >
+                  {timingSaving ? "Saving..." : "Save Timing"}
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={!isController || timingSaving}
+                  onClick={resetRevealTimingToDefaults}
+                >
+                  Use Default Reveals
+                </Button>
+              </div>
+              <p className={["mt-1 text-xs", timingInputInvalid ? "text-red-600" : "text-slate-500"].join(" ")}>
+                Defaults scale to the full clip; custom values must stay in order before the next-song time.
+              </p>
+            </div>
             <p className="text-sm text-slate-500 mb-2">
               Current track:{" "}
               <strong className="text-slate-700">
@@ -1135,15 +1313,15 @@ export default function HostSessionControllerPage() {
                       </div>
                     );
                   }
-                  const baseCfg = isChallenge ? CHALLENGE_REVEAL_CONFIG : (session?.revealConfig ?? DEFAULT_REVEAL_CONFIG);
-                  const effectiveNextMs = baseCfg.nextMs + runtime.extensionMs;
+                  const baseCfg = isChallenge ? CHALLENGE_REVEAL_CONFIG : normalRevealConfig;
+                  const effectiveCfg = getRevealConfigWithExtension(baseCfg, runtime.extensionMs);
+                  const effectiveNextMs = effectiveCfg.nextMs;
                   const timeUntilNextSec = Math.max(0, Math.ceil((effectiveNextMs - progressMs) / 1000));
-                  const nextSec = Math.floor(effectiveNextMs / 1000);
                   return (
                     <div className="rounded-xl bg-slate-100 border border-slate-200 px-3 py-2 mb-3">
                       <div className="flex items-baseline gap-3 flex-wrap">
                         <span className="text-2xl font-black text-slate-800 tabular-nums">{progressSec}s</span>
-                        <span className="text-sm text-slate-500">of {nextSec}s</span>
+                        <span className="text-sm text-slate-500">of {formatTimingMs(effectiveNextMs)}</span>
                         {runtime.revealState.shouldAdvance ? (
                           <span className="text-sm font-bold text-brand-gold">Advancing...</span>
                         ) : (
@@ -1160,14 +1338,15 @@ export default function HostSessionControllerPage() {
                 })()}
 
                 {(() => {
-                  const badgeCfg = isChallenge ? CHALLENGE_REVEAL_CONFIG : (session?.revealConfig ?? DEFAULT_REVEAL_CONFIG);
+                  const baseBadgeCfg = isChallenge ? CHALLENGE_REVEAL_CONFIG : normalRevealConfig;
+                  const badgeCfg = getRevealConfigWithExtension(baseBadgeCfg, runtime.extensionMs);
                   return (
                     <div className="flex flex-wrap gap-2 mb-3">
-                      <Badge active={runtime.revealState.showAlbum}>Album @{Math.floor(badgeCfg.albumMs / 1000)}s</Badge>
-                      <Badge active={runtime.revealState.showTitle}>Title @{Math.floor(badgeCfg.titleMs / 1000)}s</Badge>
-                      <Badge active={runtime.revealState.showArtist}>Artist @{Math.floor(badgeCfg.artistMs / 1000)}s</Badge>
+                      <Badge active={runtime.revealState.showAlbum}>Album @{formatTimingMs(badgeCfg.albumMs)}</Badge>
+                      <Badge active={runtime.revealState.showTitle}>Title @{formatTimingMs(badgeCfg.titleMs)}</Badge>
+                      <Badge active={runtime.revealState.showArtist}>Artist @{formatTimingMs(badgeCfg.artistMs)}</Badge>
                       <Badge active={runtime.revealState.shouldAdvance}>
-                        Next @{Math.floor((badgeCfg.nextMs + runtime.extensionMs) / 1000)}s
+                        Next @{formatTimingMs(badgeCfg.nextMs)}
                       </Badge>
                     </div>
                   );
@@ -1177,9 +1356,9 @@ export default function HostSessionControllerPage() {
                   <Button
                     variant="secondary"
                     size="sm"
-                    disabled={!isController || commandBusy || runtime.mode !== "running" || runtime.extensionMs >= 300_000}
-                    title="Extend current song by 30 seconds (max 5 minutes total)"
-                    onClick={() => commitRuntime((prev) => ({ ...prev, extensionMs: Math.min(prev.extensionMs + 30_000, 300_000) }))}
+                    disabled={!isController || commandBusy || runtime.mode !== "running" || runtime.extensionMs >= MAX_SONG_EXTENSION_MS}
+                    title="Extend current song by 30 seconds (max 5 minutes extra)"
+                    onClick={() => commitRuntime((prev) => ({ ...prev, extensionMs: Math.min(prev.extensionMs + 30_000, MAX_SONG_EXTENSION_MS) }))}
                   >
                     +30s
                   </Button>
@@ -1189,10 +1368,16 @@ export default function HostSessionControllerPage() {
                     disabled={!isController || commandBusy || !runtime.currentTrack}
                     title="Skip forward 30 seconds in the current song"
                     onClick={() => {
-                      const newPos = (runtime.currentTrack?.progressMs ?? 0) + 30_000;
-                      // Also extend the auto-advance threshold so seeking past the
-                      // original nextMs doesn't immediately trigger the next song.
-                      commitRuntime((prev) => ({ ...prev, extensionMs: Math.min(prev.extensionMs + 30_000, 300_000) }));
+                      const progressMs = runtime.currentTrack?.progressMs ?? 0;
+                      const durationMs = runtime.currentTrack?.durationMs ?? 0;
+                      const requestedPos = progressMs + 30_000;
+                      const maxSeekPos = durationMs > 1_000 ? Math.max(0, durationMs - 1_000) : requestedPos;
+                      const newPos = Math.max(progressMs, Math.min(requestedPos, maxSeekPos));
+                      const skippedMs = Math.max(0, newPos - progressMs);
+                      if (skippedMs === 0) return;
+                      // Also extend the reveal schedule by the amount skipped so
+                      // seeking ahead preserves the remaining clip time.
+                      commitRuntime((prev) => ({ ...prev, extensionMs: Math.min(prev.extensionMs + skippedMs, MAX_SONG_EXTENSION_MS) }));
                       void sendCommand("seek", { positionMs: newPos });
                     }}
                   >
@@ -1223,7 +1408,7 @@ export default function HostSessionControllerPage() {
                       {cs.artist} — {cs.title}
                     </p>
                   ))}
-                  <p className="text-xs text-amber-600 mt-0.5">Plays for {Math.floor(CHALLENGE_REVEAL_CONFIG.nextMs / 1000)}s instead of {Math.floor((session?.revealConfig ?? DEFAULT_REVEAL_CONFIG).nextMs / 1000)}s</p>
+                  <p className="text-xs text-amber-600 mt-0.5">Plays for {formatTimingMs(CHALLENGE_REVEAL_CONFIG.nextMs)} instead of {formatTimingMs(normalRevealConfig.nextMs)}</p>
                 </div>
               );
             })()}

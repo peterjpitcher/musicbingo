@@ -11,7 +11,7 @@ import {
   textareaClass,
 } from "@/components/ui/formStyles";
 import { MAX_SONGS_PER_GAME, makeSongSelectionValue } from "@/lib/gameInput";
-import type { IntroSong } from "@/lib/live/types";
+import { CHALLENGE_REVEAL_CONFIG, DEFAULT_REVEAL_CONFIG, type IntroSong } from "@/lib/live/types";
 import type { Song } from "@/lib/types";
 
 type ParsedResult = {
@@ -44,6 +44,7 @@ type StepGameConfigProps = {
   onIntroSongsChange: (songs: IntroSong[]) => void;
   spotifyConnected: boolean;
   parsed: ParsedResult;
+  normalSongSeconds: number;
   onBack: () => void;
   onNext: () => void;
   nextLabel?: string;
@@ -122,6 +123,7 @@ export function StepGameConfig({
   onIntroSongsChange,
   spotifyConnected,
   parsed,
+  normalSongSeconds,
   onBack,
   onNext,
   nextLabel = "Next →",
@@ -424,8 +426,8 @@ export function StepGameConfig({
           })}
 
           <p className={helpClass}>
-            At least 1 challenge song required. These songs play for 90 seconds
-            instead of 60.
+            At least 1 challenge song required. These songs play for {Math.floor(CHALLENGE_REVEAL_CONFIG.nextMs / 1000)} seconds
+            instead of {Number.isFinite(normalSongSeconds) ? Math.round(normalSongSeconds) : Math.floor(DEFAULT_REVEAL_CONFIG.nextMs / 1000)}.
           </p>
         </div>
       </div>

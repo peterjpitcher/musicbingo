@@ -4,7 +4,7 @@ import {
   type LiveRuntimeState,
   type LiveSessionV1,
 } from "@/lib/live/types";
-import { asNumber, asString, isObject, validateLiveSession as _validateLiveSession } from "@/lib/live/validate";
+import { asNumber, asString, isObject, validateLiveSession as _validateLiveSession, validateRevealConfig } from "@/lib/live/validate";
 
 export { validateLiveSession } from "@/lib/live/validate";
 
@@ -147,6 +147,7 @@ export function validateRuntimeState(input: unknown): LiveRuntimeState | null {
     showArtist: Boolean(reveal.showArtist),
     shouldAdvance: Boolean(reveal.shouldAdvance),
   };
+  const revealConfig = validateRevealConfig(input.revealConfig);
 
   let currentTrack: LiveRuntimeState["currentTrack"] = null;
   if (isObject(input.currentTrack)) {
@@ -169,6 +170,7 @@ export function validateRuntimeState(input: unknown): LiveRuntimeState | null {
     spotifyControlAvailable,
     currentTrack,
     revealState,
+    ...(revealConfig ? { revealConfig } : {}),
     advanceTriggeredForTrackId:
       typeof input.advanceTriggeredForTrackId === "string" && input.advanceTriggeredForTrackId.trim()
         ? input.advanceTriggeredForTrackId.trim()

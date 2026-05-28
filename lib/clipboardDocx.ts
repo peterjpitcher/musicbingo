@@ -2,6 +2,7 @@ import { Document, Packer, Paragraph, TextRun } from "docx";
 
 import { formatEventDateWithWeekdayDisplay } from "@/lib/eventDate";
 import { normalizeGameTheme } from "@/lib/gameInput";
+import { DEFAULT_REVEAL_CONFIG } from "@/lib/live/types";
 import type { NormalisedEvent } from "@/lib/eventFeed";
 import type { Song } from "@/lib/types";
 
@@ -25,6 +26,7 @@ type RenderClipboardDocxParams = {
   game1: ClipboardGame;
   game2: ClipboardGame;
   upcomingEvents?: NormalisedEvent[];
+  normalSongSeconds?: number;
 };
 
 function songLabel(song: Song): string {
@@ -113,6 +115,9 @@ export async function renderClipboardDocx(params: RenderClipboardDocxParams): Pr
   const eventDate = formatEventDateWithWeekdayDisplay(params.eventDateInput) || params.eventDateInput;
   const game1Theme = normalizeGameTheme(params.game1.theme);
   const game2Theme = normalizeGameTheme(params.game2.theme);
+  const normalSongSeconds = Number.isFinite(params.normalSongSeconds)
+    ? Math.max(1, Math.round(params.normalSongSeconds as number))
+    : Math.floor(DEFAULT_REVEAL_CONFIG.nextMs / 1000);
 
 
   const children: Paragraph[] = [
@@ -149,7 +154,7 @@ export async function renderClipboardDocx(params: RenderClipboardDocxParams): Pr
     // ─── GAME RULES AND POINTS ───
     sectionHeading("GAME RULES AND POINTS"),
     bullet("We will play two separate Music Bingo games using two different song lists."),
-    bullet("Song pace: aim for around 40 seconds per song. Keep it moving unless there is big audience participation."),
+    bullet(`Song pace: aim for around ${normalSongSeconds} seconds per song. Keep it moving unless there is big audience participation.`),
     bullet("Each Music Bingo game is capped at 50 songs."),
     bullet("Music Bingo points: first person to call gets the points."),
     subBullet("1 line = 15 pts"),
@@ -250,7 +255,7 @@ export async function renderClipboardDocx(params: RenderClipboardDocxParams): Pr
   children.push(sectionHeading("MUSIC BINGO SET-UP NOTES"));
   children.push(bullet("IMPORTANT: Create two separate games for next time - Game 1 list and Game 2 list. Do not reuse the same pool for both."));
   children.push(bullet("Max 50 songs per game."));
-  children.push(bullet("40 seconds per song unless audience participation is high."));
+  children.push(bullet(`${normalSongSeconds} seconds per song unless audience participation is high.`));
   children.push(bullet("Keep the bingo simple: hear the song, mark the song, shout when you win."));
   children.push(bullet("The more complicated the scoring feels, the more the energy drops. Let Nikki drive the fun, not the rules."));
 

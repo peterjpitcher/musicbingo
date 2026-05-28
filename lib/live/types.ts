@@ -10,20 +10,72 @@ export type RevealConfig = {
   nextMs: number;
 };
 
-export const DEFAULT_REVEAL_CONFIG: RevealConfig = {
-  albumMs: 15_000,
-  titleMs: 30_000,
-  artistMs: 40_000,
-  nextMs: 60_000,
+export type RevealRatios = {
+  album: number;
+  title: number;
+  artist: number;
 };
 
-/** Challenge songs play for 90 seconds instead of 60. */
-export const CHALLENGE_REVEAL_CONFIG: RevealConfig = {
-  albumMs: 10_000,
-  titleMs: 20_000,
-  artistMs: 25_000,
-  nextMs: 90_000,
+export const DEFAULT_SONG_PLAY_MS = 45_000;
+export const MIN_SONG_PLAY_MS = 15_000;
+export const MAX_SONG_PLAY_MS = 300_000;
+export const MAX_SONG_EXTENSION_MS = 300_000;
+
+const DEFAULT_REVEAL_RATIOS: RevealRatios = {
+  album: 15_000 / 60_000,
+  title: 30_000 / 60_000,
+  artist: 40_000 / 60_000,
 };
+
+const CHALLENGE_REVEAL_RATIOS: RevealRatios = {
+  album: 10_000 / 90_000,
+  title: 20_000 / 90_000,
+  artist: 25_000 / 90_000,
+};
+
+function sanitizeSongPlayMs(ms: number): number {
+  if (!Number.isFinite(ms)) return DEFAULT_SONG_PLAY_MS;
+  return Math.min(MAX_SONG_PLAY_MS, Math.max(MIN_SONG_PLAY_MS, Math.round(ms)));
+}
+
+function clampRatio(value: number, fallback: number): number {
+  if (!Number.isFinite(value)) return fallback;
+  return Math.min(1, Math.max(0, value));
+}
+
+function makeRevealConfigFromNextMs(nextMs: number, ratios: RevealRatios): RevealConfig {
+  const safeNextMs = Math.max(1, Math.round(nextMs));
+  const albumRatio = clampRatio(ratios.album, DEFAULT_REVEAL_RATIOS.album);
+  const titleRatio = clampRatio(ratios.title, DEFAULT_REVEAL_RATIOS.title);
+  const artistRatio = clampRatio(ratios.artist, DEFAULT_REVEAL_RATIOS.artist);
+  const albumMs = Math.min(safeNextMs, Math.max(0, Math.round(safeNextMs * albumRatio)));
+  const titleMs = Math.min(safeNextMs, Math.max(albumMs, Math.round(safeNextMs * titleRatio)));
+  const artistMs = Math.min(safeNextMs, Math.max(titleMs, Math.round(safeNextMs * artistRatio)));
+  return { albumMs, titleMs, artistMs, nextMs: safeNextMs };
+}
+
+function ratiosFromRevealConfig(cfg: RevealConfig): RevealRatios {
+  if (!Number.isFinite(cfg.nextMs) || cfg.nextMs <= 0) return DEFAULT_REVEAL_RATIOS;
+  return {
+    album: cfg.albumMs / cfg.nextMs,
+    title: cfg.titleMs / cfg.nextMs,
+    artist: cfg.artistMs / cfg.nextMs,
+  };
+}
+
+export function makeRevealConfigForSongPlayMs(ms: number): RevealConfig {
+  return makeRevealConfigFromNextMs(sanitizeSongPlayMs(ms), DEFAULT_REVEAL_RATIOS);
+}
+
+export function getRevealConfigWithExtension(cfg: RevealConfig, extensionMs: number): RevealConfig {
+  if (!Number.isFinite(extensionMs) || extensionMs <= 0) return cfg;
+  return makeRevealConfigFromNextMs(cfg.nextMs + Math.round(extensionMs), ratiosFromRevealConfig(cfg));
+}
+
+export const DEFAULT_REVEAL_CONFIG: RevealConfig = makeRevealConfigForSongPlayMs(DEFAULT_SONG_PLAY_MS);
+
+/** Challenge songs play longer than normal songs and use their own relative reveal points. */
+export const CHALLENGE_REVEAL_CONFIG: RevealConfig = makeRevealConfigFromNextMs(90_000, CHALLENGE_REVEAL_RATIOS);
 
 export type ChallengeSong = {
   artist: string;
@@ -119,6 +171,8 @@ export type LiveRuntimeState = {
   spotifyControlAvailable: boolean;
   currentTrack: LiveTrackSnapshot | null;
   revealState: LiveRevealState;
+  /** Normal-song reveal timing for this live run. Mirrored here so open guest screens receive timing changes. */
+  revealConfig?: RevealConfig;
   advanceTriggeredForTrackId: string | null;
   warningMessage: string | null;
   /** True when the currently playing track is the challenge song for the active game. */
@@ -129,7 +183,7 @@ export type LiveRuntimeState = {
   preBreakTrackId: string | null;
   /** Playlist ID stored before going to break, so resume can restart in the right context. */
   preBreakPlaylistId: string | null;
-  /** Extra ms added to the auto-advance threshold via the +30s button. Resets to 0 on track change. */
+  /** Extra ms added to the reveal schedule via the +30s and Skip 30s buttons. Resets to 0 on track change. */
   extensionMs: number;
   /** When true, auto-advance is disabled and songs play in full (free play / post-round mode). */
   freePlay: boolean;
@@ -179,6 +233,7 @@ export function makeEmptyRuntimeState(sessionId: string): LiveRuntimeState {
       showArtist: false,
       shouldAdvance: false,
     },
+    revealConfig: DEFAULT_REVEAL_CONFIG,
     advanceTriggeredForTrackId: null,
     warningMessage: null,
     isChallengeSong: false,

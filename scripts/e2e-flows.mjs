@@ -657,7 +657,7 @@ async function main() {
     await runFlow(flowResults, "Flow 4: Invalid inputs keep generation blocked", async () => {
       await openPrep(flow4Page);
 
-      const countInput = flow4Page.locator("input[type='number']");
+      const countInput = flow4Page.getByRole("spinbutton").first();
       const setupNext = flow4Page.getByRole("button", { name: /Next: Game 1/i });
 
       await countInput.fill("1001");

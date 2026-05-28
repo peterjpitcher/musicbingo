@@ -12,6 +12,7 @@ import { readRuntimeState, validateRuntimeState } from "@/lib/live/storage";
 import {
   CHALLENGE_REVEAL_CONFIG,
   DEFAULT_REVEAL_CONFIG,
+  getRevealConfigWithExtension,
   makeEmptyRuntimeState,
   type LiveRuntimeState,
   type LiveSessionV1,
@@ -24,7 +25,9 @@ import type { BrandConfig } from "@/lib/brands/types";
 
 function formatSeconds(ms: number): string {
   const safeMs = Number.isFinite(ms) ? Math.max(0, Math.floor(ms)) : 0;
-  return `${Math.floor(safeMs / 1000)}s`;
+  const seconds = safeMs / 1000;
+  const rounded = Math.round(seconds * 10) / 10;
+  return `${Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(1)}s`;
 }
 
 /**
@@ -204,17 +207,21 @@ export default function GuestDisplayPage() {
 
   const effectiveCfg: RevealConfig = isChallenge
     ? CHALLENGE_REVEAL_CONFIG
-    : (session?.revealConfig ?? DEFAULT_REVEAL_CONFIG);
+    : (runtime.revealConfig ?? session?.revealConfig ?? DEFAULT_REVEAL_CONFIG);
 
   // Include host-side extensions in the config so guest matches host timing
-  const effectiveNextCfg: RevealConfig = runtime.extensionMs > 0
-    ? { ...effectiveCfg, nextMs: effectiveCfg.nextMs + runtime.extensionMs }
-    : effectiveCfg;
+  const effectiveNextCfg: RevealConfig = getRevealConfigWithExtension(effectiveCfg, runtime.extensionMs);
 
   // Use locally interpolated progress for smooth reveal transitions
-  const localRevealState = (runtime.isIntroSong || runtime.freePlay)
+  const computedLocalRevealState = (runtime.isIntroSong || runtime.freePlay)
     ? { showAlbum: true, showTitle: true, showArtist: true, shouldAdvance: false }
     : computeRevealState(interpolatedProgress, effectiveNextCfg);
+  const localRevealState = {
+    showAlbum: runtime.revealState.showAlbum || computedLocalRevealState.showAlbum,
+    showTitle: runtime.revealState.showTitle || computedLocalRevealState.showTitle,
+    showArtist: runtime.revealState.showArtist || computedLocalRevealState.showArtist,
+    shouldAdvance: computedLocalRevealState.shouldAdvance || runtime.revealState.shouldAdvance,
+  };
 
   const showWaiting =
     runtime.mode === "idle" || (!runtime.currentTrack && runtime.mode === "running");
@@ -428,7 +435,7 @@ export default function GuestDisplayPage() {
                       />
                     ) : (
                       <div className="w-[min(48dvh,34vw)] max-w-none aspect-square rounded-[22px] border-4 border-dashed border-yellow-200/70 flex items-center justify-center text-[clamp(1rem,2vw,1.8rem)] uppercase tracking-[0.08em] bg-amber-900/35 text-white/80">
-                        Album reveals at {Math.floor(CHALLENGE_REVEAL_CONFIG.albumMs / 1000)}s
+                        Album reveals at {formatSeconds(effectiveNextCfg.albumMs)}
                       </div>
                     )}
                   </div>
@@ -445,7 +452,7 @@ export default function GuestDisplayPage() {
                       </h3>
                     ) : (
                       <p className="m-0 text-[clamp(1.25rem,2.7vw,2.8rem)] uppercase tracking-[0.08em] text-white/90">
-                        Title reveals at {Math.floor(CHALLENGE_REVEAL_CONFIG.titleMs / 1000)}s
+                        Title reveals at {formatSeconds(effectiveNextCfg.titleMs)}
                       </p>
                     )}
                     {(runtime.freePlay || localRevealState.showArtist) ? (
@@ -454,7 +461,7 @@ export default function GuestDisplayPage() {
                       </p>
                     ) : localRevealState.showTitle ? (
                       <p className="m-0 text-[clamp(1rem,2vw,1.8rem)] uppercase tracking-[0.08em] text-white/80">
-                        Artist reveals at {Math.floor(CHALLENGE_REVEAL_CONFIG.artistMs / 1000)}s
+                        Artist reveals at {formatSeconds(effectiveNextCfg.artistMs)}
                       </p>
                     ) : null}
                   </div>
@@ -472,7 +479,7 @@ export default function GuestDisplayPage() {
                   ) : (
                     <div className="inline-flex items-center justify-center rounded-xl border border-yellow-200/55 bg-amber-900/30 px-[clamp(1rem,2vw,2rem)] py-[clamp(0.4rem,0.9vh,0.7rem)]">
                       <p className="m-0 text-white/95 text-[clamp(1rem,2vw,2rem)] uppercase tracking-[0.05em]">
-                        Next song at {Math.floor((effectiveCfg.nextMs + runtime.extensionMs) / 1000)}s
+                        Next song at {formatSeconds(effectiveNextCfg.nextMs)}
                       </p>
                     </div>
                   )}
@@ -496,7 +503,7 @@ export default function GuestDisplayPage() {
                     )
                   ) : (
                     <div className="w-[min(74dvh,44vw)] max-w-none aspect-square rounded-[22px] border-4 border-dashed border-white/50 flex items-center justify-center text-[clamp(1.2rem,2.4vw,2.2rem)] uppercase tracking-[0.08em] bg-brand-green/72 opacity-50">
-                      Album reveals at {Math.floor(effectiveCfg.albumMs / 1000)}s
+                      Album reveals at {formatSeconds(effectiveNextCfg.albumMs)}
                     </div>
                   )}
                 </div>
@@ -509,7 +516,7 @@ export default function GuestDisplayPage() {
                     </h2>
                   ) : (
                     <h2 className="m-0 text-[clamp(2.2rem,6.1vw,7rem)] uppercase font-black tracking-wide text-white/75 leading-[0.96]">
-                      Title reveals at {Math.floor(effectiveCfg.titleMs / 1000)}s
+                      Title reveals at {formatSeconds(effectiveNextCfg.titleMs)}
                     </h2>
                   )}
 
@@ -519,7 +526,7 @@ export default function GuestDisplayPage() {
                     </p>
                   ) : (
                     <p className="m-0 text-[clamp(1.7rem,3.9vw,4.4rem)] font-bold text-white/75 leading-tight">
-                      Artist reveals at {Math.floor(effectiveCfg.artistMs / 1000)}s
+                      Artist reveals at {formatSeconds(effectiveNextCfg.artistMs)}
                     </p>
                   )}
 
@@ -533,7 +540,7 @@ export default function GuestDisplayPage() {
                     </p>
                   ) : (
                     <p className="mt-1 text-white/90 text-[clamp(1.2rem,2.5vw,2.8rem)] uppercase tracking-[0.05em]">
-                      Next song at {Math.floor((effectiveCfg.nextMs + runtime.extensionMs) / 1000)}s
+                      Next song at {formatSeconds(effectiveNextCfg.nextMs)}
                     </p>
                   )}
                 </div>
