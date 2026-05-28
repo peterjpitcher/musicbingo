@@ -42,17 +42,77 @@ async function qrPng(url: string): Promise<Uint8Array> {
   return new Uint8Array(buf);
 }
 
+const fontCharacterSetCache = new WeakMap<PDFFont, Set<number>>();
+
+function getFontCharacterSet(font: PDFFont): Set<number> {
+  const cached = fontCharacterSetCache.get(font);
+  if (cached) return cached;
+  const characterSet = new Set(font.getCharacterSet());
+  fontCharacterSetCache.set(font, characterSet);
+  return characterSet;
+}
+
+function isCombiningMark(codePoint: number): boolean {
+  return (
+    (codePoint >= 0x0300 && codePoint <= 0x036f) ||
+    (codePoint >= 0x1ab0 && codePoint <= 0x1aff) ||
+    (codePoint >= 0x1dc0 && codePoint <= 0x1dff) ||
+    (codePoint >= 0x20d0 && codePoint <= 0x20ff) ||
+    (codePoint >= 0xfe20 && codePoint <= 0xfe2f)
+  );
+}
+
+function appendSingleSpace(text: string): string {
+  return text.length === 0 || /[\s\n]$/.test(text) ? text : `${text} `;
+}
+
+function sanitizePdfText(text: string, font: PDFFont): string {
+  const characterSet = getFontCharacterSet(font);
+  const normalized = text
+    .normalize("NFKC")
+    .replace(/\r\n?/g, "\n")
+    .replace(/\u00a0/g, " ")
+    .replace(/[\u200b-\u200d\ufeff]/g, "");
+
+  let safe = "";
+  for (const char of normalized) {
+    if (char === "\n") {
+      safe += "\n";
+      continue;
+    }
+    if (char === "\t") {
+      safe = appendSingleSpace(safe);
+      continue;
+    }
+
+    const codePoint = char.codePointAt(0);
+    if (codePoint === undefined) continue;
+
+    if (characterSet.has(codePoint)) {
+      safe += char;
+    } else if (!isCombiningMark(codePoint)) {
+      safe = appendSingleSpace(safe);
+    }
+  }
+
+  return safe
+    .replace(/[^\S\n]+/g, " ")
+    .replace(/ *\n */g, "\n")
+    .trim();
+}
+
 function wrapTextLines(params: {
   text: string;
   maxWidth: number;
-  font: any;
+  font: PDFFont;
   fontSize: number;
   minFontSize: number;
   maxHeight: number;
   leadingRatio: number;
 }): { lines: string[]; fontSize: number; lineHeight: number } {
-  const { text, maxWidth, font, minFontSize, maxHeight, leadingRatio } = params;
-  const paragraphs = text
+  const { maxWidth, font, minFontSize, maxHeight, leadingRatio } = params;
+  const safeText = sanitizePdfText(params.text, font);
+  const paragraphs = safeText
     .split(/\n+/)
     .map((p) => p.trim())
     .filter(Boolean);
@@ -212,9 +272,10 @@ export async function renderCardsPdf(cards: Card[], opts: RenderOptions): Promis
 
     // Theme centred 10pt bold
     if (opts.theme) {
+      const theme = sanitizePdfText(opts.theme, fontBold);
       const themeSize = 10;
-      const themeW = fontBold.widthOfTextAtSize(opts.theme, themeSize);
-      page.drawText(opts.theme, {
+      const themeW = fontBold.widthOfTextAtSize(theme, themeSize);
+      page.drawText(theme, {
         x: (pageW - themeW) / 2,
         y: headerTop - titleSize - themeSize - 4,
         size: themeSize,
@@ -225,9 +286,10 @@ export async function renderCardsPdf(cards: Card[], opts: RenderOptions): Promis
 
     // Date centred 9pt bold
     if (opts.eventDate) {
+      const eventDate = sanitizePdfText(opts.eventDate, fontBold);
       const dateSize = 9;
-      const dateW = fontBold.widthOfTextAtSize(opts.eventDate, dateSize);
-      page.drawText(opts.eventDate, {
+      const dateW = fontBold.widthOfTextAtSize(eventDate, dateSize);
+      page.drawText(eventDate, {
         x: (pageW - dateW) / 2,
         y: headerBottom + 2,
         size: dateSize,
@@ -313,7 +375,7 @@ export async function renderCardsPdf(cards: Card[], opts: RenderOptions): Promis
 
       // Card ID below grid
       if (showCardId) {
-        const label = `Card ${String(cardIdx + 1).padStart(3, "0")} • ${card.cardId}`;
+        const label = sanitizePdfText(`Card ${String(cardIdx + 1).padStart(3, "0")} • ${card.cardId}`, font);
         const idSize = 6;
         const labelW = font.widthOfTextAtSize(label, idSize);
         const labelX = gridX + (cardW - labelW) / 2;
@@ -374,7 +436,7 @@ export async function renderEventsPage(
 
   const whatsOnW = fontBold.widthOfTextAtSize("What's On", 22);
   const venueName = opts.brandConfig?.name
-    ? `AT ${opts.brandConfig.name.toUpperCase()}`
+    ? sanitizePdfText(`AT ${opts.brandConfig.name.toUpperCase()}`, fontBold)
     : "AT THE ANCHOR";
   page.drawText(venueName, {
     x: marginX + whatsOnW + 8,
@@ -384,7 +446,7 @@ export async function renderEventsPage(
     color: black,
   });
 
-  const siteUrl = opts.brandConfig?.website_url || "the-anchor.pub";
+  const siteUrl = sanitizePdfText(opts.brandConfig?.website_url || "the-anchor.pub", font);
   const siteUrlW = font.widthOfTextAtSize(siteUrl, 8);
   page.drawText(siteUrl, {
     x: pageW - marginX - siteUrlW,
@@ -403,9 +465,12 @@ export async function renderEventsPage(
   });
 
   // --- Footer ---
-  const footerText = opts.brandConfig?.qr_items?.length
-    ? opts.brandConfig.qr_items.map((item) => item.label).join("  \u00b7  ")
-    : opts.brandConfig?.website_url || "the-anchor.pub";
+  const footerText = sanitizePdfText(
+    opts.brandConfig?.qr_items?.length
+      ? opts.brandConfig.qr_items.map((item) => item.label).join("  \u00b7  ")
+      : opts.brandConfig?.website_url || "the-anchor.pub",
+    font,
+  );
   const footerSize = 7;
   const footerRuleY = contentBottom + 14;
   page.drawLine({
@@ -430,7 +495,7 @@ export async function renderEventsPage(
   // --- No events ---
   if (!opts.events || opts.events.length === 0) {
     const visitUrl = opts.brandConfig?.website_url || "the-anchor.pub";
-    const msg = `Visit ${visitUrl} for upcoming events`;
+    const msg = sanitizePdfText(`Visit ${visitUrl} for upcoming events`, font);
     const msgSize = 14;
     const msgW = font.widthOfTextAtSize(msg, msgSize);
     page.drawText(msg, {
@@ -508,7 +573,7 @@ export async function renderEventsPage(
   cursorY -= featNameResult.lines.length * featNameResult.lineHeight + 6;
 
   // Date + time (7.5pt bold)
-  const featDateTime = `${featured.dateFormatted} \u2022 ${featured.time}`;
+  const featDateTime = sanitizePdfText(`${featured.dateFormatted} \u2022 ${featured.time}`, fontBold);
   page.drawText(featDateTime, {
     x: leftX + panelPad,
     y: cursorY - 7.5,
@@ -519,7 +584,7 @@ export async function renderEventsPage(
   cursorY -= 14;
 
   // Price (7pt)
-  page.drawText(featured.price, {
+  page.drawText(sanitizePdfText(featured.price, font), {
     x: leftX + panelPad,
     y: cursorY - 7,
     size: 7,
@@ -639,7 +704,7 @@ export async function renderEventsPage(
     const dateCenterX = rightPanelX + dateBlockW / 2;
 
     // Day-of-week (5.5pt uppercase)
-    const dowText = ev.dayOfWeek.toUpperCase();
+    const dowText = sanitizePdfText(ev.dayOfWeek.toUpperCase(), font);
     const dowW = font.widthOfTextAtSize(dowText, 5.5);
     page.drawText(dowText, {
       x: dateCenterX - dowW / 2,
@@ -650,8 +715,9 @@ export async function renderEventsPage(
     });
 
     // Day number (20pt bold)
-    const dayNumW = fontBold.widthOfTextAtSize(ev.dayNumber, 20);
-    page.drawText(ev.dayNumber, {
+    const dayNumber = sanitizePdfText(ev.dayNumber, fontBold);
+    const dayNumW = fontBold.widthOfTextAtSize(dayNumber, 20);
+    page.drawText(dayNumber, {
       x: dateCenterX - dayNumW / 2,
       y: rowCenterY - 4,
       size: 20,
@@ -660,7 +726,7 @@ export async function renderEventsPage(
     });
 
     // Month (6.5pt bold uppercase)
-    const monthText = ev.monthShort.toUpperCase();
+    const monthText = sanitizePdfText(ev.monthShort.toUpperCase(), fontBold);
     const monthW = fontBold.widthOfTextAtSize(monthText, 6.5);
     page.drawText(monthText, {
       x: dateCenterX - monthW / 2,
@@ -699,7 +765,7 @@ export async function renderEventsPage(
     }
 
     // Time + price (6.5pt)
-    const timePriceText = `${ev.time} \u2022 ${ev.price}`;
+    const timePriceText = sanitizePdfText(`${ev.time} \u2022 ${ev.price}`, font);
     page.drawText(timePriceText, {
       x: detailX,
       y: rowCenterY - 4,
