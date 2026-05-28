@@ -82,6 +82,10 @@ function makeSessionId(): string {
   return `session-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
 }
 
+function normaliseIntroSongsForSignature(songs: IntroSong[]): IntroSong[] {
+  return [...songs].sort((a, b) => a.type.localeCompare(b.type));
+}
+
 export default function PrepPage() {
   const [currentStep, setCurrentStep] = useState(0);
 
@@ -144,6 +148,68 @@ export default function PrepPage() {
   const parsedGame1 = useMemo(() => parseSongListText(game1SongsText), [game1SongsText]);
   const parsedGame2 = useMemo(() => parseSongListText(game2SongsText), [game2SongsText]);
   const normalSongSeconds = Number(songPlaySecondsInput);
+  const playlistInputSignature = useMemo(
+    () =>
+      JSON.stringify({
+        eventDate: eventDate.trim(),
+        game1Theme: game1Theme.trim(),
+        game2Theme: game2Theme.trim(),
+        game1SongsText,
+        game2SongsText,
+        game1IntroSongs: normaliseIntroSongsForSignature(game1IntroSongs),
+        game2IntroSongs: normaliseIntroSongsForSignature(game2IntroSongs),
+      }),
+    [
+      eventDate,
+      game1IntroSongs,
+      game1SongsText,
+      game1Theme,
+      game2IntroSongs,
+      game2SongsText,
+      game2Theme,
+    ]
+  );
+  const formInputSignature = useMemo(
+    () =>
+      JSON.stringify({
+        eventDate,
+        countInput,
+        songPlaySecondsInput,
+        albumRevealSecondsInput,
+        titleRevealSecondsInput,
+        artistRevealSecondsInput,
+        breakPlaylistId,
+        selectedBrandId,
+        game1Theme,
+        game1SongsText,
+        game1ChallengeSongs,
+        game1IntroSongs: normaliseIntroSongsForSignature(game1IntroSongs),
+        game2Theme,
+        game2SongsText,
+        game2ChallengeSongs,
+        game2IntroSongs: normaliseIntroSongsForSignature(game2IntroSongs),
+      }),
+    [
+      albumRevealSecondsInput,
+      artistRevealSecondsInput,
+      breakPlaylistId,
+      countInput,
+      eventDate,
+      game1ChallengeSongs,
+      game1IntroSongs,
+      game1SongsText,
+      game1Theme,
+      game2ChallengeSongs,
+      game2IntroSongs,
+      game2SongsText,
+      game2Theme,
+      selectedBrandId,
+      songPlaySecondsInput,
+      titleRevealSecondsInput,
+    ]
+  );
+  const playlistSignatureRef = useRef<string | null>(null);
+  const formSignatureRef = useRef<string>(formInputSignature);
 
   function resetRevealTimingDefaults() {
     const revealConfig = getDefaultRevealConfigForSongInput(songPlaySecondsInput);
@@ -160,6 +226,33 @@ export default function PrepPage() {
       .then((data) => setSpotifyConnected(Boolean(data?.connected)))
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (formSignatureRef.current === formInputSignature) return;
+    formSignatureRef.current = formInputSignature;
+    setError("");
+    setQrNotice("");
+  }, [formInputSignature]);
+
+  useEffect(() => {
+    const hasPlaylistArtifacts = playlistsCreated || Boolean(playlistResults) || Boolean(spotifyResult);
+    if (!hasPlaylistArtifacts) {
+      playlistSignatureRef.current = null;
+      return;
+    }
+
+    if (
+      playlistSignatureRef.current
+      && playlistSignatureRef.current !== playlistInputSignature
+    ) {
+      setSpotifyResult(null);
+      setPlaylistResults(null);
+      setPlaylistsCreated(false);
+      setLiveSessionNotice("");
+      pendingAutoSave.current = false;
+      playlistSignatureRef.current = null;
+    }
+  }, [playlistInputSignature, playlistResults, playlistsCreated, spotifyResult]);
 
   // Auto-select first challenge song & prune stale selections for Game 1
   useEffect(() => {
@@ -280,6 +373,14 @@ export default function PrepPage() {
     form.set("game2_challenge_song_types", g2ChallengeTypes.join(","));
     if (game1IntroSongs.length) form.set("game1_intro_songs", JSON.stringify(game1IntroSongs));
     if (game2IntroSongs.length) form.set("game2_intro_songs", JSON.stringify(game2IntroSongs));
+    if (game1IntroSongs[0]?.artist && game1IntroSongs[0]?.title) {
+      form.set("game1_intro_artist", game1IntroSongs[0].artist);
+      form.set("game1_intro_title", game1IntroSongs[0].title);
+    }
+    if (game2IntroSongs[0]?.artist && game2IntroSongs[0]?.title) {
+      form.set("game2_intro_artist", game2IntroSongs[0].artist);
+      form.set("game2_intro_title", game2IntroSongs[0].title);
+    }
     if (livePlaylistByGame?.game1.playlistId) {
       form.set("game1_playlist_id", livePlaylistByGame.game1.playlistId);
     }
@@ -590,6 +691,7 @@ export default function PrepPage() {
     setLiveSessionNotice("");
     setBusy(true);
     try {
+      const signatureAtCreate = playlistInputSignature;
       if (!spotifyConnected) {
         const ok = await connectSpotify({ clearError: false });
         if (!ok) return;
@@ -618,6 +720,7 @@ export default function PrepPage() {
             notFoundSongs: r.notFound,
           }));
         if (mapped.length > 0) {
+          playlistSignatureRef.current = signatureAtCreate;
           setPlaylistResults(mapped);
           setPlaylistsCreated(true);
         }
@@ -747,7 +850,12 @@ export default function PrepPage() {
           Generate a full event pack with two game card PDFs, an Event Clipboard DOCX, and two Spotify playlists.
         </p>
 
-        <StepIndicator steps={STEPS} currentStep={currentStep} />
+        <StepIndicator
+          steps={STEPS}
+          currentStep={currentStep}
+          onStepClick={goToStep}
+          canNavigateToStep={(step) => step <= currentStep}
+        />
 
         {currentStep === 0 && (
           <StepEventSetup

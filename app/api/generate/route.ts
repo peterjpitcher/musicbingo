@@ -111,18 +111,97 @@ async function fetchSpotifyPlaylistTracks(
  * Songs with no Spotify match are appended at the end in their original relative order.
  * The returned array always contains all input songs — count is always preserved.
  */
+function normalizeTrackText(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/\p{M}+/gu, "")
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/['’]/g, "")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function stripTrackNoise(value: string): string {
+  return value
+    .replace(/\s*\((?:feat\.?|ft\.?|featuring)\b[^)]*\)\s*/gi, " ")
+    .replace(/\s*(?:feat\.?|ft\.?|featuring)\b.+$/i, "")
+    .replace(/\s*\[[^\]]*]\s*/g, " ")
+    .replace(/\s*\([^)]*\)\s*/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function tokenOverlapScore(a: string, b: string): number {
+  if (!a || !b) return 0;
+  const aTokens = new Set(a.split(" ").filter(Boolean));
+  const bTokens = new Set(b.split(" ").filter(Boolean));
+  if (!aTokens.size || !bTokens.size) return 0;
+
+  let intersection = 0;
+  for (const token of aTokens) {
+    if (bTokens.has(token)) intersection += 1;
+  }
+
+  const union = aTokens.size + bTokens.size - intersection;
+  return union ? intersection / union : 0;
+}
+
+function trackTextScore(input: string, candidate: string): number {
+  const inputNorm = normalizeTrackText(input);
+  const candidateNorm = normalizeTrackText(candidate);
+  if (!inputNorm || !candidateNorm) return 0;
+  if (inputNorm === candidateNorm) return 1;
+  if (inputNorm.includes(candidateNorm) || candidateNorm.includes(inputNorm)) return 0.9;
+
+  const strippedInput = normalizeTrackText(stripTrackNoise(input));
+  const strippedCandidate = normalizeTrackText(stripTrackNoise(candidate));
+  if (strippedInput && strippedCandidate) {
+    if (strippedInput === strippedCandidate) return 0.95;
+    if (strippedInput.includes(strippedCandidate) || strippedCandidate.includes(strippedInput)) return 0.85;
+  }
+
+  return tokenOverlapScore(strippedInput || inputNorm, strippedCandidate || candidateNorm);
+}
+
+function spotifyOrderScore(song: Song, track: SpotifyTrack): number {
+  return 0.65 * trackTextScore(song.title, track.title)
+    + 0.35 * trackTextScore(song.artist, track.artist);
+}
+
 function sortSongsBySpotifyOrder(songs: Song[], spotifyTracks: SpotifyTrack[] | null): Song[] {
   if (!spotifyTracks || spotifyTracks.length === 0) return songs;
-  const norm = (s: string) => s.trim().toLowerCase();
-  const spotifyIndex = new Map<string, number>();
-  spotifyTracks.forEach((t, i) => {
-    spotifyIndex.set(`${norm(t.artist)}|${norm(t.title)}`, i);
+
+  const unusedTrackIndexes = new Set(spotifyTracks.map((_, index) => index));
+  const ordered = songs.map((song, originalIndex) => {
+    let bestIndex = Infinity;
+    let bestScore = 0;
+
+    for (const trackIndex of unusedTrackIndexes) {
+      const track = spotifyTracks[trackIndex];
+      if (!track) continue;
+      const score = spotifyOrderScore(song, track);
+      if (score > bestScore) {
+        bestScore = score;
+        bestIndex = trackIndex;
+      }
+    }
+
+    if (bestScore >= 0.72 && Number.isFinite(bestIndex)) {
+      unusedTrackIndexes.delete(bestIndex);
+      return { song, originalIndex, spotifyIndex: bestIndex };
+    }
+
+    return { song, originalIndex, spotifyIndex: Infinity };
   });
-  return [...songs].sort((a, b) => {
-    const ia = spotifyIndex.get(`${norm(a.artist)}|${norm(a.title)}`) ?? Infinity;
-    const ib = spotifyIndex.get(`${norm(b.artist)}|${norm(b.title)}`) ?? Infinity;
-    return ia - ib;
-  });
+
+  return ordered
+    .sort((a, b) => {
+      if (a.spotifyIndex !== b.spotifyIndex) return a.spotifyIndex - b.spotifyIndex;
+      return a.originalIndex - b.originalIndex;
+    })
+    .map((item) => item.song);
 }
 
 function makeBundleFilename(eventDate: string): string {
@@ -229,39 +308,9 @@ export async function POST(request: Request) {
     let game1IntroSong: Song | undefined;
     let game2IntroSong: Song | undefined;
 
-    const origin = new URL(request.url).origin;
-
-    const [spotifyTracksGame1Source, spotifyTracksGame2Source] = await Promise.all([
-      spotifyPlaylistIdGame1 ? fetchSpotifyPlaylistTracks(spotifyPlaylistIdGame1, origin) : Promise.resolve(null),
-      spotifyPlaylistIdGame2 ? fetchSpotifyPlaylistTracks(spotifyPlaylistIdGame2, origin) : Promise.resolve(null),
-    ]);
-
     try {
-      if (spotifyTracksGame1Source && spotifyTracksGame1Source.length > 0) {
-        const spotifySongs: Song[] = spotifyTracksGame1Source.map(t => ({ artist: t.artist, title: t.title }));
-        parsedGame1 = {
-          songs: spotifySongs,
-          uniqueArtists: [...new Set(spotifySongs.map(s => s.artist))],
-          uniqueTitles: [...new Set(spotifySongs.map(s => s.title))],
-          combinedPool: spotifySongs.map(s => `${s.artist} - ${s.title}`),
-          ignoredLines: [],
-        };
-      } else {
-        parsedGame1 = parseGameSongsText(game1SongsText, "Game 1");
-      }
-
-      if (spotifyTracksGame2Source && spotifyTracksGame2Source.length > 0) {
-        const spotifySongs: Song[] = spotifyTracksGame2Source.map(t => ({ artist: t.artist, title: t.title }));
-        parsedGame2 = {
-          songs: spotifySongs,
-          uniqueArtists: [...new Set(spotifySongs.map(s => s.artist))],
-          uniqueTitles: [...new Set(spotifySongs.map(s => s.title))],
-          combinedPool: spotifySongs.map(s => `${s.artist} - ${s.title}`),
-          ignoredLines: [],
-        };
-      } else {
-        parsedGame2 = parseGameSongsText(game2SongsText, "Game 2");
-      }
+      parsedGame1 = parseGameSongsText(game1SongsText, "Game 1");
+      parsedGame2 = parseGameSongsText(game2SongsText, "Game 2");
 
       const game1ChallengeRaw = asString(form.get("game1_challenge_songs"));
       const game2ChallengeRaw = asString(form.get("game2_challenge_songs"));
@@ -314,15 +363,14 @@ export async function POST(request: Request) {
       return new Response(message, { status: 400 });
     }
 
+    const origin = new URL(request.url).origin;
     const game1PlaylistId = asString(form.get("game1_playlist_id")).trim();
     const game2PlaylistId = asString(form.get("game2_playlist_id")).trim();
+    const game1OrderPlaylistId = spotifyPlaylistIdGame1 || game1PlaylistId;
+    const game2OrderPlaylistId = spotifyPlaylistIdGame2 || game2PlaylistId;
     const [spotifyTracksGame1Sort, spotifyTracksGame2Sort] = await Promise.all([
-      game1PlaylistId && !spotifyTracksGame1Source
-        ? fetchSpotifyPlaylistTracks(game1PlaylistId, origin)
-        : Promise.resolve(spotifyTracksGame1Source),
-      game2PlaylistId && !spotifyTracksGame2Source
-        ? fetchSpotifyPlaylistTracks(game2PlaylistId, origin)
-        : Promise.resolve(spotifyTracksGame2Source),
+      game1OrderPlaylistId ? fetchSpotifyPlaylistTracks(game1OrderPlaylistId, origin) : Promise.resolve(null),
+      game2OrderPlaylistId ? fetchSpotifyPlaylistTracks(game2OrderPlaylistId, origin) : Promise.resolve(null),
     ]);
     const sortedGame1Songs = sortSongsBySpotifyOrder(parsedGame1.songs, spotifyTracksGame1Sort);
     const sortedGame2Songs = sortSongsBySpotifyOrder(parsedGame2.songs, spotifyTracksGame2Sort);
