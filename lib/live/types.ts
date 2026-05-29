@@ -1,3 +1,6 @@
+import type { ScreenId } from "@/lib/live/runOfShow";
+import type { ContentKey } from "@/lib/live/content";
+
 export const LIVE_SESSION_VERSION = "music-bingo-live-session-v1" as const;
 export const LIVE_RUNTIME_VERSION = "music-bingo-live-runtime-v1" as const;
 
@@ -144,6 +147,11 @@ export type LiveSessionV1 = {
   prepData?: PrepData;
   /** Brand ID for venue theming. Null = use default brand. */
   brandId?: string;
+  /** Per-event editable TV text (spec A3). Bounded to ContentKey. */
+  content?: Partial<Record<ContentKey, string>>;
+  /** Session default layout variants for the Welcome / Title screens. */
+  welcomeVariant?: "A" | "B" | "C";
+  titleVariant?: "A" | "B" | "C";
 };
 
 export type LiveTrackSnapshot = {
@@ -191,6 +199,13 @@ export type LiveRuntimeState = {
   isIntroSong: boolean;
   /** Flips true after first track change post-intro. Persisted in localStorage. Prevents re-trigger after refresh. */
   introPlayed: boolean;
+  /** Current run-of-show screen on the TV. Always populated by the factory/validator; optional for back-compat with older states. */
+  screenId?: ScreenId;
+  /** Live content snapshot pushed to the TV (spec A3), overrides session content. */
+  content?: Partial<Record<ContentKey, string>>;
+  /** Host-selected layout variants for the Welcome / Title screens. */
+  welcomeVariant?: "A" | "B" | "C";
+  titleVariant?: "A" | "B" | "C";
   updatedAtMs: number;
 };
 
@@ -244,6 +259,7 @@ export function makeEmptyRuntimeState(sessionId: string): LiveRuntimeState {
     freePlay: false,
     isIntroSong: false,
     introPlayed: false,
+    screenId: "welcome",
     updatedAtMs: 0,
   };
 }
