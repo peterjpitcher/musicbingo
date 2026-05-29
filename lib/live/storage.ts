@@ -5,6 +5,8 @@ import {
   type LiveSessionV1,
 } from "@/lib/live/types";
 import { asNumber, asString, isObject, validateLiveSession as _validateLiveSession, validateRevealConfig } from "@/lib/live/validate";
+import { normalizeScreenId } from "@/lib/live/runOfShow";
+import { sanitizeContent, normalizeVariant } from "@/lib/live/content";
 
 export { validateLiveSession } from "@/lib/live/validate";
 
@@ -162,6 +164,11 @@ export function validateRuntimeState(input: unknown): LiveRuntimeState | null {
     };
   }
 
+  const screenId = normalizeScreenId(input.screenId);
+  const content = sanitizeContent(input.content);
+  const welcomeVariant = normalizeVariant(input.welcomeVariant);
+  const titleVariant = normalizeVariant(input.titleVariant);
+
   return {
     version: LIVE_RUNTIME_VERSION,
     sessionId,
@@ -192,6 +199,10 @@ export function validateRuntimeState(input: unknown): LiveRuntimeState | null {
     freePlay: Boolean(input.freePlay),
     isIntroSong: Boolean(input.isIntroSong),
     introPlayed: Boolean(input.introPlayed),
+    screenId,
+    ...(Object.keys(content).length ? { content } : {}),
+    ...(welcomeVariant ? { welcomeVariant } : {}),
+    ...(titleVariant ? { titleVariant } : {}),
     updatedAtMs,
   };
 }
