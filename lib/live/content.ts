@@ -95,7 +95,6 @@ function derivedDefault(
     case "venueName": return brand?.name || undefined;
     case "venuePresents": return brand?.name ? `${brand.name} Presents` : undefined;
     case "venueWeb": return brand?.website_url || undefined;
-    case "nextDate": return session?.eventDateDisplay || undefined;
     case "breakLede": return brand?.break_message || undefined;
     case "tyLede": return brand?.end_message || undefined;
     default: return undefined;
