@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Music Bingo · Run Sheet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="print-styles.css" />
+</head>
+<body>
+<div class="bar">
+  <div class="ttl">Run Sheet</div>
+  <label>Venue
+    <select id="venue"><option value="anchor">The Anchor</option><option value="velvet">The Velvet Room</option></select>
+  </label>
+  <label>Event name<input id="ev" type="text" value="Friday Night Bingo" /></label>
+  <label>Date<input id="date" type="date" value="2026-06-27" /></label>
+  <button class="btn" id="print">⎙ Print / Save PDF</button>
+</div>
+<div class="stagearea" id="stage"></div>
+
+<script>
+const BRANDS = {
+  anchor: { name: "The Anchor", tag:"Stanwell Moor Village", logo: "assets/the-anchor-pub-logo-black-transparent.png", green:"#003F27", gold:"#A57626" },
+  velvet: { name: "The Velvet Room", tag:"Soho · London", logo: null, green:"#2A1538", gold:"#C06A8E" },
+};
+const SCHEDULE = [
+  ["Welcome & intro song", "Nikki enters to the intro track (plays in full)", "8:00"],
+  ["Tonight's running order", "Show the night's plan on screen", "8:05"],
+  ["Switch to Quiz · Round 1", "KaraFun mobile quiz — phones out", "8:08"],
+  ["Music Bingo title", "Logo reveal — hype it up", "8:25"],
+  ["House rules", "Explain how to play & how to win", "8:27"],
+  ["Dance-along warm up", "Full song — get the room moving", "8:30"],
+  ["Music Bingo — Game 1", "50 songs · lines & full house", "8:34"],
+  ["Interval", "Break — bar refills (~10 min)", "9:10"],
+  ["Switch to Quiz · Round 2", "KaraFun mobile quiz round two", "9:20"],
+  ["Sing-along warm up", "Full song — big sing-along", "9:35"],
+  ["Music Bingo — Game 2", "Different song list", "9:39"],
+  ["Winners", "1st place + wooden spoon (2nd from last)", "10:15"],
+  ["Thank you & reviews", "Google review QR + next event", "10:20"],
+];
+const G1 = ["The Killers - Mr. Brightside","ABBA - Dancing Queen","Queen - Don't Stop Me Now","Oasis - Wonderwall","Mark Ronson - Uptown Funk","Neil Diamond - Sweet Caroline","ELO - Mr Blue Sky","Journey - Don't Stop Believin'","Whitney Houston - I Wanna Dance with Somebody","Bon Jovi - Livin' on a Prayer","Toto - Africa","a-ha - Take On Me","Spice Girls - Wannabe","Madonna - Like a Prayer","Robbie Williams - Angels","Katy Perry - Firework","Rihanna - Umbrella","Coldplay - Yellow","Kings of Leon - Sex on Fire","Pulp - Common People","Blur - Song 2","The Beatles - Hey Jude","Wham! - Last Christmas","Lady Gaga - Just Dance","Elvis Presley - Jailhouse Rock"];
+const G2 = ["Backstreet Boys - I Want It That Way","Britney Spears - Baby One More Time","NSYNC - Bye Bye Bye","Steps - Tragedy","S Club 7 - Reach","Vengaboys - We Like to Party","Aqua - Barbie Girl","Eiffel 65 - Blue","Shaggy - It Wasn't Me","Outkast - Hey Ya!","Gnarls Barkley - Crazy","Black Eyed Peas - I Gotta Feeling","Flo Rida - Low","Kesha - Tik Tok","LMFAO - Party Rock Anthem","Cee Lo Green - Forget You","Maroon 5 - Moves Like Jagger","Pharrell - Happy","Daft Punk - Get Lucky","Mark Morrison - Return of the Mack","Lou Bega - Mambo No. 5","Ricky Martin - Livin' la Vida Loca","Sisqo - Thong Song","Crazy Town - Butterfly","Las Ketchup - The Ketchup Song"];
+
+const $ = (id)=>document.getElementById(id);
+function ansList(songs, intro, chal){
+  return songs.map((s,i)=>{
+    const tags = [];
+    if (s===intro) tags.push('<span class="note-chip">Intro</span>');
+    if (chal.includes(s)) tags.push('<span class="note-chip">Challenge 90s</span>');
+    return `<div class="ans"><span class="i">${i+1}</span><span>${s} ${tags.join(" ")}</span></div>`;
+  }).join("");
+}
+function render(){
+  const b = BRANDS[$("venue").value];
+  const ev = $("ev").value || "Music Bingo";
+  const dateStr = $("date").value ? new Date($("date").value+"T00:00").toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"}) : "";
+  const stage = $("stage");
+  stage.style.setProperty("--p-green", b.green); stage.style.setProperty("--p-gold", b.gold);
+  const logo = b.logo ? `<img src="${b.logo}" alt="${b.name}">` : `<div style="font-family:Anton;font-size:9mm;color:#000;text-transform:uppercase">${b.name}</div>`;
+  stage.innerHTML = `<div class="page portrait portrait-print"><div class="doc">
+    <div class="doc-head">
+      <div><h1 class="ttl">Run Sheet</h1><div class="sub">${b.name} · Host</div></div>
+      <div style="text-align:right">${logo}<div class="meta"><b>${ev}</b><br>${dateStr}</div></div>
+    </div>
+
+    <div class="badge-row">
+      <span class="kv"><b>Cards:</b> 240 (40 pages)</span>
+      <span class="kv"><b>Song length:</b> 45s</span>
+      <span class="kv"><b>Reveals:</b> album 11s · title 23s · artist 30s</span>
+      <span class="kv"><b>Challenge:</b> 90s</span>
+    </div>
+
+    <h3>Schedule</h3>
+    <ul class="sched">${SCHEDULE.map((r,i)=>`<li><span class="n">${String(i+1).padStart(2,"0")}</span><span><b>${r[0]}</b> — ${r[1]}</span><span class="t">${r[2]}</span></li>`).join("")}</ul>
+  </div></div>`;
+  fit();
+}
+function fit(){
+  const pxPerMm=96/25.4, pageW=210*pxPerMm, avail=window.innerWidth-60, scale=Math.min(1,avail/pageW);
+  document.querySelectorAll(".page").forEach((pg)=>{ pg.style.transform=`scale(${scale})`; pg.style.transformOrigin="top center"; pg.style.marginBottom=`${(scale-1)*297*pxPerMm+26}px`; });
+}
+["venue","ev","date"].forEach(id=>{ $(id).oninput=render; $(id).onchange=render; });
+$("print").onclick=()=>window.print();
+window.addEventListener("resize", fit);
+render();
+</script>
+</body>
+</html>

@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Music Bingo · Bingo Cards</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;500;600;700;800&family=Archivo:ital@1&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="print-styles.css" />
+</head>
+<body>
+<div class="bar">
+  <div class="ttl">Bingo Cards</div>
+  <label>Venue
+    <select id="venue">
+      <option value="anchor">The Anchor</option>
+      <option value="velvet">The Velvet Room</option>
+    </select>
+  </label>
+  <label>Theme
+    <input id="theme" type="text" value="Pop Anthems" />
+  </label>
+  <label>Pages
+    <input id="pages" type="number" min="1" max="40" value="2" />
+  </label>
+  <button class="btn ghost" id="regen">↻ Reshuffle</button>
+  <button class="btn" id="print">⎙ Print / Save PDF</button>
+  <span class="note">Prints double-sided — cards on the front, what&rsquo;s-on on the back</span>
+</div>
+<div class="stagearea" id="stage"></div>
+
+<script src="https://unpkg.com/qrcode-generator@1.4.4/qrcode.js"></script>
+<script>
+const BRANDS = {
+  anchor: { name: "The Anchor", logo: "assets/the-anchor-pub-logo-black-transparent.png", green: "#003F27", greenLite:"#0F6846", gold: "#A57626", goldLite: "#C4952F" },
+  velvet: { name: "The Velvet Room", logo: null, green: "#2A1538", greenLite:"#5B2A6E", gold: "#C06A8E", goldLite: "#E59ABA" },
+};
+// combined pool — mix of artists & song titles (matches the app's "combinedPool")
+const POOL = [
+  "The Killers","Mr. Brightside","ABBA","Dancing Queen","Queen","Don't Stop Me Now","Oasis","Wonderwall",
+  "Mark Ronson","Uptown Funk","Neil Diamond","Sweet Caroline","ELO","Mr Blue Sky","Journey","Don't Stop Believin'",
+  "Whitney Houston","I Wanna Dance with Somebody","Bon Jovi","Livin' on a Prayer","Toto","Africa","a-ha","Take On Me",
+  "Spice Girls","Wannabe","Madonna","Like a Prayer","Wham!","Last Christmas","Robbie Williams","Angels",
+  "Katy Perry","Firework","Lady Gaga","Just Dance","Rihanna","Umbrella","Coldplay","Yellow",
+  "Kings of Leon","Sex on Fire","Pulp","Common People","Blur","Song 2","The Beatles","Hey Jude",
+];
+
+const $ = (id) => document.getElementById(id);
+
+// real QR (B&W) via qrcode-generator
+function qrSVG(text, mm){
+  try{
+    var qr = qrcode(0, "M"); qr.addData(text || "https://theanchor.pub"); qr.make();
+    var n = qr.getModuleCount(), cell = 100/n, rects = "";
+    for (var y=0;y<n;y++) for (var x=0;x<n;x++) if (qr.isDark(y,x))
+      rects += '<rect x="'+(x*cell).toFixed(2)+'" y="'+(y*cell).toFixed(2)+'" width="'+(cell+0.3).toFixed(2)+'" height="'+(cell+0.3).toFixed(2)+'"/>';
+    return '<svg width="'+mm+'mm" height="'+mm+'mm" viewBox="0 0 100 100" preserveAspectRatio="none"><rect width="100" height="100" fill="#fff"/><g fill="#000">'+rects+'</g></svg>';
+  } catch(e){ return '<svg width="'+mm+'mm" height="'+mm+'mm" viewBox="0 0 100 100"><rect width="100" height="100" fill="#eee"/></svg>'; }
+}
+
+// upcoming events (in the real app these come from the venue's event feed)
+const EVENTS = {
+  featured: { name:"Quiz Night", dow:"Wednesday", day:"2", month:"Jul", time:"8:00 PM", price:"£2 per person",
+    desc:"Six rounds of general knowledge, music & picture rounds. Teams of up to 6 — winner takes the cash pot.", url:"https://theanchor.pub/events/quiz" },
+  upcoming: [
+    { dow:"Fri", day:"11", month:"Jul", name:"Live Music: The Hi-Tones", time:"9:00 PM", price:"Free entry", desc:"Soul, funk & motown covers all night long.", url:"https://theanchor.pub/events/hitones" },
+    { dow:"Sun", day:"20", month:"Jul", name:"Sunday Roast Club", time:"12:00 PM", price:"From £14.95", desc:"Locally-sourced roasts — booking recommended.", url:"https://theanchor.pub/events/roast" },
+    { dow:"Fri", day:"25", month:"Jul", name:"Music Bingo Returns", time:"8:00 PM", price:"£3 per person", desc:"The one you’re playing — back again next month!", url:"https://theanchor.pub/events/bingo" },
+  ],
+};
+
+function backPageHTML(brand){
+  const web = brand.name === "The Velvet Room" ? "velvetroom.london" : "theanchor.pub";
+  const logo = brand.logo ? `<img src="${brand.logo}" alt="${brand.name}">` : `<span class="ttl">${brand.name}</span>`;
+  const f = EVENTS.featured;
+  const cards = EVENTS.upcoming.map((e) => `<div class="ev-card">
+    <div class="date">${e.dow} ${e.day} ${e.month}</div>
+    <div class="nm">${e.name}</div>
+    <div class="meta">${e.time} &middot; ${e.price}</div>
+    <div class="d">${e.desc}</div>
+    <div class="qrow">${qrSVG(e.url,16)}<span class="sc">Scan to<br>book</span></div>
+  </div>`).join("");
+  return `<div class="page landscape">
+    <div class="ev-head"><div class="left">${logo}<span class="ttl">What’s On</span></div>
+      <div class="meta"><b>${brand.name}</b><br>More great nights out</div></div>
+    <div class="ev-body">
+      <div class="ev-feature">
+        <div class="info"><div class="lab">Featured &middot; Don’t Miss</div>
+          <div class="nm">${f.name}</div>
+          <div class="when">${f.dow} ${f.day} ${f.month} &middot; ${f.time} &middot; ${f.price}</div>
+          <div class="desc">${f.desc}</div>
+        </div>
+        <div class="qr">${qrSVG(f.url,36)}<div class="cap">Scan to book</div></div>
+      </div>
+      <div class="ev-grid">${cards}</div>
+      <div class="ev-foot">Book online at ${web} &middot; or just ask at the bar</div>
+    </div>
+  </div>`;
+}
+function rint(n){ return Math.floor(Math.random()*n); }
+function sample(arr, k){ const c = arr.slice(); for(let i=0;i<k;i++){ const j=i+rint(c.length-i); [c[i],c[j]]=[c[j],c[i]]; } return c.slice(0,k); }
+function cardId(){ let s=""; for(let i=0;i<10;i++) s+="0123456789abcdef"[rint(16)]; return s; }
+
+// one card: 5 cols x 3 rows, 1 blank per row in distinct columns (12 filled)
+function makeCard(){
+  const cols = sample([0,1,2,3,4], 3); // distinct blank column per row
+  const filled = sample(POOL, 12);
+  const cells = []; let f = 0;
+  for (let r=0;r<3;r++) for (let c=0;c<5;c++){
+    cells.push(c === cols[r] ? null : filled[f++]);
+  }
+  return { cells, id: cardId() };
+}
+
+function cardHTML(card, theme, n){
+  const cells = card.cells.map((v) =>
+    v === null ? '<div class="bcell blank"></div>' : `<div class="bcell">${v}</div>`
+  ).join("");
+  return `<div class="bcard">
+    <div class="bcard-h"><span class="th">${theme}</span><span class="no">#${String(n).padStart(3,"0")}</span></div>
+    <div class="bgrid">${cells}</div>
+    <div class="bcard-f"><span>Dab a song when you hear it</span><span class="id">${card.id}</span></div>
+  </div>`;
+}
+
+function render(){
+  const brand = BRANDS[$("venue").value];
+  const theme = $("theme").value || "Music Bingo";
+  const pages = Math.max(1, Math.min(40, parseInt($("pages").value,10)||1));
+  const stage = $("stage");
+  stage.style.setProperty("--p-green", brand.green);
+  stage.style.setProperty("--p-green-lite", brand.greenLite);
+  stage.style.setProperty("--p-gold", brand.gold);
+  stage.style.setProperty("--p-gold-lite", brand.goldLite);
+  const dateStr = new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+  let n = 0; let html = "";
+  for (let p=0;p<pages;p++){
+    let cards = "";
+    for (let c=0;c<6;c++){ n++; cards += cardHTML(makeCard(), theme, n); }
+    const logo = brand.logo ? `<img src="${brand.logo}" alt="${brand.name}">` : `<span style="font-family:Anton;font-size:7mm;color:#000;text-transform:uppercase">${brand.name}</span>`;
+    html += `<div class="page landscape">
+      <div class="sheet-head">
+        <div class="left">${logo}<span class="ttl">Music Bingo</span></div>
+        <div class="meta"><b>${brand.name}</b><br>${theme} &middot; ${dateStr}</div>
+      </div>
+      <div class="cards-grid">${cards}</div>
+    </div>`;
+    html += backPageHTML(brand);
+  }
+  stage.innerHTML = html;
+  fit();
+}
+function fit(){
+  const pxPerMm = 96/25.4; const pageW = 297*pxPerMm;
+  const avail = window.innerWidth - 60;
+  const scale = Math.min(1, avail/pageW);
+  document.querySelectorAll(".page").forEach((pg)=>{
+    pg.style.transform = `scale(${scale})`; pg.style.transformOrigin = "top center";
+    pg.style.marginBottom = `${(scale-1)*210*pxPerMm + 26}px`;
+  });
+}
+$("venue").onchange = render; $("theme").oninput = render; $("pages").onchange = render;
+$("regen").onclick = render; $("print").onclick = () => window.print();
+window.addEventListener("resize", fit);
+render();
+</script>
+</body>
+</html>
