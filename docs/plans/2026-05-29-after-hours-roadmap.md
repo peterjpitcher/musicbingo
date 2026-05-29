@@ -8,7 +8,7 @@ Status: ✅ done · ▶ in progress · ⬜ not started · ⛔ blocked/gated
 | # | Scope (1-liner) | Depends on | Status | Plan |
 |---|---|---|---|---|
 | 0 | Foundations: fonts, design tokens, dark UI primitives, brand font/logo schema + migration, Vitest harness | — | ✅ (11 commits, verified, Codex-reviewed) | [phase-0-foundations.md](2026-05-29-after-hours-phase-0-foundations.md) |
-| 1a | **State contract**: `lib/live/runOfShow.ts`, `lib/live/content.ts`, additive `LiveRuntimeState`/`LiveSessionV1` fields (`screenId`, `content`, `welcomeVariant`, `titleVariant`) + validators | 0 | ▶ planning | (this session) |
+| 1a | **State contract**: `lib/live/runOfShow.ts`, `lib/live/content.ts`, additive `LiveRuntimeState`/`LiveSessionV1` fields (`screenId`, `content`, `welcomeVariant`, `titleVariant`) + validators | 0 | ✅ done (5 commits, 58 tests, reviewed) | [phase-1a-state-contract.md](2026-05-29-after-hours-phase-1a-state-contract.md) |
 | 1b | **Component library**: `components/motifs/*` + `components/screens/*` (~16 presentational components) ported from the bundle, rendered in isolation | 0, 1a | ⬜ | tbd |
 | 2 | **TV Display** (`/guest/[sessionId]`) rebuilt as a `screenId`-driven renderer over the existing sync engine | 1a, 1b | ⬜ | tbd |
 | 3 | **Host Controller** (`/host/[sessionId]`) console: preview + run-of-show + Now-Playing/Game-Flow/Timing/Content/Playlist panels + variant controls | 1a, 1b, 2 | ⬜ | tbd |
@@ -17,6 +17,8 @@ Status: ✅ done · ▶ in progress · ⬜ not started · ⛔ blocked/gated
 | 6 | **Print/PDF**: `@pdf-lib/fontkit`, cards + What's-On restyle (≤3 events), new run-sheet PDF, `/api/generate` output modes | 0 | ⬜ | tbd |
 
 > Split note: spec Phase 1 → **1a** (state/lib, fast, TDD) + **1b** (component porting, large/visual) for shippability. Phases 4/5/6 can parallelise after 0+1a.
+>
+> **1a consumer note (for 1b/2/3):** `getContent` auto-derives only `g1theme`/`g2theme` (from session games) and `venueName`/`venuePresents`/`venueWeb`/`breakLede`/`tyLede` (from brand). Everything else — incl. `nextDate`, `breakMins`, `hostName`, winners — falls back to design placeholders until set via the host content panel (session/runtime `content`). Don't assume those are populated from data. (`nextDate` deliberately does **not** derive from the session's own event date — Codex review fix.)
 
 ## Cross-phase carry-over items (do NOT lose)
 - ⛔ **Apply migration `20260529120000_*` before Phase 5** (Codex CR-1). Supabase CLI is unlinked in this env → **user applies** (`supabase db push`). Not needed for 1a/1b/2/3. No current code writes the new columns.
