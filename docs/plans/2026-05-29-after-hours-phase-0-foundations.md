@@ -432,12 +432,12 @@ Expected: FAIL — `brandSchema.parse` strips/rejects `font_display`/`font_body`
 
 - [ ] **Step 3: Add the fields to the schema**
 
-In `lib/brands/types.ts`, inside the `brandSchema = z.object({...})` definition, add these three lines immediately **after** the `font_family: z.string().max(100).nullable(),` line:
+In `lib/brands/types.ts`, inside the `brandSchema = z.object({...})` definition, add these three lines immediately **after** the `font_family: z.string().max(100).nullable(),` line. They are `.optional()` (not just `.nullable()`) so the existing `BrandForm` consumer — whose UI for these fields lands in Phase 5 — keeps compiling; on input they may be omitted and defaults apply:
 
 ```ts
-  font_display: z.string().max(100).nullable(),
-  font_body: z.string().max(100).nullable(),
-  event_logo_url: z.string().max(300).nullable().or(z.literal("")),
+  font_display: z.string().max(100).nullable().optional(),
+  font_body: z.string().max(100).nullable().optional(),
+  event_logo_url: z.string().max(300).nullable().or(z.literal("")).optional(),
 ```
 
 Then, in the `BrandConfig` type (the `Pick<Brand, ...>`), add `font_display`, `font_body`, and `event_logo_url` to the picked key union (alongside `font_family`).
