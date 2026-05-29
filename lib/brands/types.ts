@@ -24,6 +24,9 @@ export const brandSchema = z.object({
   color_accent: HEX_COLOUR,
   color_accent_light: HEX_COLOUR,
   font_family: z.string().max(100).nullable(),
+  font_display: z.string().max(100).nullable().optional(),
+  font_body: z.string().max(100).nullable().optional(),
+  event_logo_url: z.string().max(300).nullable().or(z.literal("")).optional(),
   break_message: z.string().max(500).nullable(),
   end_message: z.string().max(500).nullable(),
   website_url: z.string().max(200).nullable().or(z.literal("")),
@@ -50,6 +53,9 @@ export type BrandConfig = Pick<
   | "color_accent"
   | "color_accent_light"
   | "font_family"
+  | "font_display"
+  | "font_body"
+  | "event_logo_url"
   | "break_message"
   | "end_message"
   | "website_url"

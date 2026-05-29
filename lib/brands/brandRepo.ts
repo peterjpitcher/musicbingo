@@ -13,6 +13,9 @@ type BrandRow = {
   color_accent: string;
   color_accent_light: string;
   font_family: string | null;
+  font_display: string | null;
+  font_body: string | null;
+  event_logo_url: string | null;
   break_message: string | null;
   end_message: string | null;
   website_url: string | null;
@@ -37,6 +40,9 @@ function rowToBrand(row: BrandRow): Brand {
     color_accent: row.color_accent,
     color_accent_light: row.color_accent_light,
     font_family: row.font_family,
+    font_display: row.font_display,
+    font_body: row.font_body,
+    event_logo_url: row.event_logo_url,
     break_message: row.break_message,
     end_message: row.end_message,
     website_url: row.website_url,
@@ -109,6 +115,9 @@ function brandToBrandConfig(brand: Brand): BrandConfig {
     color_accent: brand.color_accent,
     color_accent_light: brand.color_accent_light,
     font_family: brand.font_family,
+    font_display: brand.font_display,
+    font_body: brand.font_body,
+    event_logo_url: brand.event_logo_url,
     break_message: brand.break_message,
     end_message: brand.end_message,
     website_url: brand.website_url,
@@ -141,6 +150,9 @@ type CreateBrandInput = {
   color_accent: string;
   color_accent_light: string;
   font_family?: string | null;
+  font_display?: string | null;
+  font_body?: string | null;
+  event_logo_url?: string | null;
   break_message?: string | null;
   end_message?: string | null;
   website_url?: string | null;

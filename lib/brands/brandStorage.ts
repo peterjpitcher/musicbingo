@@ -5,7 +5,7 @@ const BUCKET_NAME = "brand-assets";
 const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
 const ALLOWED_MIME_TYPES = ["image/png", "image/jpeg", "image/webp"];
 
-type LogoSlot = "logo-dark" | "logo-light";
+export type LogoSlot = "logo-dark" | "logo-light" | "event-logo";
 
 /** Upload a logo to Supabase Storage and return the object key. */
 export async function uploadBrandLogo(
