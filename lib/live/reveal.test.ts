@@ -1,5 +1,4 @@
-import assert from "node:assert/strict";
-import test from "node:test";
+import { test, expect } from "vitest";
 
 import {
   computeRevealState,
@@ -10,47 +9,47 @@ import {
 import { getRevealConfigWithExtension, makeRevealConfigForSongPlayMs } from "@/lib/live/types";
 
 test("getRevealPhase follows relative 45s default thresholds", () => {
-  assert.equal(getRevealPhase(0), "hidden");
-  assert.equal(getRevealPhase(11_249), "hidden");
-  assert.equal(getRevealPhase(11_250), "album");
-  assert.equal(getRevealPhase(22_499), "album");
-  assert.equal(getRevealPhase(22_500), "title");
-  assert.equal(getRevealPhase(29_999), "title");
-  assert.equal(getRevealPhase(30_000), "artist");
-  assert.equal(getRevealPhase(44_999), "artist");
-  assert.equal(getRevealPhase(45_000), "advance");
+  expect(getRevealPhase(0)).toBe("hidden");
+  expect(getRevealPhase(11_249)).toBe("hidden");
+  expect(getRevealPhase(11_250)).toBe("album");
+  expect(getRevealPhase(22_499)).toBe("album");
+  expect(getRevealPhase(22_500)).toBe("title");
+  expect(getRevealPhase(29_999)).toBe("title");
+  expect(getRevealPhase(30_000)).toBe("artist");
+  expect(getRevealPhase(44_999)).toBe("artist");
+  expect(getRevealPhase(45_000)).toBe("advance");
 });
 
 test("computeRevealState maps phases to reveal booleans", () => {
-  assert.deepEqual(computeRevealState(0), {
+  expect(computeRevealState(0)).toEqual({
     showAlbum: false,
     showTitle: false,
     showArtist: false,
     shouldAdvance: false,
   });
 
-  assert.deepEqual(computeRevealState(11_250), {
+  expect(computeRevealState(11_250)).toEqual({
     showAlbum: true,
     showTitle: false,
     showArtist: false,
     shouldAdvance: false,
   });
 
-  assert.deepEqual(computeRevealState(22_500), {
+  expect(computeRevealState(22_500)).toEqual({
     showAlbum: true,
     showTitle: true,
     showArtist: false,
     shouldAdvance: false,
   });
 
-  assert.deepEqual(computeRevealState(30_000), {
+  expect(computeRevealState(30_000)).toEqual({
     showAlbum: true,
     showTitle: true,
     showArtist: true,
     shouldAdvance: false,
   });
 
-  assert.deepEqual(computeRevealState(45_000), {
+  expect(computeRevealState(45_000)).toEqual({
     showAlbum: true,
     showTitle: true,
     showArtist: true,
@@ -59,13 +58,13 @@ test("computeRevealState maps phases to reveal booleans", () => {
 });
 
 test("makeRevealConfigForSongPlayMs scales milestones with song play time", () => {
-  assert.deepEqual(makeRevealConfigForSongPlayMs(60_000), {
+  expect(makeRevealConfigForSongPlayMs(60_000)).toEqual({
     albumMs: 15_000,
     titleMs: 30_000,
     artistMs: 40_000,
     nextMs: 60_000,
   });
-  assert.deepEqual(makeRevealConfigForSongPlayMs(45_000), {
+  expect(makeRevealConfigForSongPlayMs(45_000)).toEqual({
     albumMs: 11_250,
     titleMs: 22_500,
     artistMs: 30_000,
@@ -76,39 +75,37 @@ test("makeRevealConfigForSongPlayMs scales milestones with song play time", () =
 test("getRevealConfigWithExtension preserves relative timing after skip or extension", () => {
   const cfg = makeRevealConfigForSongPlayMs(45_000);
   const extended = getRevealConfigWithExtension(cfg, 30_000);
-  assert.deepEqual(extended, {
+  expect(extended).toEqual({
     albumMs: 18_750,
     titleMs: 37_500,
     artistMs: 50_000,
     nextMs: 75_000,
   });
-  assert.equal(getRevealPhase(30_000, extended), "album");
-  assert.equal(getRevealPhase(75_000, extended), "advance");
+  expect(getRevealPhase(30_000, extended)).toBe("album");
+  expect(getRevealPhase(75_000, extended)).toBe("advance");
 });
 
 test("shouldTriggerNextForTrack fires once per track", () => {
   const reveal = computeRevealState(45_000);
-  assert.equal(
+  expect(
     shouldTriggerNextForTrack({
       trackId: "abc",
       revealState: reveal,
       advanceTriggeredForTrackId: null,
-    }),
-    true
-  );
+    })
+  ).toBe(true);
 
-  assert.equal(
+  expect(
     shouldTriggerNextForTrack({
       trackId: "abc",
       revealState: reveal,
       advanceTriggeredForTrackId: "abc",
-    }),
-    false
-  );
+    })
+  ).toBe(false);
 });
 
 test("updateAdvanceTrackMarker clears marker when track changes", () => {
-  assert.equal(updateAdvanceTrackMarker({ trackId: "abc", advanceTriggeredForTrackId: "abc" }), "abc");
-  assert.equal(updateAdvanceTrackMarker({ trackId: "xyz", advanceTriggeredForTrackId: "abc" }), null);
-  assert.equal(updateAdvanceTrackMarker({ trackId: null, advanceTriggeredForTrackId: "abc" }), null);
+  expect(updateAdvanceTrackMarker({ trackId: "abc", advanceTriggeredForTrackId: "abc" })).toBe("abc");
+  expect(updateAdvanceTrackMarker({ trackId: "xyz", advanceTriggeredForTrackId: "abc" })).toBeNull();
+  expect(updateAdvanceTrackMarker({ trackId: null, advanceTriggeredForTrackId: "abc" })).toBeNull();
 });
