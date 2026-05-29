@@ -25,3 +25,6 @@ node_modules/
 *.tsbuildinfo
 .vercel
 .claude/session-context.md
+
+# Local Node.js compile cache
+node-compile-cache/
