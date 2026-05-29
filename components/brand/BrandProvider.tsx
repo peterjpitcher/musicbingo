@@ -2,6 +2,7 @@
 
 import { useEffect, type ReactNode } from "react";
 import { hexToRgbChannels } from "@/lib/brands/hexToRgb";
+import { resolveBrandFonts, fontFamilyCss, buildGoogleFontHref } from "@/lib/brands/fonts";
 import type { BrandConfig } from "@/lib/brands/types";
 
 type BrandProviderProps = {
@@ -9,47 +10,54 @@ type BrandProviderProps = {
   children: ReactNode;
 };
 
+function setBrandFontLink(attr: string, family: string) {
+  const existing = document.querySelector(`link[${attr}]`);
+  if (existing) existing.remove();
+  const href = buildGoogleFontHref(family);
+  if (!href) return; // next/font-managed default or unsupported — nothing to load
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href = href;
+  link.setAttribute(attr, "true");
+  document.head.appendChild(link);
+}
+
 export function BrandProvider({ brand, children }: BrandProviderProps): ReactNode {
   useEffect(() => {
     if (!brand) return;
-
     const root = document.documentElement;
-    root.style.setProperty("--brand-primary-rgb", hexToRgbChannels(brand.color_primary));
-    root.style.setProperty("--brand-primary-light-rgb", hexToRgbChannels(brand.color_primary_light));
-    root.style.setProperty("--brand-accent-rgb", hexToRgbChannels(brand.color_accent));
-    root.style.setProperty("--brand-accent-light-rgb", hexToRgbChannels(brand.color_accent_light));
 
-    // Update page title
-    document.title = `${brand.name} — Music Bingo`;
-
-    // Load Google Font if specified
-    if (brand.font_family) {
-      const fontUrl = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(brand.font_family)}:wght@400;600;700;900&display=swap`;
-      const existingLink = document.querySelector(`link[data-brand-font]`);
-      if (existingLink) existingLink.remove();
-
-      const link = document.createElement("link");
-      link.rel = "stylesheet";
-      link.href = fontUrl;
-      link.setAttribute("data-brand-font", "true");
-      document.head.appendChild(link);
-      root.style.setProperty("--brand-font", `'${brand.font_family}', ui-sans-serif, system-ui, sans-serif`);
-    } else {
-      root.style.setProperty("--brand-font", "'Inter', ui-sans-serif, system-ui, sans-serif");
-      const existingLink = document.querySelector(`link[data-brand-font]`);
-      if (existingLink) existingLink.remove();
+    // Hex + RGB-channel tokens (the design uses both forms).
+    const colours: Array<[string, string]> = [
+      ["--brand-primary", brand.color_primary],
+      ["--brand-primary-light", brand.color_primary_light],
+      ["--brand-accent", brand.color_accent],
+      ["--brand-accent-light", brand.color_accent_light],
+    ];
+    for (const [name, hex] of colours) {
+      root.style.setProperty(name, hex);
+      root.style.setProperty(`${name}-rgb`, hexToRgbChannels(hex));
     }
 
+    // Fonts — resolved through the allowlist (A9); links only for non-next/font families.
+    const { display, body } = resolveBrandFonts(brand);
+    root.style.setProperty("--brand-display", fontFamilyCss(display));
+    root.style.setProperty("--brand-body", fontFamilyCss(body));
+    setBrandFontLink("data-brand-font-display", display);
+    setBrandFontLink("data-brand-font-body", body);
+
+    document.title = `${brand.name} — Music Bingo`;
+
     return () => {
-      // Reset to defaults on unmount
-      root.style.removeProperty("--brand-primary-rgb");
-      root.style.removeProperty("--brand-primary-light-rgb");
-      root.style.removeProperty("--brand-accent-rgb");
-      root.style.removeProperty("--brand-accent-light-rgb");
-      root.style.removeProperty("--brand-font");
+      for (const [name] of colours) {
+        root.style.removeProperty(name);
+        root.style.removeProperty(`${name}-rgb`);
+      }
+      root.style.removeProperty("--brand-display");
+      root.style.removeProperty("--brand-body");
+      document.querySelector("link[data-brand-font-display]")?.remove();
+      document.querySelector("link[data-brand-font-body]")?.remove();
       document.title = "Music Bingo";
-      const existingLink = document.querySelector(`link[data-brand-font]`);
-      if (existingLink) existingLink.remove();
     };
   }, [brand]);
 
