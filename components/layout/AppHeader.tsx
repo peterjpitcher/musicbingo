@@ -17,7 +17,7 @@ export function AppHeader({
   title,
   subtitle,
   actions,
-  variant = "light",
+  variant = "dark",
   logoDarkUrl,
   logoLightUrl,
   logoAlt,
@@ -27,10 +27,10 @@ export function AppHeader({
   return (
     <header
       className={[
-        "sticky top-0 z-20 flex items-center justify-between gap-5 px-6 py-4",
+        "sticky top-0 z-20 flex items-center justify-between gap-5 px-6 py-4 backdrop-blur",
         isDark
-          ? "bg-brand-green/95 border-b border-brand-gold/50 backdrop-blur-sm"
-          : "bg-white/95 border-b border-slate-200 backdrop-blur-sm shadow-sm",
+          ? "bg-ink/85 border-b border-brand-gold/35"
+          : "bg-white/95 border-b border-slate-200 shadow-sm",
       ].join(" ")}
     >
       <div className="flex items-center gap-3.5">
@@ -49,8 +49,8 @@ export function AppHeader({
         <div>
           <h1
             className={[
-              "m-0 text-xl font-extrabold uppercase tracking-wide leading-tight",
-              isDark ? "text-white" : "text-slate-900",
+              "m-0 text-2xl font-display uppercase tracking-wide leading-none",
+              isDark ? "text-cream" : "text-slate-900",
             ].join(" ")}
           >
             {title}
@@ -58,8 +58,8 @@ export function AppHeader({
           {subtitle && (
             <p
               className={[
-                "m-0 mt-0.5 text-xs uppercase tracking-widest",
-                isDark ? "text-white/70" : "text-slate-500",
+                "m-0 mt-1 text-[11px] font-bold uppercase tracking-[0.28em]",
+                isDark ? "text-brand-gold-light" : "text-slate-500",
               ].join(" ")}
             >
               {subtitle}

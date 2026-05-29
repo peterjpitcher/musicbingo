@@ -21,12 +21,10 @@ export function StepIndicator({
         const canNavigate = Boolean(onStepClick) && (canNavigateToStep?.(i) ?? true);
         const circleClass = [
           "w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold border-2 transition-colors",
-          canNavigate ? "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold focus-visible:ring-offset-2" : "",
-          done
-            ? "bg-brand-gold border-brand-gold text-white"
-            : active
-            ? "bg-brand-gold border-brand-gold text-white"
-            : "bg-white border-slate-300 text-slate-400",
+          canNavigate ? "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold focus-visible:ring-offset-2 focus-visible:ring-offset-ink" : "",
+          done || active
+            ? "bg-brand-gold border-brand-gold-light text-ink"
+            : "bg-black/25 border-white/20 text-cream/50",
         ].join(" ");
 
         const circleContent = done ? (
@@ -58,7 +56,7 @@ export function StepIndicator({
               <span
                 className={[
                   "text-xs font-medium whitespace-nowrap",
-                  active ? "text-brand-gold" : done ? "text-slate-600" : "text-slate-400",
+                  active ? "text-brand-gold-light" : done ? "text-cream/70" : "text-cream/40",
                 ].join(" ")}
               >
                 {step.label}
@@ -68,7 +66,7 @@ export function StepIndicator({
               <div
                 className={[
                   "flex-1 h-0.5 mt-[-14px] mx-1",
-                  done ? "bg-brand-gold" : "bg-slate-200",
+                  done ? "bg-brand-gold" : "bg-white/15",
                 ].join(" ")}
               />
             )}

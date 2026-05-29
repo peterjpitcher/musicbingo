@@ -7,10 +7,10 @@ type NoticeProps = {
 };
 
 const variantClasses: Record<Variant, string> = {
-  success: "bg-emerald-50 border-emerald-300 text-emerald-800",
-  warning: "bg-amber-50 border-amber-300 text-amber-800",
-  error: "bg-red-50 border-red-300 text-red-800",
-  info: "bg-sky-50 border-sky-300 text-sky-800",
+  success: "bg-emerald-500/15 border-emerald-400/50 text-emerald-200",
+  warning: "bg-amber-500/15 border-amber-400/50 text-amber-200",
+  error: "bg-red-500/15 border-red-400/50 text-red-200",
+  info: "bg-sky-500/15 border-sky-400/50 text-sky-200",
 };
 
 export function Notice({ variant, children, className = "" }: NoticeProps) {

@@ -11,7 +11,7 @@ type CardProps = {
 
 export function Card({ children, className = "", as: Tag = "div", onSubmit }: CardProps) {
   const base =
-    "bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8";
+    "bg-ink/60 rounded-2xl border border-brand-gold/30 shadow-[0_18px_50px_rgba(0,0,0,0.4)] p-6 sm:p-8 text-cream";
   const cls = [base, className].filter(Boolean).join(" ");
 
   if (Tag === "form") {
