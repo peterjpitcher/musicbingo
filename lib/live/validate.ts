@@ -6,6 +6,7 @@ import {
   type PrepData,
   type RevealConfig,
 } from "@/lib/live/types";
+import { sanitizeContent, normalizeVariant } from "@/lib/live/content";
 
 export function isObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -117,6 +118,9 @@ export function validateLiveSession(input: unknown): LiveSessionV1 | null {
   const prepData = validatePrepData(input.prepData);
 
   const brandId = asString(input.brandId);
+  const content = sanitizeContent(input.content);
+  const welcomeVariant = normalizeVariant(input.welcomeVariant);
+  const titleVariant = normalizeVariant(input.titleVariant);
 
   return {
     version: LIVE_SESSION_VERSION,
@@ -130,6 +134,9 @@ export function validateLiveSession(input: unknown): LiveSessionV1 | null {
     breakPlaylistId: asString(input.breakPlaylistId) ?? "",
     ...(prepData ? { prepData } : {}),
     ...(brandId ? { brandId } : {}),
+    ...(Object.keys(content).length ? { content } : {}),
+    ...(welcomeVariant ? { welcomeVariant } : {}),
+    ...(titleVariant ? { titleVariant } : {}),
   };
 }
 
