@@ -70,17 +70,18 @@ function formatPrice(ticketPrice: number | null, bookingType: string | null): st
   return "Free entry";
 }
 
-function isHttpsUrl(url: string): boolean {
+function isHttpUrl(url: string): boolean {
   try {
-    return new URL(url).protocol === "https:";
+    const protocol = new URL(url).protocol;
+    return protocol === "http:" || protocol === "https:";
   } catch {
     return false;
   }
 }
 
-function normaliseHttpsUrl(url: string | null | undefined): string | null {
+function normaliseHttpUrl(url: string | null | undefined): string | null {
   const trimmed = url?.trim();
-  if (!trimmed || !isHttpsUrl(trimmed)) return null;
+  if (!trimmed || !isHttpUrl(trimmed)) return null;
   return trimmed;
 }
 
@@ -103,10 +104,10 @@ export function resolveBaronsHubEventUrl(params: {
   seoSlug?: string | null;
   apiBaseUrl: string;
 }): string | null {
-  const bookingUrl = normaliseHttpsUrl(params.bookingUrl);
+  const bookingUrl = normaliseHttpUrl(params.bookingUrl);
   if (bookingUrl) return bookingUrl;
 
-  const bookingPageUrl = normaliseHttpsUrl(params.bookingPageUrl);
+  const bookingPageUrl = normaliseHttpUrl(params.bookingPageUrl);
   if (bookingPageUrl) return bookingPageUrl;
 
   if (params.bookingUrl?.trim() || params.bookingEnabled === false) return null;
