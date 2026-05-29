@@ -2,6 +2,8 @@ import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTypeScript from "eslint-config-next/typescript";
 
 const config = [
+  // Vendored design prototypes + local caches are reference material, not source.
+  { ignores: ["docs/**", "node-compile-cache/**"] },
   ...nextVitals,
   ...nextTypeScript,
   {
@@ -13,6 +15,7 @@ const config = [
           argsIgnorePattern: "^_",
           varsIgnorePattern: "^_",
           caughtErrorsIgnorePattern: "^_",
+          ignoreRestSiblings: true,
         },
       ],
       "import/no-anonymous-default-export": "off",
