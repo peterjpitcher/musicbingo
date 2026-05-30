@@ -1,5 +1,4 @@
-import assert from "node:assert/strict";
-import test from "node:test";
+import { test, expect } from "vitest";
 
 import {
   isControlLockStale,
@@ -53,9 +52,9 @@ function makeValidSession(): LiveSessionV1 {
 test("validateLiveSession accepts valid v1 payload", () => {
   const session = makeValidSession();
   const validated = validateLiveSession(session);
-  assert.ok(validated);
-  assert.equal(validated?.id, session.id);
-  assert.equal(validated?.games.length, 2);
+  expect(validated).toBeTruthy();
+  expect(validated?.id).toBe(session.id);
+  expect(validated?.games.length).toBe(2);
 });
 
 test("validateLiveSession rejects wrong schema", () => {
@@ -69,20 +68,20 @@ test("validateLiveSession rejects wrong schema", () => {
     revealConfig: DEFAULT_REVEAL_CONFIG,
     games: [{ gameNumber: 1 }],
   };
-  assert.equal(validateLiveSession(bad), null);
+  expect(validateLiveSession(bad)).toBeNull();
 });
 
 test("storage helpers are safe when localStorage is unavailable", () => {
-  assert.deepEqual(listLiveSessions(), []);
+  expect(listLiveSessions()).toEqual([]);
 });
 
 test("empty runtime starts at timestamp zero so fetched host state can win first load", () => {
   const runtime = makeEmptyRuntimeState("session-123");
-  assert.equal(runtime.updatedAtMs, 0);
+  expect(runtime.updatedAtMs).toBe(0);
 });
 
 test("isControlLockStale uses timeout window", () => {
   const now = 1_000_000;
-  assert.equal(isControlLockStale({ tabId: "abc", lastSeenMs: now - 31_000 }, now, 30_000), true);
-  assert.equal(isControlLockStale({ tabId: "abc", lastSeenMs: now - 29_000 }, now, 30_000), false);
+  expect(isControlLockStale({ tabId: "abc", lastSeenMs: now - 31_000 }, now, 30_000)).toBe(true);
+  expect(isControlLockStale({ tabId: "abc", lastSeenMs: now - 29_000 }, now, 30_000)).toBe(false);
 });
