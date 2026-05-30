@@ -444,13 +444,20 @@ async function openPrep(page) {
 
 async function fillCurrentGameStep(page, songs) {
   await page.locator("textarea").fill(songs);
-  await page.locator("text=Songs: 26/50").waitFor();
-  await page.locator("text=Unique pool items: 52").waitFor();
+  await page.locator("text=26 songs").first().waitFor();
 
-  const selects = page.locator("select");
-  assert.equal(await selects.nth(0).isDisabled(), false, "Challenge type should be enabled after songs");
-  assert.equal(await selects.nth(1).isDisabled(), false, "Challenge song should be enabled after songs");
-  assert.notEqual(await selects.nth(1).inputValue(), "", "Challenge song should auto-select a song");
+  // The After Hours wizard renders challenge songs as a Sing/Dance segmented
+  // toggle + a song <select> per row (defaulting to "None"). Pick the first
+  // real option in the first challenge row so generation isn't blocked.
+  const firstChallenge = page.locator(".chal-row select").first();
+  await firstChallenge.waitFor();
+  assert.equal(await firstChallenge.isDisabled(), false, "Challenge song select should be enabled after songs");
+  const values = await firstChallenge
+    .locator("option")
+    .evaluateAll((opts) => opts.map((o) => o.value).filter((v) => v));
+  assert.ok(values.length > 0, "Challenge song select should have song options after songs are entered");
+  await firstChallenge.selectOption(values[0]);
+  assert.notEqual(await firstChallenge.inputValue(), "", "A challenge song should be selected");
 }
 
 async function fillPrepWizardToGenerate(page, game1Songs, game2Songs) {
@@ -467,7 +474,7 @@ async function fillPrepWizardToGenerate(page, game1Songs, game2Songs) {
   await waitUntilEnabled(page.getByRole("button", { name: /Next: Generate/i }));
   await page.getByRole("button", { name: /Next: Generate/i }).click();
 
-  await page.getByRole("heading", { name: "Spotify" }).waitFor();
+  await page.getByRole("heading", { name: /Generate/i }).waitFor();
 }
 
 async function runFlow(results, name, fn) {
@@ -610,7 +617,7 @@ async function main() {
       await waitUntilEnabled(flow123Page.getByRole("button", { name: /Next: Generate/i }));
       await flow123Page.getByRole("button", { name: /Next: Generate/i }).click();
 
-      await flow123Page.getByRole("heading", { name: "Spotify" }).waitFor();
+      await flow123Page.getByRole("heading", { name: /Generate/i }).waitFor();
       assert.equal(
         await flow123Page.getByRole("button", { name: "Create Spotify Playlists" }).isDisabled(),
         true,
@@ -624,16 +631,16 @@ async function main() {
       await rm(DOWNLOAD_PATH, { force: true });
 
       await flow123Page.getByRole("button", { name: "Connect Spotify" }).click();
-      await flow123Page.getByRole("button", { name: "Disconnect Spotify" }).waitFor({ timeout: 10_000 });
+      await flow123Page.getByRole("button", { name: "Disconnect" }).waitFor({ timeout: 10_000 });
       assert.equal(spotifyFlow123.authorizeCalls, 1, "Connect flow should trigger exactly one Spotify auth popup");
 
       const createButton = flow123Page.getByRole("button", { name: "Create Spotify Playlists" });
       await waitUntilEnabled(createButton);
       await createButton.click();
-      await flow123Page.getByRole("link", { name: /Open in Spotify/i }).first().waitFor({ timeout: 10_000 });
+      await flow123Page.getByRole("link", { name: /Open/i }).first().waitFor({ timeout: 10_000 });
       assert.equal(spotifyFlow123.createCalls, 1, "Playlist creation request should be called once");
 
-      const matchedRows = flow123Page.getByText(/26\/26 tracks matched/);
+      const matchedRows = flow123Page.getByText(/26\/26 tracks/);
       await matchedRows.first().waitFor({ timeout: 10_000 });
       assert.ok(await matchedRows.count() >= 2, "Expected playlist summary for both games");
 
@@ -671,7 +678,7 @@ async function main() {
       const textarea = flow4Page.locator("textarea");
       const gameNext = flow4Page.getByRole("button", { name: /Next: Game 2/i });
       await textarea.fill("Invalid Song Format\nStill Invalid");
-      await flow4Page.locator("text=Songs: 0/50").waitFor();
+      await flow4Page.locator("text=0 songs").first().waitFor();
       assert.equal(await gameNext.isDisabled(), true, "Game next should stay disabled with malformed song input");
 
       await textarea.fill(songListA);
@@ -689,9 +696,9 @@ async function main() {
       await fillPrepWizardToGenerate(flow5Page, songListA, songListB);
 
       await flow5Page.getByRole("button", { name: "Connect Spotify" }).click();
-      await flow5Page.getByRole("button", { name: "Disconnect Spotify" }).waitFor({ timeout: 10_000 });
+      await flow5Page.getByRole("button", { name: "Disconnect" }).waitFor({ timeout: 10_000 });
 
-      const disconnectButton = flow5Page.getByRole("button", { name: "Disconnect Spotify" });
+      const disconnectButton = flow5Page.getByRole("button", { name: "Disconnect" });
       await disconnectButton.click();
 
       await flow5Page.getByRole("button", { name: "Connect Spotify" }).waitFor({ timeout: 10_000 });
