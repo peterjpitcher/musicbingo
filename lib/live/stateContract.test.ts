@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { validateLiveSession } from "@/lib/live/validate";
 import { validateRuntimeState } from "@/lib/live/storage";
-import { LIVE_SESSION_VERSION, LIVE_RUNTIME_VERSION, makeEmptyRuntimeState } from "@/lib/live/types";
+import { LIVE_SESSION_VERSION, makeEmptyRuntimeState } from "@/lib/live/types";
 
 function validGame(n: 1 | 2) {
   return { gameNumber: n, theme: `Theme ${n}`, playlistId: `pl${n}`, playlistName: `Playlist ${n}`, playlistUrl: null, totalSongs: 25, addedCount: 25 };
