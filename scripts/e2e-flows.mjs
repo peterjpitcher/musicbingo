@@ -514,23 +514,27 @@ async function validateDownloadedBundle(zipPath) {
     .filter((entry) => !entry.dir)
     .map((entry) => entry.name);
 
-  assert.equal(files.length, 3, `Expected 3 files in bundle, got ${files.length}: ${files.join(", ")}`);
+  assert.equal(files.length, 4, `Expected 4 files in bundle, got ${files.length}: ${files.join(", ")}`);
 
   const game1Pdf = files.find((name) => /^music-bingo-game-1-.*\.pdf$/.test(name));
   const game2Pdf = files.find((name) => /^music-bingo-game-2-.*\.pdf$/.test(name));
   const clipboard = files.find((name) => /^event-clipboard-.*\.docx$/.test(name));
+  const runSheet = files.find((name) => /^run-sheet-.*\.pdf$/.test(name));
 
   assert.ok(game1Pdf, `Missing game 1 PDF in bundle: ${files.join(", ")}`);
   assert.ok(game2Pdf, `Missing game 2 PDF in bundle: ${files.join(", ")}`);
   assert.ok(clipboard, `Missing clipboard DOCX in bundle: ${files.join(", ")}`);
+  assert.ok(runSheet, `Missing run-sheet PDF in bundle: ${files.join(", ")}`);
 
   const game1Bytes = await zip.file(game1Pdf).async("nodebuffer");
   const game2Bytes = await zip.file(game2Pdf).async("nodebuffer");
   const docxBytes = await zip.file(clipboard).async("nodebuffer");
+  const runSheetBytes = await zip.file(runSheet).async("nodebuffer");
 
   assert.equal(game1Bytes.subarray(0, 4).toString("utf8"), "%PDF", "Game 1 file is not a valid PDF");
   assert.equal(game2Bytes.subarray(0, 4).toString("utf8"), "%PDF", "Game 2 file is not a valid PDF");
   assert.equal(docxBytes.subarray(0, 2).toString("utf8"), "PK", "Clipboard file is not a ZIP-based DOCX");
+  assert.equal(runSheetBytes.subarray(0, 4).toString("utf8"), "%PDF", "Run-sheet file is not a valid PDF");
 
   const docxZip = await JSZip.loadAsync(docxBytes);
   assert.ok(docxZip.file("word/document.xml"), "DOCX missing word/document.xml");
