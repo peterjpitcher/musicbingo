@@ -23,14 +23,14 @@ export function RunningOrder({ brand }: ScreenProps): JSX.Element {
   return (
     <div
       className="screen grain vignette"
-      style={{ padding: "82px 120px 110px" }}
+      style={{ padding: "68px 120px 82px" }}
     >
       {/* Header */}
-      <div className="col" style={{ alignItems: "center", gap: 14 }}>
+      <div className="col" style={{ alignItems: "center", gap: 12 }}>
         <div className="kicker an-rise d1">Here&apos;s The Plan</div>
         <h1
           className="display display--gold an-rise d2"
-          style={{ fontSize: 120, marginTop: 4 }}
+          style={{ fontSize: 104, marginTop: 4 }}
         >
           Tonight&apos;s Running Order
         </h1>
@@ -42,8 +42,8 @@ export function RunningOrder({ brand }: ScreenProps): JSX.Element {
         style={{
           display: "flex",
           flexDirection: "column",
-          gap: 18,
-          marginTop: 30,
+          gap: 14,
+          marginTop: 24,
         }}
       >
         {RUN_ORDER.map((r, i) => (
@@ -53,19 +53,19 @@ export function RunningOrder({ brand }: ScreenProps): JSX.Element {
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 30,
-              padding: "24px 30px",
+              gap: 24,
+              padding: "16px 24px",
               borderRadius: 18,
               background: "rgba(0,0,0,.26)",
               border: "1px solid rgb(var(--brand-accent-rgb) / .4)",
             }}
           >
-            <Ball n={r.n} size={88} />
+            <Ball n={r.n} size={78} />
             <div className="col" style={{ minWidth: 0 }}>
               <div
                 style={{
                   fontFamily: "var(--brand-display)",
-                  fontSize: 44,
+                  fontSize: 42,
                   lineHeight: 1,
                   textTransform: "uppercase",
                   color: "var(--cream)",
@@ -74,7 +74,7 @@ export function RunningOrder({ brand }: ScreenProps): JSX.Element {
               >
                 <Editable field={`${r.k}t`} placeholder={r.t} />
               </div>
-              <div className="muted" style={{ fontSize: 23, marginTop: 8 }}>
+              <div className="muted" style={{ fontSize: 22, marginTop: 6 }}>
                 <Editable field={`${r.k}s`} placeholder={r.s} />
               </div>
             </div>

@@ -37,12 +37,9 @@ function TitleHero({ brand, max }: { brand: BrandConfig; max: number }): JSX.Ele
   }
   return (
     <div className="an-pop d2" style={{ textAlign: "center" }}>
-      <div className="display display--gold" style={{ fontSize: 90 }}>
-        Monthly
-      </div>
       <div
         className="display display--gold"
-        style={{ fontSize: 300, lineHeight: 0.82 }}
+        style={{ fontSize: 300, lineHeight: 0.94 }}
       >
         Music
         <br />
