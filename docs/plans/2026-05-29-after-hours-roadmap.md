@@ -11,7 +11,7 @@ Status: ✅ done · ▶ in progress · ⬜ not started · ⛔ blocked/gated
 | 1a | **State contract**: `lib/live/runOfShow.ts`, `lib/live/content.ts`, additive `LiveRuntimeState`/`LiveSessionV1` fields (`screenId`, `content`, `welcomeVariant`, `titleVariant`) + validators | 0 | ✅ done (5 commits, 58 tests, reviewed) | [phase-1a-state-contract.md](2026-05-29-after-hours-phase-1a-state-contract.md) |
 | 1b | **Component library**: `components/motifs/*` + `components/screens/*` (24 presentational components) ported from the bundle, rendered in isolation | 0, 1a | ✅ done (24 components, reviewed) | [phase-1b-component-library.md](2026-05-29-after-hours-phase-1b-component-library.md) |
 | 2 | **TV Display** (`/guest/[sessionId]`) rebuilt as a `screenId`-driven renderer over the existing sync engine | 1a, 1b | ✅ done (reviewed; e2e 6/7, Flow 3 pre-existing) | executed inline (commits `7e7d36b`..`02748d6`) |
-| 3 | **Host Controller** (`/host/[sessionId]`) console: preview + run-of-show + Now-Playing/Game-Flow/Timing/Content/Playlist panels + variant controls | 1a, 1b, 2 | ⬜ | tbd |
+| 3 | **Host Controller** (`/host/[sessionId]`) console: preview + run-of-show + Now-Playing/Game-Flow/Timing/Content/Playlist panels + variant controls | 1a, 1b, 2 | ✅ done (engine preserved verbatim; reviewed; e2e 6/7) | executed inline (commits `29dd56e`..HEAD) |
 | 4 | **Setup & Manage**: `/host` dashboard + `/prep` wizard restyle (+ derived readiness, edit-mode hydration, missing-song resolution route) | 0 (1a for content defaults) | ⬜ | tbd |
 | 5 | **Brands & Venues** three-pane editor + live preview + font/event-logo UI | 0 | ⬜ | tbd |
 | 6 | **Print/PDF**: `@pdf-lib/fontkit`, cards + What's-On restyle (≤3 events), new run-sheet PDF, `/api/generate` output modes | 0 | ⬜ | tbd |
