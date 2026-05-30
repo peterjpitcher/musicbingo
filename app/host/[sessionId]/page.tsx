@@ -6,19 +6,30 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useWakeLock } from "@/hooks/useWakeLock";
 import { AppHeader } from "@/components/layout/AppHeader";
-import { Badge } from "@/components/ui/Badge";
+
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Notice } from "@/components/ui/Notice";
 import { publishLiveMessage } from "@/lib/live/channel";
+import { NowPlayingPanel } from "@/components/host/NowPlayingPanel";
+import { GameFlowPanel } from "@/components/host/GameFlowPanel";
+import { TimingPanel } from "@/components/host/TimingPanel";
+import { ContentPanel } from "@/components/host/ContentPanel";
+import { PlaylistPanel } from "@/components/host/PlaylistPanel";
+import { SCREEN_REGISTRY } from "@/components/screens/registry";
+import { EditContext, type EditContextValue } from "@/components/motifs/EditContext";
+import { BrandProvider } from "@/components/brand/BrandProvider";
+import { RUN_OF_SHOW, normalizeScreenId, type ScreenId } from "@/lib/live/runOfShow";
+import { deriveScreenId } from "@/lib/live/deriveScreen";
+import { getContent, type ContentKey } from "@/lib/live/content";
+import { DEFAULT_BRAND_CONFIG } from "@/lib/brands/defaultBrand";
+import type { BrandConfig } from "@/lib/brands/types";
 import { computeRevealState, shouldTriggerNextForTrack, updateAdvanceTrackMarker } from "@/lib/live/reveal";
 import { getLiveSession, upsertLiveSession } from "@/lib/live/sessionApi";
 import {
   formatSecondsInput,
   formatTimingMs,
-  getDefaultRevealConfigForSongInput,
   parseRevealConfigInputs,
-  revealConfigsEqual,
 } from "@/lib/live/timing";
 import {
   acquireControlLock,
@@ -151,25 +162,65 @@ export default function HostSessionControllerPage() {
   const [isController, setIsController] = useState<boolean>(false);
   const [spotifyDisconnected, setSpotifyDisconnected] = useState<boolean>(false);
   const [lockOwnerLabel, setLockOwnerLabel] = useState<string>("");
-  const [commandBusy, setCommandBusy] = useState<boolean>(false);
-  const [playedTrackIds, setPlayedTrackIds] = useState<Set<string>>(new Set());
+  const [_commandBusy, setCommandBusy] = useState<boolean>(false);
+  const [_playedTrackIds, setPlayedTrackIds] = useState<Set<string>>(new Set());
   const lastPlayedTrackIdRef = useRef<string | null>(null);
   const [playlistTracks, setPlaylistTracks] = useState<{ trackId: string; title: string; artist: string }[]>([]);
   const playlistTracksRef = useRef<{ trackId: string; title: string; artist: string }[]>([]);
   const loadedPlaylistIdRef = useRef<string | null>(null);
   // Guards against concurrent in-flight fetches for the same playlist.
   const fetchingPlaylistIdRef = useRef<string | null>(null);
-  const [playlistLoadError, setPlaylistLoadError] = useState<boolean>(false);
-  const [playlistRetryCount, setPlaylistRetryCount] = useState<number>(0);
+  const [_playlistLoadError, setPlaylistLoadError] = useState<boolean>(false);
+  const [playlistRetryCount, _setPlaylistRetryCount] = useState<number>(0);
   const [songPlaySecondsInput, setSongPlaySecondsInput] = useState<string>("");
   const [albumRevealSecondsInput, setAlbumRevealSecondsInput] = useState<string>("");
   const [titleRevealSecondsInput, setTitleRevealSecondsInput] = useState<string>("");
   const [artistRevealSecondsInput, setArtistRevealSecondsInput] = useState<string>("");
-  const [timingSaving, setTimingSaving] = useState<boolean>(false);
+  const [_timingSaving, setTimingSaving] = useState<boolean>(false);
   // Resolved Spotify track IDs for all challenge songs of the active game.
   const challengeTrackIdsRef = useRef<Set<string>>(new Set());
   // Resolved Spotify track ID for the intro song (first track in playlist when introSongArtist is set).
   const introTrackIdRef = useRef<string | null>(null);
+
+  // ---- After Hours console additions ----
+  const [brand, setBrand] = useState<BrandConfig | null>(null);
+  const [editing, setEditing] = useState<boolean>(false);
+  const [contentCollapsed, setContentCollapsed] = useState<boolean>(false);
+  // TV preview scale (ResizeObserver on the frame container)
+  const [previewScale, setPreviewScale] = useState<number>(0.27);
+  const tvFrameRef = useRef<HTMLDivElement | null>(null);
+
+  // Load brand from the session API (mirrors guest page pattern).
+  useEffect(() => {
+    if (!sessionId) return;
+    let cancelled = false;
+    fetch(`/api/sessions/${encodeURIComponent(sessionId)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { brand?: BrandConfig } | null) => {
+        if (data?.brand && !cancelled) setBrand(data.brand);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId]);
+
+  // TV preview scale: fit the 1920px canvas into the frame container.
+  useEffect(() => {
+    const fit = (): void => {
+      if (tvFrameRef.current) {
+        setPreviewScale(tvFrameRef.current.clientWidth / 1920);
+      }
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    if (tvFrameRef.current) ro.observe(tvFrameRef.current);
+    window.addEventListener("resize", fit);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", fit);
+    };
+  }, []);
 
   useEffect(() => {
     runtimeRef.current = runtime;
@@ -561,7 +612,7 @@ export default function HostSessionControllerPage() {
           trackId != null &&
           tracks[tracks.length - 1].trackId === trackId;
         if (isLastTrack) {
-          commitRuntime((prev) => ({ ...prev, mode: "ended" }));
+          commitRuntime((prev) => ({ ...prev, mode: "ended", screenId: "winners" as ScreenId }));
           await fetch("/api/spotify/live/command", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -681,6 +732,7 @@ export default function HostSessionControllerPage() {
         ...prev,
         mode: "running",
         activeGameNumber: gameNumber,
+        screenId: (gameNumber === 1 ? "game1" : "game2") as ScreenId,
         advanceTriggeredForTrackId: null,
         isIntroSong: false,
         introPlayed: false,
@@ -718,6 +770,7 @@ export default function HostSessionControllerPage() {
         ...prev,
         mode: "running",
         activeGameNumber: gameNumber,
+        screenId: (gameNumber === 1 ? "dance" : "sing") as ScreenId,
         isIntroSong: true,
         introPlayed: false,
       }));
@@ -737,6 +790,7 @@ export default function HostSessionControllerPage() {
     commitRuntime((prev) => ({
       ...prev,
       mode: "break",
+      screenId: "break" as ScreenId,
       preBreakTrackId: trackId,
       preBreakPlaylistId: gamePlaylistId,
     }));
@@ -759,6 +813,7 @@ export default function HostSessionControllerPage() {
     commitRuntime((prev) => ({
       ...prev,
       mode: "running",
+      screenId: (prev.activeGameNumber === 2 ? "game2" : "game1") as ScreenId,
       preBreakTrackId: null,
       preBreakPlaylistId: null,
     }));
@@ -830,15 +885,6 @@ export default function HostSessionControllerPage() {
     }
   }
 
-  function resetRevealTimingToDefaults() {
-    const fallback = runtimeRef.current.revealConfig ?? session?.revealConfig ?? DEFAULT_REVEAL_CONFIG;
-    const revealConfig = getDefaultRevealConfigForSongInput(songPlaySecondsInput, fallback);
-    setSongPlaySecondsInput(formatSecondsInput(revealConfig.nextMs));
-    setAlbumRevealSecondsInput(formatSecondsInput(revealConfig.albumMs));
-    setTitleRevealSecondsInput(formatSecondsInput(revealConfig.titleMs));
-    setArtistRevealSecondsInput(formatSecondsInput(revealConfig.artistMs));
-  }
-
   async function reconnectSpotify() {
     setError("");
     try {
@@ -875,9 +921,28 @@ export default function HostSessionControllerPage() {
     }
   }
 
-  function openGuestDisplay() {
-    if (!sessionId) return;
-    window.open(`/guest/${sessionId}`, "music_bingo_guest", "noopener,noreferrer");
+  // ---- Screen navigation (Change 2) ----
+  // SHOW screens = everything except sys-* entries
+  const SHOW_SCREENS = RUN_OF_SHOW.filter((s) => !s.id.startsWith("sys-"));
+
+  function gotoScreen(id: ScreenId): void {
+    commitRuntime((prev) => ({ ...prev, screenId: id }));
+  }
+
+  function stepScreen(delta: 1 | -1): void {
+    const currentId = normalizeScreenId(runtime.screenId, deriveScreenId(runtime));
+    const currentIdx = SHOW_SCREENS.findIndex((s) => s.id === currentId);
+    const baseIdx = currentIdx >= 0 ? currentIdx : 0;
+    const nextIdx = Math.max(0, Math.min(SHOW_SCREENS.length - 1, baseIdx + delta));
+    gotoScreen(SHOW_SCREENS[nextIdx].id);
+  }
+
+  function setWelcomeVariant(v: "A" | "B" | "C"): void {
+    commitRuntime((prev) => ({ ...prev, welcomeVariant: v }));
+  }
+
+  function setTitleVariant(v: "A" | "B" | "C"): void {
+    commitRuntime((prev) => ({ ...prev, titleVariant: v }));
   }
 
   if (error && !session) {
@@ -896,627 +961,436 @@ export default function HostSessionControllerPage() {
     );
   }
 
-  const activeGameTheme = runtime.activeGameNumber
-    ? session?.games.find((g) => g.gameNumber === runtime.activeGameNumber)?.theme ?? ""
-    : "";
-
   const activeGame = runtime.activeGameNumber
     ? session?.games.find((g) => g.gameNumber === runtime.activeGameNumber) ?? null
     : null;
 
+  // ---- Derived values ----
   const localChallengeType = matchChallengeSong(runtime.currentTrack, activeGame);
   const isChallenge = runtime.isChallengeSong || localChallengeType !== null;
-  const challengeType = runtime.challengeType ?? localChallengeType;
   const normalRevealConfig = runtime.revealConfig ?? session?.revealConfig ?? DEFAULT_REVEAL_CONFIG;
-  const parsedRevealConfig = parseRevealConfigInputs({
-    albumSeconds: albumRevealSecondsInput,
-    titleSeconds: titleRevealSecondsInput,
-    artistSeconds: artistRevealSecondsInput,
-    songPlaySeconds: songPlaySecondsInput,
-  });
-  const timingInputInvalid = parsedRevealConfig === null;
-  const songTimingChanged = parsedRevealConfig !== null && !revealConfigsEqual(parsedRevealConfig, normalRevealConfig);
+  // ---- After Hours console derived values ----
+  const effectiveBrand = brand ?? DEFAULT_BRAND_CONFIG;
+  const currentScreenId = normalizeScreenId(runtime.screenId, deriveScreenId(runtime));
+
+  // EditContext value — Change 3
+  const editValue: EditContextValue = {
+    editing,
+    get: (key: string, fallback?: string): string =>
+      getContent(key as ContentKey, { runtime, session, brand: effectiveBrand }) || (fallback ?? ""),
+    set: (key: string, value: string): void => {
+      // Write into runtime.content so the TV sees it immediately, and persist via upsertLiveSession.
+      commitRuntime((prev) => ({
+        ...prev,
+        content: { ...(prev.content ?? {}), [key as ContentKey]: value },
+      }));
+      // Also persist onto the session record so it survives a page refresh.
+      if (session) {
+        const updatedSession = {
+          ...session,
+          content: { ...(session.content ?? {}), [key as ContentKey]: value },
+        };
+        void upsertLiveSession(updatedSession).catch(() => {});
+      }
+    },
+  };
+
+  // Playlist current index (0-based)
+  const currentTrackIdx = (() => {
+    if (!runtime.currentTrack?.trackId || playlistTracks.length === 0) return 0;
+    const idx = playlistTracks.findIndex((t) => t.trackId === runtime.currentTrack?.trackId);
+    return idx >= 0 ? idx : 0;
+  })();
+
+  // Effective reveal config (for timing panel)
+  const baseCfgForPanel = isChallenge ? CHALLENGE_REVEAL_CONFIG : normalRevealConfig;
+  const effectiveCfgForPanel = getRevealConfigWithExtension(baseCfgForPanel, runtime.extensionMs);
+
+  // Timing in seconds for NowPlayingPanel
+  const timingForPanel = {
+    song: Math.round(effectiveCfgForPanel.nextMs / 1000),
+    album: Math.round(effectiveCfgForPanel.albumMs / 1000),
+    title: Math.round(effectiveCfgForPanel.titleMs / 1000),
+    artist: Math.round(effectiveCfgForPanel.artistMs / 1000),
+  };
+
+  // Current step is a play screen
+  const currentStep = SHOW_SCREENS.find((s) => s.id === currentScreenId);
+  const isOnPlayScreen = currentStep?.play === true;
+
+  // Game 1 / Game 2 theme for PlaylistPanel
+  const gameThemeKey = (runtime.activeGameNumber === 2 ? "g2theme" : "g1theme") as ContentKey;
+  const gameThemeLabel = getContent(gameThemeKey, { runtime, session, brand: effectiveBrand });
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <AppHeader
-        title={session?.name ?? "Live Host"}
-        subtitle="Host Controller"
-        variant="light"
-        actions={
-          <>
-            <Button variant="secondary" size="sm" onClick={openGuestDisplay}>
-              Open Guest Screen
-            </Button>
-            <Button as="link" href="/host" variant="secondary" size="sm">
-              Back to Sessions
-            </Button>
-          </>
-        }
-      />
+    <BrandProvider brand={brand}>
+      <EditContext.Provider value={editValue}>
+        <div className="host-root">
 
-      <main className="max-w-5xl mx-auto px-4 py-6 space-y-4">
-        {notice ? <Notice variant={noticeVariant}>{notice}</Notice> : null}
-        {error ? <Notice variant="error">{error}</Notice> : null}
-        {spotifyDisconnected ? (
-          <Card className="border-red-300 bg-red-50">
-            <h2 className="text-base font-bold text-red-800 mb-1">Spotify disconnected</h2>
-            <p className="text-sm text-red-700 mb-3">
-              {runtime.warningMessage || "Spotify auth expired. Reconnect to restore playback control."}
-            </p>
-            <Button variant="primary" size="sm" onClick={() => void reconnectSpotify()}>
-              Reconnect Spotify
-            </Button>
-          </Card>
-        ) : runtime.warningMessage ? (
-          <Notice variant="warning">{runtime.warningMessage}</Notice>
-        ) : null}
-
-        {!isController ? (
-          <Card className="border-amber-300 bg-amber-50">
-            <h2 className="text-base font-bold text-amber-800 mb-1">Read-only mode</h2>
-            <p className="text-sm text-amber-700 mb-3">
-              {lockOwnerLabel || "Another host tab may be in control."}
-            </p>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => {
-                const ok = acquireLock(true);
-                if (!ok) {
-                  setError("Unable to take control right now.");
-                  return;
-                }
-                setNoticeVariant("success");
-                setNotice("Controller lock transferred to this tab.");
-              }}
-            >
-              Take Control
-            </Button>
-          </Card>
-        ) : null}
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Card as="article">
-            <h2 className="text-base font-bold text-slate-800 mb-3 uppercase tracking-wide">
-              Game Control
-            </h2>
-            <p className="text-sm text-slate-500 mb-1">
-              Mode: <strong className="text-slate-700">{runtime.mode.toUpperCase()}</strong>
-            </p>
-            <p className="text-sm text-slate-500 mb-4">
-              Active game:{" "}
-              {runtime.activeGameNumber
-                ? `Game ${runtime.activeGameNumber}${activeGameTheme ? ` (${activeGameTheme})` : ""}`
-                : "None"}
-            </p>
-
-            <div className="flex flex-wrap gap-2.5 mb-3">
-              {session?.games.find((g) => g.gameNumber === 1) && getIntroSongs(session.games.find((g) => g.gameNumber === 1)!).length > 0 && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={!isController || commandBusy}
-                  onClick={() => void playIntroSong(1)}
-                >
-                  Play Dance Along
-                </Button>
+          {/* ---- Top bar ---- */}
+          <div className="host-bar">
+            <div className="brandlock">
+              {effectiveBrand.logo_dark_url && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img className="logo" src={effectiveBrand.logo_dark_url} alt={effectiveBrand.name} />
               )}
-              <Button
-                variant="primary"
-                size="sm"
-                disabled={!isController || commandBusy}
-                onClick={() => void startGame(1)}
-              >
-                Start Game 1
-              </Button>
-              {session?.games.find((g) => g.gameNumber === 2) && getIntroSongs(session.games.find((g) => g.gameNumber === 2)!).length > 0 && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={!isController || commandBusy}
-                  onClick={() => void playIntroSong(2)}
-                >
-                  Play Sing Along
-                </Button>
-              )}
-              <Button
-                variant="primary"
-                size="sm"
-                disabled={!isController || commandBusy}
-                onClick={() => void startGame(2)}
-              >
-                Start Game 2
-              </Button>
+              <div className="host-title">
+                Music Bingo
+                <small>{session?.name ?? effectiveBrand.name} · Host Controller</small>
+              </div>
             </div>
-
-            {runtime.mode === "break" ? (
-              /* Break mode — prominent resume button, hide irrelevant game controls */
-              <div className="flex flex-wrap gap-2.5 mb-3">
-                <Button
-                  variant="success"
-                  size="sm"
-                  disabled={!isController || commandBusy}
-                  onClick={resumeFromBreak}
-                >
-                  ▶ Resume Game
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={commandBusy}
-                  title="Click if guest display stops updating"
-                  onClick={() => void pollStatus()}
-                >
-                  Resync State
-                </Button>
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={() =>
-                    commitRuntime((prev) => ({ ...prev, mode: "ended" }))
-                  }
-                >
-                  End Session
-                </Button>
-              </div>
-            ) : (
-              /* Normal mode — full game controls */
-              <>
-                <div className="flex flex-wrap gap-2.5 mb-3">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    disabled={!isController || commandBusy}
-                    onClick={() =>
-                      void sendCommand(
-                        runtime.currentTrack?.isPlaying ? "pause" : "resume",
-                        undefined,
-                        {
-                          modeOnSuccess: runtime.currentTrack?.isPlaying
-                            ? "paused"
-                            : "running",
-                        }
-                      )
-                    }
-                  >
-                    {runtime.currentTrack?.isPlaying ? "Pause" : "Resume"}
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    disabled={!isController || commandBusy}
-                    onClick={() => void sendCommand("previous")}
-                  >
-                    Previous
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    disabled={!isController || commandBusy}
-                    onClick={() => void sendCommand("next")}
-                  >
-                    Next
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    disabled={commandBusy}
-                    title="Click if guest display stops updating"
-                    onClick={() => void pollStatus()}
-                  >
-                    Resync State
-                  </Button>
-                </div>
-
-                <div className="flex flex-wrap gap-2.5">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    disabled={!isController || commandBusy}
-                    onClick={openBreakScreen}
-                  >
-                    Show Break Screen
-                  </Button>
-                  <Button
-                    variant={runtime.freePlay ? "primary" : "secondary"}
-                    size="sm"
-                    disabled={!isController}
-                    title="Songs play in full with no auto-advance — useful after bingo is called"
-                    onClick={() => commitRuntime((prev) => ({ ...prev, freePlay: !prev.freePlay }))}
-                  >
-                    {runtime.freePlay ? "Free Play ON" : "Free Play"}
-                  </Button>
-                  {runtime.mode === "ended" && (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      disabled={!isController}
-                      onClick={() =>
-                        commitRuntime((prev) => ({
-                          ...prev,
-                          mode: "idle",
-                          activeGameNumber: null,
-                          currentTrack: null,
-                          revealState: { showAlbum: false, showTitle: false, showArtist: false, shouldAdvance: false },
-                          advanceTriggeredForTrackId: null,
-                          isChallengeSong: false,
-                          challengeType: null,
-                          isIntroSong: false,
-                          introPlayed: false,
-                          extensionMs: 0,
-                          freePlay: false,
-                        }))
-                      }
-                    >
-                      Reset to Lobby
-                    </Button>
-                  )}
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    onClick={() =>
-                      commitRuntime((prev) => ({ ...prev, mode: "ended" }))
-                    }
-                  >
-                    End Session
-                  </Button>
-                </div>
-              </>
-            )}
-          </Card>
-
-          <Card as="article">
-            <h2 className="text-base font-bold text-slate-800 mb-3 uppercase tracking-wide">
-              Track + Reveal
-            </h2>
-            <p className="text-sm text-slate-500 mb-1">
-              Spotify API:{" "}
-              <strong className="text-slate-700">
-                {runtime.spotifyControlAvailable
-                  ? "Available"
-                  : "Manual host control mode"}
-              </strong>
-            </p>
-            <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                <label className="text-sm font-semibold text-slate-700">
-                  Song length
-                  <input
-                    type="number"
-                    min={Math.floor(MIN_SONG_PLAY_MS / 1000)}
-                    max={Math.floor(MAX_SONG_PLAY_MS / 1000)}
-                    step={0.25}
-                    value={songPlaySecondsInput}
-                    onChange={(event) => setSongPlaySecondsInput(event.target.value)}
-                    className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-brand-gold focus:outline-none focus:ring-2 focus:ring-brand-gold/20"
-                    disabled={!isController || timingSaving}
-                  />
-                </label>
-                <label className="text-sm font-semibold text-slate-700">
-                  Album reveal
-                  <input
-                    type="number"
-                    min={0}
-                    max={Math.floor(MAX_SONG_PLAY_MS / 1000)}
-                    step={0.25}
-                    value={albumRevealSecondsInput}
-                    onChange={(event) => setAlbumRevealSecondsInput(event.target.value)}
-                    className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-brand-gold focus:outline-none focus:ring-2 focus:ring-brand-gold/20"
-                    disabled={!isController || timingSaving}
-                  />
-                </label>
-                <label className="text-sm font-semibold text-slate-700">
-                  Title reveal
-                  <input
-                    type="number"
-                    min={0}
-                    max={Math.floor(MAX_SONG_PLAY_MS / 1000)}
-                    step={0.25}
-                    value={titleRevealSecondsInput}
-                    onChange={(event) => setTitleRevealSecondsInput(event.target.value)}
-                    className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-brand-gold focus:outline-none focus:ring-2 focus:ring-brand-gold/20"
-                    disabled={!isController || timingSaving}
-                  />
-                </label>
-                <label className="text-sm font-semibold text-slate-700">
-                  Artist reveal
-                  <input
-                    type="number"
-                    min={0}
-                    max={Math.floor(MAX_SONG_PLAY_MS / 1000)}
-                    step={0.25}
-                    value={artistRevealSecondsInput}
-                    onChange={(event) => setArtistRevealSecondsInput(event.target.value)}
-                    className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-brand-gold focus:outline-none focus:ring-2 focus:ring-brand-gold/20"
-                    disabled={!isController || timingSaving}
-                  />
-                </label>
-              </div>
-              <div className="mt-2 flex flex-wrap gap-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={!isController || timingSaving || timingInputInvalid || !songTimingChanged}
-                  onClick={() => void saveSongTiming()}
-                >
-                  {timingSaving ? "Saving..." : "Save Timing"}
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={!isController || timingSaving}
-                  onClick={resetRevealTimingToDefaults}
-                >
-                  Use Default Reveals
-                </Button>
-              </div>
-              <p className={["mt-1 text-xs", timingInputInvalid ? "text-red-600" : "text-slate-500"].join(" ")}>
-                Defaults scale to the full clip; custom values must stay in order before the next-song time.
-              </p>
-            </div>
-            <p className="text-sm text-slate-500 mb-2">
-              Current track:{" "}
-              <strong className="text-slate-700">
-                {runtime.currentTrack?.title
-                  ? `${runtime.currentTrack.title} — ${runtime.currentTrack.artist}`
-                  : "No track detected"}
-              </strong>
-              {runtime.isIntroSong && runtime.mode !== "break" && (
-                <span className="ml-2 inline-flex items-center rounded-full bg-purple-100 border border-purple-300 px-2 py-0.5 text-xs font-bold text-purple-800">
-                  INTRO SONG
-                </span>
-              )}
-              {isChallenge && !runtime.isIntroSong && runtime.mode !== "break" && (
-                <span className="ml-2 inline-flex items-center rounded-full bg-amber-100 border border-brand-gold px-2 py-0.5 text-xs font-bold text-amber-800">
-                  {challengeType === 'dance-along' ? 'DANCE CHALLENGE' : 'SING-ALONG CHALLENGE'}
-                </span>
-              )}
-            </p>
-
-            {runtime.mode === "break" ? (
-              /* Break mode — context-rich indicator showing what we'll resume to */
-              <div className="rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-2 mb-3">
-                <div className="flex items-baseline gap-3 flex-wrap">
-                  <span className="text-sm font-semibold text-emerald-700">Break playlist playing</span>
-                  {runtime.currentTrack?.progressMs != null && (
-                    <span className="text-2xl font-black text-emerald-800 tabular-nums">
-                      {Math.floor(runtime.currentTrack.progressMs / 1000)}s
-                    </span>
-                  )}
-                </div>
-                {runtime.activeGameNumber && (
-                  <p className="text-xs text-emerald-600 mt-1">
-                    Will resume: Game {runtime.activeGameNumber}
-                    {activeGameTheme ? ` (${activeGameTheme})` : ""}
-                    {playlistTracks.length > 0 && ` — track ${playedTrackIds.size} of ${playlistTracks.length}`}
-                  </p>
-                )}
-              </div>
-            ) : (
-              /* Game mode — countdown, reveal badges, and controls */
-              <>
-                {/* Countdown / intro elapsed display */}
-                {(() => {
-                  const progressMs = runtime.currentTrack?.progressMs ?? 0;
-                  const progressSec = Math.floor(progressMs / 1000);
-                  // Intro mode: show elapsed time only, no countdown to next song.
-                  if (runtime.isIntroSong) {
-                    return (
-                      <div className="rounded-xl bg-purple-50 border border-purple-200 px-3 py-2 mb-3">
-                        <div className="flex items-baseline gap-3 flex-wrap">
-                          <span className="text-2xl font-black text-purple-800 tabular-nums">{progressSec}s</span>
-                          <span className="text-sm font-semibold text-purple-600">
-                            {runtime.activeGameNumber === 1 ? "Dance Along" : "Sing Along"}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  }
-                  const baseCfg = isChallenge ? CHALLENGE_REVEAL_CONFIG : normalRevealConfig;
-                  const effectiveCfg = getRevealConfigWithExtension(baseCfg, runtime.extensionMs);
-                  const effectiveNextMs = effectiveCfg.nextMs;
-                  const timeUntilNextSec = Math.max(0, Math.ceil((effectiveNextMs - progressMs) / 1000));
-                  return (
-                    <div className="rounded-xl bg-slate-100 border border-slate-200 px-3 py-2 mb-3">
-                      <div className="flex items-baseline gap-3 flex-wrap">
-                        <span className="text-2xl font-black text-slate-800 tabular-nums">{progressSec}s</span>
-                        <span className="text-sm text-slate-500">of {formatTimingMs(effectiveNextMs)}</span>
-                        {runtime.revealState.shouldAdvance ? (
-                          <span className="text-sm font-bold text-brand-gold">Advancing...</span>
-                        ) : (
-                          <span className="text-sm text-slate-500">
-                            Next song in <strong className="text-slate-700">{timeUntilNextSec}s</strong>
-                          </span>
-                        )}
-                        {runtime.extensionMs > 0 && (
-                          <span className="text-xs text-brand-gold font-semibold">+{Math.floor(runtime.extensionMs / 1000)}s extended</span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {(() => {
-                  const baseBadgeCfg = isChallenge ? CHALLENGE_REVEAL_CONFIG : normalRevealConfig;
-                  const badgeCfg = getRevealConfigWithExtension(baseBadgeCfg, runtime.extensionMs);
-                  return (
-                    <div className="flex flex-wrap gap-2 mb-3">
-                      <Badge active={runtime.revealState.showAlbum}>Album @{formatTimingMs(badgeCfg.albumMs)}</Badge>
-                      <Badge active={runtime.revealState.showTitle}>Title @{formatTimingMs(badgeCfg.titleMs)}</Badge>
-                      <Badge active={runtime.revealState.showArtist}>Artist @{formatTimingMs(badgeCfg.artistMs)}</Badge>
-                      <Badge active={runtime.revealState.shouldAdvance}>
-                        Next @{formatTimingMs(badgeCfg.nextMs)}
-                      </Badge>
-                    </div>
-                  );
-                })()}
-
-                <div className="flex flex-wrap gap-2 mb-4">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    disabled={!isController || commandBusy || runtime.mode !== "running" || runtime.extensionMs >= MAX_SONG_EXTENSION_MS}
-                    title="Extend current song by 30 seconds (max 5 minutes extra)"
-                    onClick={() => commitRuntime((prev) => ({ ...prev, extensionMs: Math.min(prev.extensionMs + 30_000, MAX_SONG_EXTENSION_MS) }))}
-                  >
-                    +30s
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    disabled={!isController || commandBusy || !runtime.currentTrack}
-                    title="Skip forward 30 seconds in the current song"
-                    onClick={() => {
-                      const progressMs = runtime.currentTrack?.progressMs ?? 0;
-                      const durationMs = runtime.currentTrack?.durationMs ?? 0;
-                      const requestedPos = progressMs + 30_000;
-                      const maxSeekPos = durationMs > 1_000 ? Math.max(0, durationMs - 1_000) : requestedPos;
-                      const newPos = Math.max(progressMs, Math.min(requestedPos, maxSeekPos));
-                      const skippedMs = Math.max(0, newPos - progressMs);
-                      if (skippedMs === 0) return;
-                      // Also extend the reveal schedule by the amount skipped so
-                      // seeking ahead preserves the remaining clip time.
-                      commitRuntime((prev) => ({ ...prev, extensionMs: Math.min(prev.extensionMs + skippedMs, MAX_SONG_EXTENSION_MS) }));
-                      void sendCommand("seek", { positionMs: newPos });
-                    }}
-                  >
-                    Skip 30s
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    disabled={!isController || commandBusy || !runtime.currentTrack}
-                    onClick={restartSong}
-                  >
-                    Restart Song
-                  </Button>
-                </div>
-              </>
-            )}
-
-            {activeGame && runtime.mode !== "break" && (() => {
-              const songs = getChallengeSongs(activeGame);
-              if (songs.length === 0) return null;
-              return (
-                <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 mb-3">
-                  <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-0.5">
-                    {songs.length === 1 ? "Challenge Song" : `Challenge Songs (${songs.length})`} — Game {activeGame.gameNumber}
-                  </p>
-                  {songs.map((cs, i) => (
-                    <p key={i} className="text-sm font-semibold text-amber-900">
-                      {cs.artist} — {cs.title}
-                    </p>
-                  ))}
-                  <p className="text-xs text-amber-600 mt-0.5">Plays for {formatTimingMs(CHALLENGE_REVEAL_CONFIG.nextMs)} instead of {formatTimingMs(normalRevealConfig.nextMs)}</p>
-                </div>
-              );
-            })()}
-            {(() => {
-              if (!activeGame || runtime.mode === "break") return null;
-              const intros = getIntroSongs(activeGame);
-              if (intros.length === 0) return null;
-              const intro = intros[0];
-              return (
-                <div className="rounded-xl bg-purple-50 border border-purple-200 px-3 py-2 mb-3">
-                  <p className="text-xs font-semibold text-purple-700 uppercase tracking-wide mb-0.5">
-                    {intro.type === "dance-along" ? "Dance Along" : "Sing Along"} — Game {activeGame.gameNumber}
-                  </p>
-                  <p className="text-sm font-semibold text-purple-900">
-                    {intro.artist} — {intro.title}
-                  </p>
-                  <p className="text-xs text-purple-600 mt-0.5">
-                    Plays before game — no auto-advance
-                  </p>
-                </div>
-              );
-            })()}
-            <p className="text-xs text-slate-400">
-              TV screen:{" "}
-              <Link
-                href={`/guest/${sessionId}`}
-                target="_blank"
-                className="underline underline-offset-2"
-              >
-                Open TV display
-              </Link>
-            </p>
-          </Card>
-        </div>
-
-        {/* Playlist track listing */}
-        <Card as="article">
-          <div className="flex items-baseline justify-between mb-1">
-            <h2 className="text-base font-bold text-slate-800 uppercase tracking-wide">
-              {activeGame ? `Game ${activeGame.gameNumber} — ${activeGame.theme}` : "Playlist"}
-            </h2>
-            {playlistTracks.length > 0 && (
-              <span className="text-xs text-slate-400 tabular-nums">
-                {playedTrackIds.size} / {playlistTracks.length} played
+            <div className="right">
+              {/* Spotify status pill */}
+              <span className={`statuspill${spotifyDisconnected || !runtime.spotifyControlAvailable ? " warn" : ""}`}>
+                <span className="led" />
+                {spotifyDisconnected
+                  ? "Spotify Offline"
+                  : !runtime.spotifyControlAvailable
+                  ? "Manual Mode"
+                  : "Spotify Connected"}
               </span>
-            )}
+              {/* Open guest screen */}
+              <button
+                type="button"
+                className="hbtn"
+                onClick={() => window.open(`/guest/${sessionId}`)}
+              >
+                Open Guest Screen ↗
+              </button>
+              {/* Back to sessions */}
+              <Link href="/host" className="hbtn">
+                Back to Sessions
+              </Link>
+            </div>
           </div>
 
-          {playlistTracks.length === 0 ? (
-            <div className="mt-3">
-              {!runtime.activeGameNumber ? (
-                <p className="text-sm text-slate-400 italic">Start a game to see the full track listing here.</p>
-              ) : playlistLoadError ? (
-                <div className="flex items-center gap-3">
-                  <p className="text-sm text-red-500">Failed to load playlist.</p>
-                  <button
-                    type="button"
-                    className="text-sm text-brand-gold underline hover:no-underline"
-                    onClick={() => {
-                      loadedPlaylistIdRef.current = null;
-                      fetchingPlaylistIdRef.current = null;
-                      setPlaylistRetryCount((n) => n + 1);
-                    }}
-                  >
-                    Retry
+          {/* ---- System-state banners ---- */}
+          <div style={{ maxWidth: 1560, margin: "0 auto", padding: "18px 26px 0" }}>
+            {!isController && (
+              <div className="banner banner--warn">
+                <span className="bi">🔒</span>
+                <div className="bx">
+                  <b>Read-only mode</b>
+                  <p>{lockOwnerLabel || "Another host tab is controlling this session — your controls are disabled."}</p>
+                </div>
+                <button
+                  type="button"
+                  className="hbtn hbtn--primary"
+                  onClick={() => {
+                    const ok = acquireLock(true);
+                    if (!ok) {
+                      setError("Unable to take control right now.");
+                      return;
+                    }
+                    setNoticeVariant("success");
+                    setNotice("Controller lock transferred to this tab.");
+                  }}
+                >
+                  Take Control
+                </button>
+              </div>
+            )}
+            {spotifyDisconnected && (
+              <div className="banner banner--danger">
+                <span className="bi">⚠</span>
+                <div className="bx">
+                  <b>Spotify disconnected</b>
+                  <p>{runtime.warningMessage || "Playback control is unavailable — your Spotify session expired. Reconnect to resume."}</p>
+                </div>
+                <button type="button" className="hbtn" onClick={() => void reconnectSpotify()}>
+                  Reconnect Spotify
+                </button>
+              </div>
+            )}
+            {!spotifyDisconnected && !runtime.spotifyControlAvailable && (
+              <>
+                <div className="banner banner--warn">
+                  <span className="bi">🎛</span>
+                  <div className="bx">
+                    <b>Manual host control mode</b>
+                    <p>No active Spotify device detected — control playback in the Spotify app while this screen drives the on-screen reveals.</p>
+                  </div>
+                  <button type="button" className="hbtn" onClick={() => void pollStatus()}>
+                    Resync
                   </button>
                 </div>
-              ) : (
-                <p className="text-sm text-slate-400 italic">Loading playlist…</p>
+                <div className="notice notice--ok">
+                  <span>✓</span>
+                  <span>Reveal timing is still running — the TV will advance on schedule.</span>
+                </div>
+              </>
+            )}
+            {notice ? (
+              <div className={`banner ${noticeVariant === "warning" ? "banner--warn" : "banner--info"}`} style={{ marginBottom: 0 }}>
+                <span className="bi">{noticeVariant === "warning" ? "⚠" : "✓"}</span>
+                <div className="bx"><p>{notice}</p></div>
+                <button type="button" className="hbtn" onClick={() => setNotice("")}>✕</button>
+              </div>
+            ) : null}
+            {error ? (
+              <div className="banner banner--danger" style={{ marginBottom: 0 }}>
+                <span className="bi">⚠</span>
+                <div className="bx"><p>{error}</p></div>
+                <button type="button" className="hbtn" onClick={() => setError("")}>✕</button>
+              </div>
+            ) : null}
+          </div>
+
+          {/* ---- Main 2-col layout ---- */}
+          <div className="host-main">
+
+            {/* LEFT — TV preview + run of show */}
+            <div className="host-col">
+
+              {/* TV preview panel */}
+              <div className="panel tv-wrap">
+                <h2>
+                  On The TV Now{" "}
+                  <span className="meta">
+                    {SHOW_SCREENS.find((s) => s.id === currentScreenId)?.short ?? currentScreenId}
+                  </span>
+                </h2>
+                <div className="tv-frame" ref={tvFrameRef}>
+                  <div className="tv-live">
+                    <span className="led" />
+                    Live
+                  </div>
+                  <div
+                    className="tv-canvas"
+                    style={{ transform: `scale(${previewScale})` }}
+                  >
+                    {/* Render the current screen from the registry */}
+                    <div className={editing ? "editing" : ""}>
+                      {SCREEN_REGISTRY[currentScreenId]({
+                        brand: effectiveBrand,
+                        runtime,
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Variant pickers for welcome / title screens */}
+                {currentScreenId === "welcome" && (
+                  <div className="btn-row" style={{ marginTop: 10 }}>
+                    <span style={{ fontSize: 12, opacity: 0.6, marginRight: 6 }}>Variant:</span>
+                    {(["A", "B", "C"] as const).map((v) => (
+                      <button
+                        key={v}
+                        type="button"
+                        className={`hbtn${runtime.welcomeVariant === v ? " hbtn--primary" : ""}`}
+                        style={{ minHeight: 34, padding: "0 12px", fontSize: 13 }}
+                        onClick={() => setWelcomeVariant(v)}
+                      >
+                        {v}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {currentScreenId === "title" && (
+                  <div className="btn-row" style={{ marginTop: 10 }}>
+                    <span style={{ fontSize: 12, opacity: 0.6, marginRight: 6 }}>Variant:</span>
+                    {(["A", "B", "C"] as const).map((v) => (
+                      <button
+                        key={v}
+                        type="button"
+                        className={`hbtn${runtime.titleVariant === v ? " hbtn--primary" : ""}`}
+                        style={{ minHeight: 34, padding: "0 12px", fontSize: 13 }}
+                        onClick={() => setTitleVariant(v)}
+                      >
+                        {v}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Prev / Next + Edit toggle */}
+                <div className="bignav">
+                  <button
+                    type="button"
+                    className="hbtn grow hbtn--lg"
+                    onClick={() => stepScreen(-1)}
+                    disabled={SHOW_SCREENS.findIndex((s) => s.id === currentScreenId) === 0}
+                  >
+                    ‹ Previous Screen
+                  </button>
+                  <button
+                    type="button"
+                    className={`hbtn${editing ? " hbtn--primary" : ""}`}
+                    style={{ minHeight: 46, padding: "0 18px" }}
+                    onClick={() => setEditing((e) => !e)}
+                    title="Toggle click-to-edit mode for TV content"
+                  >
+                    ✎ Edit
+                  </button>
+                  <button
+                    type="button"
+                    className="hbtn grow hbtn--lg hbtn--primary"
+                    onClick={() => stepScreen(1)}
+                    disabled={SHOW_SCREENS.findIndex((s) => s.id === currentScreenId) === SHOW_SCREENS.length - 1}
+                  >
+                    Next Screen ›
+                  </button>
+                </div>
+              </div>
+
+              {/* Run Of Show panel */}
+              <div className="panel">
+                <h2>
+                  Run Of Show{" "}
+                  <span className="meta">
+                    {SHOW_SCREENS.findIndex((s) => s.id === currentScreenId) + 1} / {SHOW_SCREENS.length}
+                  </span>
+                </h2>
+                <div className="ros">
+                  {SHOW_SCREENS.map((step, i) => {
+                    const isCurrent = step.id === currentScreenId;
+                    const currentIdx2 = SHOW_SCREENS.findIndex((s) => s.id === currentScreenId);
+                    const isDone = i < currentIdx2;
+                    return (
+                      <button
+                        key={step.id}
+                        type="button"
+                        className={`ros-step${isCurrent ? " live" : isDone ? " done" : ""}`}
+                        onClick={() => gotoScreen(step.id)}
+                      >
+                        <span className="idx">{String(i + 1).padStart(2, "0")}</span>
+                        <span>
+                          <span className="lbl">{step.short}</span>
+                          <br />
+                          <span className="sub">{step.sub}</span>
+                        </span>
+                        {isCurrent && <span className="nowtag">● On TV</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* RIGHT — control panels */}
+            <div className="host-col">
+
+              {/* Now Playing panel */}
+              <NowPlayingPanel
+                track={{
+                  title: runtime.currentTrack?.title ?? "—",
+                  artist: runtime.currentTrack?.artist ?? "",
+                }}
+                playing={runtime.currentTrack?.isPlaying ?? false}
+                progressMs={runtime.currentTrack?.progressMs ?? 0}
+                timing={timingForPanel}
+                isIntro={runtime.isIntroSong}
+                isChallenge={isChallenge}
+                freePlay={runtime.freePlay}
+                extendedMs={runtime.extensionMs}
+                onTransport={(action) => {
+                  if (action === "pause" || action === "resume") {
+                    void sendCommand(action, undefined, {
+                      modeOnSuccess: action === "pause" ? "paused" : "running",
+                    });
+                  } else if (action === "next") {
+                    void sendCommand("next");
+                  } else if (action === "previous") {
+                    void sendCommand("previous");
+                  }
+                }}
+                onFree={() => commitRuntime((prev) => ({ ...prev, freePlay: !prev.freePlay }))}
+                onExtend={() =>
+                  commitRuntime((prev) => ({
+                    ...prev,
+                    extensionMs: Math.min(prev.extensionMs + 30_000, MAX_SONG_EXTENSION_MS),
+                  }))
+                }
+                onSkip={() => {
+                  const progressMs = runtime.currentTrack?.progressMs ?? 0;
+                  const durationMs = runtime.currentTrack?.durationMs ?? 0;
+                  const requestedPos = progressMs + 30_000;
+                  const maxSeekPos = durationMs > 1_000 ? Math.max(0, durationMs - 1_000) : requestedPos;
+                  const newPos = Math.max(progressMs, Math.min(requestedPos, maxSeekPos));
+                  const skippedMs = Math.max(0, newPos - progressMs);
+                  if (skippedMs === 0) return;
+                  commitRuntime((prev) => ({
+                    ...prev,
+                    extensionMs: Math.min(prev.extensionMs + skippedMs, MAX_SONG_EXTENSION_MS),
+                  }));
+                  void sendCommand("seek", { positionMs: newPos });
+                }}
+                onRestart={restartSong}
+              />
+
+              {/* Game Flow panel */}
+              <GameFlowPanel
+                mode={runtime.mode}
+                activeGame={runtime.activeGameNumber}
+                onIntro={(n) => void playIntroSong(n)}
+                onStart={(n) => void startGame(n)}
+                onBreak={openBreakScreen}
+                onResume={resumeFromBreak}
+                onEnd={() =>
+                  commitRuntime((prev) => ({
+                    ...prev,
+                    mode: "ended",
+                    screenId: "winners" as ScreenId,
+                  }))
+                }
+                onReset={() =>
+                  commitRuntime((prev) => ({
+                    ...prev,
+                    mode: "idle",
+                    screenId: "welcome" as ScreenId,
+                    activeGameNumber: null,
+                    currentTrack: null,
+                    revealState: { showAlbum: false, showTitle: false, showArtist: false, shouldAdvance: false },
+                    advanceTriggeredForTrackId: null,
+                    isChallengeSong: false,
+                    challengeType: null,
+                    isIntroSong: false,
+                    introPlayed: false,
+                    extensionMs: 0,
+                    freePlay: false,
+                  }))
+                }
+              />
+
+              {/* Content panel */}
+              <ContentPanel
+                get={editValue.get}
+                set={editValue.set}
+                collapsed={contentCollapsed}
+                onToggle={() => setContentCollapsed((c) => !c)}
+              />
+
+              {/* Timing panel — converts ms ↔ seconds */}
+              <TimingPanel
+                timing={{
+                  song: Math.round(normalRevealConfig.nextMs / 1000),
+                  album: Math.round(normalRevealConfig.albumMs / 1000),
+                  title: Math.round(normalRevealConfig.titleMs / 1000),
+                  artist: Math.round(normalRevealConfig.artistMs / 1000),
+                }}
+                setTiming={(t) => {
+                  // Convert seconds back to ms and run through the existing save path.
+                  setSongPlaySecondsInput(String(t.song));
+                  setAlbumRevealSecondsInput(String(t.album));
+                  setTitleRevealSecondsInput(String(t.title));
+                  setArtistRevealSecondsInput(String(t.artist));
+                  void saveSongTiming();
+                }}
+              />
+
+              {/* Playlist panel — only on play screens */}
+              {isOnPlayScreen && (
+                <PlaylistPanel
+                  playlist={playlistTracks.map((t) => ({ title: t.title, artist: t.artist }))}
+                  currentIdx={currentTrackIdx}
+                  activeGame={runtime.activeGameNumber}
+                  theme={gameThemeLabel}
+                />
               )}
             </div>
-          ) : (
-            <ol className="mt-3 space-y-0.5 max-h-[480px] overflow-y-auto pr-1">
-              {playlistTracks.map((track, index) => {
-                const isCurrent = track.trackId === runtime.currentTrack?.trackId;
-                const hasPlayed = playedTrackIds.has(track.trackId) && !isCurrent;
-                return (
-                  <li
-                    key={track.trackId}
-                    className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm ${
-                      isCurrent
-                        ? "bg-brand-green text-white font-semibold"
-                        : hasPlayed
-                        ? "bg-slate-50 text-slate-400"
-                        : "text-slate-700"
-                    }`}
-                  >
-                    <span className={`w-6 text-center text-xs font-bold tabular-nums shrink-0 ${isCurrent ? "text-white/80" : "text-slate-400"}`}>
-                      {index + 1}
-                    </span>
-                    <span className={`truncate ${hasPlayed ? "line-through" : ""}`}>
-                      {track.title || "Unknown"}
-                      <span className={`font-normal ${isCurrent ? "text-white/80" : "text-slate-400"}`}>
-                        {" "}— {track.artist || "Unknown"}
-                      </span>
-                    </span>
-                    {isCurrent && (
-                      <span className="ml-auto shrink-0 text-xs bg-white/20 rounded-full px-2 py-0.5">
-                        Now playing
-                      </span>
-                    )}
-                  </li>
-                );
-              })}
-            </ol>
-          )}
-        </Card>
-      </main>
-    </div>
+          </div>
+        </div>
+      </EditContext.Provider>
+    </BrandProvider>
   );
 }
