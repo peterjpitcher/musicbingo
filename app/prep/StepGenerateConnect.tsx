@@ -1,8 +1,6 @@
 "use client";
 
 import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
-import { helpClass, inputClass, labelClass } from "@/components/ui/formStyles";
 import { Notice } from "@/components/ui/Notice";
 
 type SpotifyPlaylistResult = {
@@ -63,7 +61,7 @@ export function StepGenerateConnect({
   spotifyConnected,
   spotifyConnecting,
   spotifyCreating,
-  spotifyCallbackUrl,
+  spotifyCallbackUrl: _spotifyCallbackUrl,
   spotifyResult,
   livePlaylistByGame,
   playlistsCreated,
@@ -85,263 +83,177 @@ export function StepGenerateConnect({
   refreshing,
 }: StepGenerateConnectProps) {
   const createPlaylistsLabel = spotifyConnecting
-    ? "Connecting Spotify..."
+    ? "Connecting Spotify…"
     : spotifyCreating
-    ? "Creating Playlists..."
+    ? "Creating Playlists…"
     : "Create Spotify Playlists";
 
+  // Collect all not-found songs from playlist results for the .notfound block
+  const allNotFound = playlistResults
+    ? playlistResults.flatMap((r) =>
+        r.notFoundSongs.map((s) => ({ ...s, gameNumber: r.gameNumber }))
+      )
+    : spotifyResult
+    ? spotifyResult.flatMap((r) =>
+        r.notFound.map((s) => ({ ...s, gameNumber: r.gameNumber }))
+      )
+    : [];
+
   return (
-    <div className="space-y-5">
-      <Card>
-        <h2 className="text-xl font-bold text-slate-800 mb-2">Spotify</h2>
-        <p className="text-sm text-slate-500 mb-4">
-          Connect Spotify once, then create one private playlist per game.
-        </p>
+    <div className="wizpanel">
+      <h2>Generate &amp; Connect</h2>
 
-        <p className={helpClass}>
-          Add this exact Redirect URI in your Spotify app settings:{" "}
-          <code className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 text-xs ml-1">
-            {spotifyCallbackUrl || "/api/spotify/callback"}
-          </code>
-        </p>
+      {error ? <Notice variant="error" className="mb-4">{error}</Notice> : null}
+      {qrNotice ? <Notice variant="info" className="mb-4">{qrNotice}</Notice> : null}
 
-        <div className="flex gap-3 mt-4 flex-wrap items-center">
-          {!spotifyConnected ? (
-            <Button
-              variant="primary"
-              onClick={onConnectSpotify}
-              disabled={spotifyConnecting}
-            >
-              {spotifyConnecting ? "Connecting..." : "Connect Spotify"}
-            </Button>
-          ) : (
-            <Button
-              variant="secondary"
-              onClick={onDisconnectSpotify}
-              disabled={spotifyConnecting || spotifyCreating}
-            >
-              Disconnect Spotify
-            </Button>
-          )}
-        </div>
-
-        <div className="mt-5 pt-4 border-t border-slate-100 text-xs text-slate-500 space-y-1">
+      {/* Spotify connect row */}
+      <div className="genrow">
+        <div className="ic">🎧</div>
+        <div className="gx">
+          <b>Spotify</b>
           <p>
-            Spotify settings checklist: In Spotify Dashboard → your app → Settings → Redirect URIs, add:{" "}
-            <code className="bg-slate-100 px-1 rounded">
-              {spotifyCallbackUrl || "/api/spotify/callback"}
-            </code>
-          </p>
-          <p>
-            In Vercel Environment Variables, set{" "}
-            <code className="bg-slate-100 px-1 rounded">SPOTIFY_CLIENT_ID</code> and{" "}
-            <code className="bg-slate-100 px-1 rounded">SPOTIFY_CLIENT_SECRET</code>.
+            {spotifyConnected
+              ? "Connected — playback &amp; playlist creation ready"
+              : "Connect your Spotify account to build playlists &amp; control playback"}
           </p>
         </div>
-      </Card>
-
-      <Card>
-        <h2 className="text-xl font-bold text-slate-800 mb-4">
-          {playlistsCreated ? "Playlist Status" : "Step 1: Create Playlists"}
-        </h2>
-
-        {error ? <Notice variant="error" className="mb-4">{error}</Notice> : null}
-        {qrNotice ? <Notice variant="info" className="mb-4">{qrNotice}</Notice> : null}
-
-        {!playlistsCreated ? (
-          <div className="space-y-3">
-            <p className="text-sm text-slate-500">
-              Create private Spotify playlists for each game, then review them before generating your event pack.
-            </p>
-
-            <Button
-              variant="primary"
-              fullWidth
-              disabled={!spotifyConnected || !canSubmit || busy || spotifyCreating}
-              onClick={onCreatePlaylists}
-            >
-              {createPlaylistsLabel}
-            </Button>
-
-            <Button
-              variant="secondary"
-              fullWidth
-              disabled={!canSubmit || busy}
-              onClick={onDownloadOnly}
-            >
-              {busy ? "Generating..." : "Download Only (No Spotify)"}
-            </Button>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {playlistResults && playlistResults.length > 0 ? (
-              <div className="space-y-3">
-                {playlistResults.map((result) => (
-                  <div
-                    key={result.gameNumber}
-                    className="rounded-xl bg-slate-50 border border-slate-200 p-3 text-sm"
-                  >
-                    <p className="font-semibold text-slate-700">
-                      Game {result.gameNumber}
-                    </p>
-                    <p className={helpClass}>
-                      <span className="text-emerald-600 font-medium">
-                        &#10003; {result.addedCount}/{result.totalSongs} tracks matched
-                      </span>
-                      {" "}&mdash;{" "}
-                      <a
-                        href={result.playlistUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-sky-600 underline underline-offset-2"
-                      >
-                        Open in Spotify &#8599;
-                      </a>
-                    </p>
-                    {result.notFoundSongs.length > 0 ? (
-                      <div className="mt-2">
-                        <p className="text-xs font-medium text-amber-700">
-                          Not found ({result.notFoundSongs.length}):
-                        </p>
-                        <ul className="mt-1 text-xs text-slate-600 space-y-0.5 pl-3">
-                          {result.notFoundSongs.map((song) => (
-                            <li key={`${song.artist}-${song.title}`}>
-                              &bull; {song.artist} &ndash; {song.title}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-            ) : null}
-
-            <div className="flex gap-3 flex-wrap">
-              <Button
-                variant="secondary"
-                onClick={onRefreshFromSpotify}
-                disabled={refreshing}
-              >
-                {refreshing ? "Refreshing..." : "Refresh from Spotify"}
-              </Button>
-            </div>
-
-            <p className="text-sm text-slate-500">
-              Review your playlists in Spotify, then generate your event pack.
-            </p>
-          </div>
-        )}
-
-        {spotifyResult && spotifyResult.length > 0 && !playlistResults ? (
-          <div className="mt-4 space-y-3">
-            {spotifyResult.map((playlist) => (
-              <div
-                key={`${playlist.gameNumber}-${playlist.playlistName}`}
-                className="rounded-xl bg-slate-50 border border-slate-200 p-3 text-sm"
-              >
-                <p className="font-semibold text-slate-700">
-                  Game {playlist.gameNumber} ({playlist.theme}):{" "}
-                  {playlist.playlistName}
-                </p>
-                <p className={helpClass}>
-                  Added {playlist.addedCount}/{playlist.totalSongs}
-                  {playlist.notFoundCount
-                    ? ` (${playlist.notFoundCount} not found)`
-                    : ""}
-                  {playlist.playlistUrl ? (
-                    <>
-                      {" "}&mdash;{" "}
-                      <a
-                        href={playlist.playlistUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-sky-600 underline underline-offset-2"
-                      >
-                        Open in Spotify
-                      </a>
-                    </>
-                  ) : null}
-                </p>
-                {playlist.notFoundCount && playlist.notFound.length ? (
-                  <details className="mt-2">
-                    <summary className="cursor-pointer text-xs text-slate-500">
-                      Show songs not found ({playlist.notFound.length})
-                    </summary>
-                    <pre className="mt-2 text-xs bg-slate-100 rounded p-2 whitespace-pre-wrap">
-                      {playlist.notFound
-                        .map((s) => `${s.artist} - ${s.title}`)
-                        .join("\n")}
-                    </pre>
-                  </details>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        ) : null}
-
-        <div className="flex justify-start mt-6">
-          <Button variant="secondary" onClick={onBack} as="button" type="button">
-            &larr; Back
+        {spotifyConnected ? (
+          <Button
+            variant="secondary"
+            onClick={onDisconnectSpotify}
+            disabled={spotifyConnecting || spotifyCreating}
+          >
+            Disconnect
           </Button>
-        </div>
-      </Card>
-
-      {playlistsCreated ? (
-        <Card>
-          <h2 className="text-xl font-bold text-slate-800 mb-4">
-            Step 2: Generate Event Pack
-          </h2>
-          <p className="text-sm text-slate-500 mb-4">
-            Downloads: Game 1 PDF, Game 2 PDF, Event Clipboard DOCX, and QR codes.
-          </p>
-
+        ) : (
           <Button
             variant="primary"
-            fullWidth
-            disabled={busy}
-            onClick={onGenerateEventPack}
+            onClick={onConnectSpotify}
+            disabled={spotifyConnecting}
           >
-            {busy ? "Generating Event Pack..." : "Generate Event Pack"}
+            {spotifyConnecting ? "Connecting…" : "Connect Spotify"}
           </Button>
+        )}
+      </div>
 
-          <p className={[helpClass, "text-center mt-3"].join(" ")}>
-            Menu QR is always included. Event QR codes require{" "}
-            <code className="bg-slate-100 px-1 rounded text-slate-700">MANAGEMENT_API_BASE_URL</code> +{" "}
-            <code className="bg-slate-100 px-1 rounded text-slate-700">MANAGEMENT_API_TOKEN</code> on the server.
+      {/* Create playlists row */}
+      <div className="genrow">
+        <div className="ic">🎵</div>
+        <div className="gx">
+          <b>Playlists</b>
+          <p>
+            {playlistsCreated
+              ? (() => {
+                  const results = playlistResults ?? [];
+                  return results.map((r) => (
+                    <span key={r.gameNumber} style={{ display: "block" }}>
+                      Game {r.gameNumber}: ✓ {r.addedCount}/{r.totalSongs} tracks
+                      {r.playlistUrl ? (
+                        <>
+                          {" "}—{" "}
+                          <a href={r.playlistUrl} target="_blank" rel="noreferrer" style={{ color: "var(--brand-accent-light)", textDecoration: "underline" }}>
+                            Open ↗
+                          </a>
+                        </>
+                      ) : null}
+                    </span>
+                  ));
+                })()
+              : "Search Spotify &amp; build a shuffled playlist per game"}
           </p>
-        </Card>
+        </div>
+        {playlistsCreated ? (
+          <Button variant="secondary" onClick={onRefreshFromSpotify} disabled={refreshing}>
+            {refreshing ? "Refreshing…" : "Refresh"}
+          </Button>
+        ) : (
+          <Button
+            variant="primary"
+            disabled={!spotifyConnected || !canSubmit || busy || spotifyCreating}
+            onClick={onCreatePlaylists}
+          >
+            {createPlaylistsLabel}
+          </Button>
+        )}
+      </div>
+
+      {/* Songs not found on Spotify */}
+      {allNotFound.length > 0 && (
+        <div className="notfound">
+          <div className="nf-head">⚠ {allNotFound.length} song(s) not found on Spotify — check spelling or remove from song list</div>
+          {allNotFound.map((m, i) => (
+            <div className="nf-row" key={i}>
+              <span className="nf-song"><b>Game {m.gameNumber}</b> · {m.artist} – {m.title}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Download only row */}
+      <div className="genrow">
+        <div className="ic">📥</div>
+        <div className="gx">
+          <b>Download Only</b>
+          <p>Generate bingo cards without Spotify playlists</p>
+        </div>
+        <Button
+          variant="secondary"
+          disabled={!canSubmit || busy}
+          onClick={onDownloadOnly}
+        >
+          {busy ? "Generating…" : "Download Only"}
+        </Button>
+      </div>
+
+      {/* Generate event pack row */}
+      <div className="genrow">
+        <div className="ic">🗜️</div>
+        <div className="gx">
+          <b>Event Pack ZIP</b>
+          <p>Game 1 &amp; 2 PDFs, Event Clipboard DOCX, QR codes</p>
+        </div>
+        <Button
+          variant="primary"
+          disabled={!playlistsCreated || busy}
+          onClick={onGenerateEventPack}
+        >
+          {busy ? "Generating…" : "Generate Event Pack"}
+        </Button>
+      </div>
+
+      {/* Live session block */}
+      {livePlaylistByGame ? (
+        <div className="genrow" style={{ flexDirection: "column", alignItems: "flex-start", gap: 12 }}>
+          <div style={{ display: "flex", gap: 14, alignItems: "center", width: "100%" }}>
+            <div className="ic">📡</div>
+            <div className="gx"><b>Live Session</b><p>Save to host console or export as JSON</p></div>
+          </div>
+          <div className="fg" style={{ width: "100%" }}>
+            <label style={{ fontSize: 12, letterSpacing: ".1em", textTransform: "uppercase", color: "rgb(var(--cream-rgb)/.65)", fontWeight: 700 }}>
+              Session name
+            </label>
+            <input
+              type="text"
+              value={liveSessionName}
+              onChange={(e) => onLiveSessionName(e.target.value)}
+              placeholder="Music Bingo - Event Date"
+            />
+          </div>
+          {liveSessionNotice ? (
+            <Notice variant="success">{liveSessionNotice}</Notice>
+          ) : null}
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <Button variant="primary" onClick={onSaveLiveSession}>Save Live Session</Button>
+            <Button variant="secondary" onClick={onExportLiveSession}>Export JSON</Button>
+            <Button as="link" href="/host" variant="secondary">Open Host Console</Button>
+          </div>
+        </div>
       ) : null}
 
-      {livePlaylistByGame ? (
-        <Card>
-          <h3 className="text-base font-bold text-slate-800 mb-3">Live Session</h3>
-          <label className={labelClass}>Session Name</label>
-          <input
-            type="text"
-            className={inputClass}
-            value={liveSessionName}
-            onChange={(e) => onLiveSessionName(e.target.value)}
-            placeholder="Music Bingo - Event Date"
-          />
-          {liveSessionNotice ? (
-            <Notice variant="success" className="mt-3">
-              {liveSessionNotice}
-            </Notice>
-          ) : null}
-          <div className="flex flex-wrap gap-2.5 mt-4">
-            <Button variant="primary" onClick={onSaveLiveSession}>
-              Save Live Session
-            </Button>
-            <Button variant="secondary" onClick={onExportLiveSession}>
-              Export JSON
-            </Button>
-            <Button as="link" href="/host" variant="secondary">
-              Open Live Host Console
-            </Button>
-          </div>
-        </Card>
-      ) : null}
+      <div className="wiznav">
+        <Button variant="secondary" onClick={onBack}>← Back</Button>
+        <span />
+      </div>
     </div>
   );
 }

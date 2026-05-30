@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Button } from "@/components/ui/Button";
-import { StepIndicator } from "@/components/ui/StepIndicator";
 import { formatEventDateDisplay } from "@/lib/eventDate";
 import { DEFAULT_GAME_THEME, MAX_SONGS_PER_GAME, makeSongSelectionValue } from "@/lib/gameInput";
 import { exportLiveSessionJson, upsertLiveSession } from "@/lib/live/sessionApi";
@@ -833,11 +832,10 @@ export default function PrepPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-ink">
       <AppHeader
         title="Music Bingo"
         subtitle="Event Prep"
-        variant="light"
         actions={
           <Button as="link" href="/host" variant="secondary" size="sm">
             Live Host Console
@@ -846,16 +844,20 @@ export default function PrepPage() {
       />
 
       <main className="max-w-2xl mx-auto px-4 py-8">
-        <p className="text-slate-500 text-sm mb-6">
-          Generate a full event pack with two game card PDFs, an Event Clipboard DOCX, and two Spotify playlists.
-        </p>
-
-        <StepIndicator
-          steps={STEPS}
-          currentStep={currentStep}
-          onStepClick={goToStep}
-          canNavigateToStep={(step) => step <= currentStep}
-        />
+        <div className="stepper">
+          {STEPS.map((s, i) => (
+            <button
+              key={s.label}
+              type="button"
+              className={`stp${i === currentStep ? " active" : i < currentStep ? " done" : ""}`}
+              onClick={() => i <= currentStep && goToStep(i)}
+              aria-current={i === currentStep ? "step" : undefined}
+            >
+              <span className="num">{i < currentStep ? "✓" : i + 1}</span>
+              <span className="lbl">{s.label}</span>
+            </button>
+          ))}
+        </div>
 
         {currentStep === 0 && (
           <StepEventSetup

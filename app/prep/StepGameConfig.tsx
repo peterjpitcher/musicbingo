@@ -2,14 +2,6 @@
 
 import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
-import {
-  helpClass,
-  inputClass,
-  labelClass,
-  selectClass,
-  textareaClass,
-} from "@/components/ui/formStyles";
 import { MAX_SONGS_PER_GAME, makeSongSelectionValue } from "@/lib/gameInput";
 import { CHALLENGE_REVEAL_CONFIG, DEFAULT_REVEAL_CONFIG, type IntroSong } from "@/lib/live/types";
 import type { Song } from "@/lib/types";
@@ -112,7 +104,7 @@ function getAvailableOptions(songs: Song[], excludeValues: string[]): Song[] {
 
 export function StepGameConfig({
   gameNumber,
-  gameLabel,
+  gameLabel: _gameLabel,
   theme,
   onTheme,
   songsText,
@@ -227,30 +219,24 @@ export function StepGameConfig({
     [introSongs, onIntroSongsChange]
   );
 
-  return (
-    <Card>
-      <h2 className="text-xl font-bold text-slate-800 mb-6">
-        Game {gameNumber} — {gameLabel}
-      </h2>
+  const resolvedIntroSong = introSongs.find((s) => s.type === introSlot.type);
 
-      <div className="space-y-5">
-        <div>
-          <label className={labelClass}>Theme</label>
+  return (
+    <div className="wizpanel">
+      <h2>Game {gameNumber}</h2>
+      <div className="form-grid">
+        <div className="fg span2">
+          <label>Theme</label>
           <input
             type="text"
-            className={inputClass}
             value={theme}
             onChange={(e) => onTheme(e.target.value)}
-            placeholder="e.g. Pop Classics"
+            placeholder={gameNumber === 1 ? "Pop Anthems" : "Throwback Bangers"}
           />
         </div>
-
-        <div>
-          <label className={labelClass}>
-            Song List (max {MAX_SONGS_PER_GAME})
-          </label>
+        <div className="fg span2">
+          <label>Song list <span style={{ opacity: 0.5 }}>(one per line — &ldquo;Artist - Title&rdquo;)</span></label>
           <textarea
-            className={textareaClass}
             value={songsText}
             onChange={(e) => onSongsText(e.target.value)}
             placeholder={
@@ -259,187 +245,131 @@ export function StepGameConfig({
                 : "ABBA - Dancing Queen\nBon Jovi - Livin on a Prayer\nMadonna - Like a Prayer"
             }
           />
-          <div className="flex flex-wrap gap-4 mt-2">
-            <p
-              className={[
-                helpClass,
-                tooMany ? "text-red-600 font-semibold" : "",
-              ].join(" ")}
-            >
-              Songs: {parsed.songs.length}/{MAX_SONGS_PER_GAME}
-              {tooMany ? " — too many!" : ""}
-            </p>
-            <p
-              className={[
-                helpClass,
-                notEnough && parsed.songs.length > 0 ? "text-amber-600" : "",
-              ].join(" ")}
-            >
-              Unique pool items: {parsed.combinedPool.length}
-              {notEnough && parsed.songs.length > 0 ? " (need ≥25)" : ""}
-            </p>
+          <div className="songmeta">
+            <span className={tooMany ? "bad" : parsed.songs.length >= 25 ? "ok" : "warn"}>
+              {parsed.songs.length} songs
+              {tooMany ? ` — too many (max ${MAX_SONGS_PER_GAME})` : parsed.songs.length < 25 ? " — need ≥25" : ""}
+            </span>
+            {notEnough && parsed.songs.length > 0 && (
+              <span className="warn">Pool: {parsed.combinedPool.length} (need ≥25)</span>
+            )}
           </div>
         </div>
-
-        {/* Intro song URL input — one per game: dance-along for G1, sing-along for G2 */}
-        <div>
-          <label className={labelClass}>{introSlot.label}</label>
+        <div className="fg span2">
+          <label>{introSlot.label}</label>
           <input
             type="text"
-            className={inputClass}
             value={introUrls[introSlot.type] ?? ""}
             onChange={(e) =>
-              setIntroUrls((prev) => ({
-                ...prev,
-                [introSlot.type]: e.target.value,
-              }))
+              setIntroUrls((prev) => ({ ...prev, [introSlot.type]: e.target.value }))
             }
             onBlur={() => resolveIntroUrl(introSlot.type, introUrls[introSlot.type] ?? "")}
             onPaste={(e) => {
               const pasted = e.clipboardData.getData("text");
-              setIntroUrls((prev) => ({
-                ...prev,
-                [introSlot.type]: pasted,
-              }));
+              setIntroUrls((prev) => ({ ...prev, [introSlot.type]: pasted }));
               setTimeout(() => resolveIntroUrl(introSlot.type, pasted), 0);
             }}
-            placeholder="Paste Spotify track URL..."
+            placeholder="Paste Spotify track URL…"
             disabled={!spotifyConnected}
           />
           {!spotifyConnected && (
-            <p className={`${helpClass} text-amber-600`}>
-              Connect Spotify first to add intro song
-            </p>
+            <span className="help" style={{ color: "#e6b35c" }}>Connect Spotify on the Generate step to add an intro song</span>
           )}
           {introState[introSlot.type]?.loading && (
-            <p className={`${helpClass} text-slate-500`}>
-              Loading track info...
-            </p>
+            <span className="help">Loading track info…</span>
           )}
           {introState[introSlot.type]?.error && (
-            <p className={`${helpClass} text-red-600`}>{introState[introSlot.type]!.error}</p>
+            <span className="help" style={{ color: "#e88" }}>{introState[introSlot.type]!.error}</span>
           )}
-          {introSongs.find((s) => s.type === introSlot.type) &&
-            !introState[introSlot.type]?.loading &&
-            !introState[introSlot.type]?.error && (
-              <p className={`${helpClass} text-green-700`}>
-                {introSongs.find((s) => s.type === introSlot.type)!.artist} -{" "}
-                {introSongs.find((s) => s.type === introSlot.type)!.title}
-              </p>
-            )}
-        </div>
-
-        {/* Challenge song dropdowns */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <label className={labelClass}>Challenge Songs</label>
-            <span className="text-sm text-slate-500">
-              Challenge songs: {selectedChallengeCount}/{CHALLENGE_SLOT_COUNT}{" "}
-              selected
+          {resolvedIntroSong && !introState[introSlot.type]?.loading && !introState[introSlot.type]?.error && (
+            <span className="help" style={{ color: "#8fe0ab" }}>
+              ✓ {resolvedIntroSong.artist} – {resolvedIntroSong.title}
             </span>
-          </div>
-
-          {Array.from({ length: CHALLENGE_SLOT_COUNT }, (_, i) => {
-            const otherChallengeValues = challengeSongs
-              .filter((_, j) => j !== i)
-              .map((c) => c.value);
-            const available = getAvailableOptions(
-              parsed.songs,
-              otherChallengeValues
-            );
-            const current = challengeSongs[i] ?? {
-              value: "",
-              type: "sing-along" as const,
-            };
-
-            return (
-              <div key={i} className="flex gap-2 items-end">
-                <div className="w-36 shrink-0">
-                  <label className={`${labelClass} text-sm`}>Type</label>
-                  <select
-                    className={selectClass}
-                    value={current.type}
-                    onChange={(e) => {
-                      const updated = [...challengeSongs];
-                      while (updated.length <= i)
-                        updated.push({
-                          value: "",
-                          type: "sing-along" as const,
-                        });
-                      updated[i] = {
-                        ...updated[i],
-                        type: e.target.value as "sing-along" | "dance-along",
-                      };
-                      onChallengeSongs(updated);
-                    }}
-                    disabled={!parsed.songs.length}
-                  >
-                    <option value="sing-along">Sing Along</option>
-                    <option value="dance-along">Dance Along</option>
-                  </select>
-                </div>
-                <div className="flex-1">
-                  <label className={`${labelClass} text-sm`}>
-                    Challenge Song {i + 1}
-                  </label>
-                  <select
-                    className={selectClass}
-                    value={current.value}
-                    onChange={(e) => {
-                      const updated = [...challengeSongs];
-                      while (updated.length <= i)
-                        updated.push({
-                          value: "",
-                          type: "sing-along" as const,
-                        });
-                      updated[i] = { ...updated[i], value: e.target.value };
-                      onChallengeSongs(updated);
-                    }}
-                    disabled={!parsed.songs.length}
-                  >
-                    {!parsed.songs.length ? (
-                      <option value="">Add songs first</option>
-                    ) : (
-                      <option value="">None</option>
-                    )}
-                    {available.map((song) => {
-                      const value = makeSongSelectionValue(song);
-                      return (
-                        <option key={value} value={value}>
-                          {songLabel(song)}
-                        </option>
-                      );
-                    })}
-                    {current.value &&
-                      !available.some(
-                        (s) => makeSongSelectionValue(s) === current.value
-                      ) && (
-                        <option key={current.value} value={current.value}>
-                          {current.value.replace("|||", " - ")} (selected
-                          elsewhere)
-                        </option>
-                      )}
-                  </select>
-                </div>
-              </div>
-            );
-          })}
-
-          <p className={helpClass}>
-            At least 1 challenge song required. These songs play for {Math.floor(CHALLENGE_REVEAL_CONFIG.nextMs / 1000)} seconds
-            instead of {Number.isFinite(normalSongSeconds) ? Math.round(normalSongSeconds) : Math.floor(DEFAULT_REVEAL_CONFIG.nextMs / 1000)}.
-          </p>
+          )}
+          <span className="help">Plays in full with no auto-advance — the warm-up before Game {gameNumber}.</span>
         </div>
       </div>
 
-      <div className="flex justify-between mt-8">
-        <Button variant="secondary" onClick={onBack}>
-          ← Back
-        </Button>
-        <Button variant="primary" onClick={onNext} disabled={!canNext}>
-          {nextLabel}
-        </Button>
+      {/* Challenge songs */}
+      <div className="fg" style={{ marginBottom: 10 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <label>Challenge songs <span style={{ opacity: 0.5 }}>(play for {Math.floor(CHALLENGE_REVEAL_CONFIG.nextMs / 1000)}s)</span></label>
+          <span className="chal-count">{selectedChallengeCount} / {CHALLENGE_SLOT_COUNT} selected</span>
+        </div>
       </div>
-    </Card>
+
+      {Array.from({ length: CHALLENGE_SLOT_COUNT }, (_, i) => {
+        const otherChallengeValues = challengeSongs.filter((_, j) => j !== i).map((c) => c.value);
+        const available = getAvailableOptions(parsed.songs, otherChallengeValues);
+        const current = challengeSongs[i] ?? { value: "", type: "sing-along" as const };
+
+        return (
+          <div className="chal-row" key={i}>
+            <div className="seg">
+              <button
+                type="button"
+                className={current.type === "sing-along" ? "on" : ""}
+                onClick={() => {
+                  const updated = [...challengeSongs];
+                  while (updated.length <= i) updated.push({ value: "", type: "sing-along" as const });
+                  updated[i] = { ...updated[i], type: "sing-along" };
+                  onChallengeSongs(updated);
+                }}
+                disabled={!parsed.songs.length}
+              >
+                Sing
+              </button>
+              <button
+                type="button"
+                className={current.type === "dance-along" ? "on" : ""}
+                onClick={() => {
+                  const updated = [...challengeSongs];
+                  while (updated.length <= i) updated.push({ value: "", type: "sing-along" as const });
+                  updated[i] = { ...updated[i], type: "dance-along" };
+                  onChallengeSongs(updated);
+                }}
+                disabled={!parsed.songs.length}
+              >
+                Dance
+              </button>
+            </div>
+            <div className="fg" style={{ flex: 1 }}>
+              <select
+                value={current.value}
+                onChange={(e) => {
+                  const updated = [...challengeSongs];
+                  while (updated.length <= i) updated.push({ value: "", type: "sing-along" as const });
+                  updated[i] = { ...updated[i], value: e.target.value };
+                  onChallengeSongs(updated);
+                }}
+                disabled={!parsed.songs.length}
+              >
+                <option value="">{parsed.songs.length ? `Challenge song ${i + 1} — None` : "Add songs first"}</option>
+                {available.map((song) => {
+                  const value = makeSongSelectionValue(song);
+                  return <option key={value} value={value}>{songLabel(song)}</option>;
+                })}
+                {current.value && !available.some((s) => makeSongSelectionValue(s) === current.value) && (
+                  <option key={current.value} value={current.value}>
+                    {current.value.replace("|||", " - ")} (selected elsewhere)
+                  </option>
+                )}
+              </select>
+            </div>
+          </div>
+        );
+      })}
+
+      <p className="fg help" style={{ marginTop: 6, marginBottom: 0 }}>
+        At least 1 challenge song required. Normal songs play for{" "}
+        {Number.isFinite(normalSongSeconds) ? Math.round(normalSongSeconds) : Math.floor(DEFAULT_REVEAL_CONFIG.nextMs / 1000)}s;
+        challenge songs play for {Math.floor(CHALLENGE_REVEAL_CONFIG.nextMs / 1000)}s.
+      </p>
+
+      <div className="wiznav">
+        <Button variant="secondary" onClick={onBack}>← Back</Button>
+        <Button variant="primary" onClick={onNext} disabled={!canNext}>{nextLabel}</Button>
+      </div>
+    </div>
   );
 }
