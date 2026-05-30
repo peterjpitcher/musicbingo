@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Button } from "@/components/ui/Button";
+import { Notice } from "@/components/ui/Notice";
 import { formatEventDateDisplay } from "@/lib/eventDate";
 import { DEFAULT_GAME_THEME, MAX_SONGS_PER_GAME, makeSongSelectionValue } from "@/lib/gameInput";
-import { exportLiveSessionJson, upsertLiveSession } from "@/lib/live/sessionApi";
+import { exportLiveSessionJson, getLiveSession, upsertLiveSession } from "@/lib/live/sessionApi";
 import {
   formatSecondsInput,
   getDefaultRevealConfigForSongInput,
@@ -85,8 +87,15 @@ function normaliseIntroSongsForSignature(songs: IntroSong[]): IntroSong[] {
   return [...songs].sort((a, b) => a.type.localeCompare(b.type));
 }
 
-export default function PrepPage() {
+function PrepPageInner() {
+  const searchParams = useSearchParams();
+  const editSessionParam = searchParams.get("session");
+
   const [currentStep, setCurrentStep] = useState(0);
+  // When editing an existing session we preserve its id so upsert overwrites it
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [editingSessionName, setEditingSessionName] = useState<string>("");
+  const [editHydrationNotice, setEditHydrationNotice] = useState<string>("");
 
   // Step 0 fields
   const [eventDate, setEventDate] = useState<string>(todayIso());
@@ -225,6 +234,80 @@ export default function PrepPage() {
       .then((data) => setSpotifyConnected(Boolean(data?.connected)))
       .catch(() => {});
   }, []);
+
+  // Hydrate wizard state when ?session=<id> is present (edit mode)
+  useEffect(() => {
+    if (!editSessionParam) return;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const loaded = await getLiveSession(editSessionParam);
+        if (cancelled) return;
+
+        if (!loaded || !loaded.prepData) {
+          setEditHydrationNotice(
+            "Could not reconstruct the original song text for this session — the prep data is missing. " +
+            "You can duplicate it from the dashboard or proceed as a new game."
+          );
+          return;
+        }
+
+        const pd = loaded.prepData;
+
+        // Hydrate step-0 fields
+        if (loaded.eventDateInput) setEventDate(loaded.eventDateInput);
+        if (typeof pd.cardCount === "number") setCountInput(String(pd.cardCount));
+        if (loaded.revealConfig) {
+          setSongPlaySecondsInput(formatSecondsInput(loaded.revealConfig.nextMs));
+          setAlbumRevealSecondsInput(formatSecondsInput(loaded.revealConfig.albumMs));
+          setTitleRevealSecondsInput(formatSecondsInput(loaded.revealConfig.titleMs));
+          setArtistRevealSecondsInput(formatSecondsInput(loaded.revealConfig.artistMs));
+        }
+        if (loaded.name) {
+          setLiveSessionName(loaded.name);
+          setLiveSessionNameDirty(true);
+        }
+        if (loaded.breakPlaylistId != null) setBreakPlaylistId(loaded.breakPlaylistId);
+        if (loaded.brandId != null) setSelectedBrandId(loaded.brandId);
+
+        // Hydrate step-1 fields
+        if (pd.game1Theme) setGame1Theme(pd.game1Theme);
+        if (pd.game1SongsText) setGame1SongsText(pd.game1SongsText);
+        if (pd.game1ChallengeSongs && pd.game1ChallengeSongs.length > 0) {
+          const entries: ChallengeEntry[] = Array(5).fill(null).map(() => ({ value: "", type: "sing-along" as const }));
+          pd.game1ChallengeSongs.slice(0, 5).forEach((val, idx) => {
+            entries[idx] = { value: val, type: "sing-along" };
+          });
+          setGame1ChallengeSongs(entries);
+        }
+
+        // Hydrate step-2 fields
+        if (pd.game2Theme) setGame2Theme(pd.game2Theme);
+        if (pd.game2SongsText) setGame2SongsText(pd.game2SongsText);
+        if (pd.game2ChallengeSongs && pd.game2ChallengeSongs.length > 0) {
+          const entries: ChallengeEntry[] = Array(5).fill(null).map(() => ({ value: "", type: "sing-along" as const }));
+          pd.game2ChallengeSongs.slice(0, 5).forEach((val, idx) => {
+            entries[idx] = { value: val, type: "sing-along" };
+          });
+          setGame2ChallengeSongs(entries);
+        }
+
+        // Preserve the session id so save overwrites the same record
+        setEditingSessionId(loaded.id);
+        setEditingSessionName(loaded.name);
+      } catch {
+        if (!cancelled) {
+          setEditHydrationNotice(
+            "Failed to load the session for editing. You can proceed as a new game."
+          );
+        }
+      }
+    })();
+
+    return () => { cancelled = true; };
+  // Run once on mount when the param is present
+  }, [editSessionParam]);
 
   useEffect(() => {
     if (formSignatureRef.current === formInputSignature) return;
@@ -417,7 +500,8 @@ export default function PrepPage() {
     }
     return {
       version: LIVE_SESSION_VERSION,
-      id: makeSessionId(),
+      // Reuse the existing id in edit mode so upsert overwrites the same row
+      id: editingSessionId ?? makeSessionId(),
       name: sessionName,
       createdAt: new Date().toISOString(),
       eventDateInput: eventDate,
@@ -803,6 +887,46 @@ export default function PrepPage() {
     }
   }
 
+  /** Resolve a missing song row by posting a Spotify track URL to the resolve-missing route. */
+  async function handleResolveMissingSong(opts: {
+    gameNumber: 1 | 2;
+    artist: string;
+    title: string;
+    spotifyTrackUrl: string;
+  }): Promise<{ ok: true; trackId: string } | { ok: false; error: string }> {
+    const playlistId =
+      opts.gameNumber === 1
+        ? (livePlaylistByGame?.game1.playlistId ?? playlistResults?.find((p) => p.gameNumber === 1)?.playlistId)
+        : (livePlaylistByGame?.game2.playlistId ?? playlistResults?.find((p) => p.gameNumber === 2)?.playlistId);
+
+    if (!playlistId) {
+      return { ok: false, error: "Playlist not yet created — create Spotify playlists first." };
+    }
+
+    try {
+      const res = await fetch(`/api/spotify/playlist/${encodeURIComponent(playlistId)}/resolve-missing`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          resolutions: [{ artist: opts.artist, title: opts.title, spotifyTrackUrl: opts.spotifyTrackUrl }],
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        return { ok: false, error: (data as any)?.error ?? `Server error ${res.status}` };
+      }
+      const resolved = (data as any)?.resolved ?? [];
+      const failed = (data as any)?.failed ?? [];
+      if (resolved.length > 0 && resolved[0]?.trackId) {
+        return { ok: true, trackId: resolved[0].trackId as string };
+      }
+      const failMsg = failed[0]?.error ?? "Track not found on Spotify.";
+      return { ok: false, error: failMsg };
+    } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message : "Network error." };
+    }
+  }
+
   async function handleRefreshFromSpotify() {
     setRefreshing(true);
     try {
@@ -843,7 +967,21 @@ export default function PrepPage() {
         }
       />
 
+
       <main className="max-w-2xl mx-auto px-4 py-8">
+        {editHydrationNotice && (
+          <Notice variant="warning" className="mb-4">{editHydrationNotice}</Notice>
+        )}
+
+        {editingSessionId && !editHydrationNotice && (
+          <div className="editbanner">
+            <span className="pillmini">Editing</span>
+            <span>
+              <b>{editingSessionName || liveSessionName}</b> — changes save to the same game, so your host link &amp; cards stay valid.
+            </span>
+          </div>
+        )}
+
         <div className="stepper">
           {STEPS.map((s, i) => (
             <button
@@ -959,9 +1097,18 @@ export default function PrepPage() {
             onExportLiveSession={() => void exportLiveSession()}
             onBack={() => goToStep(2)}
             refreshing={refreshing}
+            onResolveMissingSong={handleResolveMissingSong}
           />
         )}
       </main>
     </div>
+  );
+}
+
+export default function PrepPage() {
+  return (
+    <Suspense>
+      <PrepPageInner />
+    </Suspense>
   );
 }

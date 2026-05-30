@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Notice } from "@/components/ui/Notice";
 
@@ -23,6 +24,10 @@ type PlaylistResult = {
   totalSongs: number;
   notFoundSongs: Array<{ artist: string; title: string }>;
 };
+
+type ResolveResult =
+  | { ok: true; trackId: string }
+  | { ok: false; error: string };
 
 type StepGenerateConnectProps = {
   canSubmit: boolean;
@@ -53,7 +58,25 @@ type StepGenerateConnectProps = {
   onExportLiveSession: () => void;
   onBack: () => void;
   refreshing: boolean;
+  onResolveMissingSong: (opts: {
+    gameNumber: 1 | 2;
+    artist: string;
+    title: string;
+    spotifyTrackUrl: string;
+  }) => Promise<ResolveResult>;
 };
+
+// Per-row resolution state keyed by "{gameNumber}:{artist}:{title}"
+type RowResolutionState =
+  | { status: "idle"; input: string }
+  | { status: "resolving"; input: string }
+  | { status: "resolved"; trackId: string }
+  | { status: "skipped" }
+  | { status: "error"; input: string; error: string };
+
+function makeRowKey(gameNumber: number, artist: string, title: string) {
+  return `${gameNumber}:${artist}:${title}`;
+}
 
 export function StepGenerateConnect({
   canSubmit,
@@ -81,7 +104,11 @@ export function StepGenerateConnect({
   onExportLiveSession,
   onBack,
   refreshing,
+  onResolveMissingSong,
 }: StepGenerateConnectProps) {
+  // Per-row resolve state — keyed by "gameNumber:artist:title"
+  const [rowStates, setRowStates] = useState<Record<string, RowResolutionState>>({});
+
   const createPlaylistsLabel = spotifyConnecting
     ? "Connecting Spotify…"
     : spotifyCreating
@@ -98,6 +125,38 @@ export function StepGenerateConnect({
         r.notFound.map((s) => ({ ...s, gameNumber: r.gameNumber }))
       )
     : [];
+
+  function getRowState(gameNumber: number, artist: string, title: string): RowResolutionState {
+    return rowStates[makeRowKey(gameNumber, artist, title)] ?? { status: "idle", input: "" };
+  }
+
+  function setRowState(gameNumber: number, artist: string, title: string, state: RowResolutionState) {
+    setRowStates((prev) => ({ ...prev, [makeRowKey(gameNumber, artist, title)]: state }));
+  }
+
+  async function handleResolve(gameNumber: 1 | 2, artist: string, title: string) {
+    const key = makeRowKey(gameNumber, artist, title);
+    const current = rowStates[key] ?? { status: "idle", input: "" };
+    const input = current.status === "idle" || current.status === "error" ? (current as any).input as string : "";
+    if (!input.trim()) return;
+    setRowState(gameNumber, artist, title, { status: "resolving", input });
+    const result = await onResolveMissingSong({ gameNumber, artist, title, spotifyTrackUrl: input.trim() });
+    if (result.ok) {
+      setRowState(gameNumber, artist, title, { status: "resolved", trackId: result.trackId });
+    } else {
+      setRowState(gameNumber, artist, title, { status: "error", input, error: result.error });
+    }
+  }
+
+  function handleSkip(gameNumber: number, artist: string, title: string) {
+    setRowState(gameNumber, artist, title, { status: "skipped" });
+  }
+
+  function handleInputChange(gameNumber: number, artist: string, title: string, value: string) {
+    const prev = rowStates[makeRowKey(gameNumber, artist, title)] ?? { status: "idle", input: "" };
+    if (prev.status === "resolved" || prev.status === "skipped") return;
+    setRowState(gameNumber, artist, title, { status: prev.status === "error" ? "error" : "idle", input: value, ...(prev.status === "error" ? { error: (prev as any).error } : {}) } as RowResolutionState);
+  }
 
   return (
     <div className="wizpanel">
@@ -180,12 +239,61 @@ export function StepGenerateConnect({
       {/* Songs not found on Spotify */}
       {allNotFound.length > 0 && (
         <div className="notfound">
-          <div className="nf-head">⚠ {allNotFound.length} song(s) not found on Spotify — check spelling or remove from song list</div>
-          {allNotFound.map((m, i) => (
-            <div className="nf-row" key={i}>
-              <span className="nf-song"><b>Game {m.gameNumber}</b> · {m.artist} – {m.title}</span>
-            </div>
-          ))}
+          <div className="nf-head">
+            ⚠ {allNotFound.length} song(s) not found on Spotify — paste a Spotify track link to resolve, or skip
+          </div>
+          {allNotFound.map((m, i) => {
+            const rs = getRowState(m.gameNumber, m.artist, m.title);
+            if (rs.status === "skipped") return null;
+            const inputVal = rs.status === "idle" || rs.status === "error" ? (rs as any).input as string : "";
+            const isResolving = rs.status === "resolving";
+            const isResolved = rs.status === "resolved";
+            return (
+              <div className="nf-row" key={i}>
+                <span className="nf-song">
+                  <b>Game {m.gameNumber}</b> · {m.artist} – {m.title}
+                </span>
+                {isResolved ? (
+                  <span className="nf-ok">✓ Matched</span>
+                ) : (
+                  <>
+                    <input
+                      type="url"
+                      className="nf-input"
+                      placeholder="Paste Spotify track link…"
+                      value={inputVal}
+                      onChange={(e) => handleInputChange(m.gameNumber, m.artist, m.title, e.target.value)}
+                      disabled={isResolving}
+                      aria-label={`Spotify link for ${m.artist} – ${m.title}`}
+                    />
+                    <button
+                      type="button"
+                      className="hbtn hbtn--primary"
+                      style={{ minHeight: 36, fontSize: 13, padding: "0 12px", flexShrink: 0 }}
+                      disabled={isResolving || !inputVal.trim()}
+                      onClick={() => void handleResolve(m.gameNumber as 1 | 2, m.artist, m.title)}
+                    >
+                      {isResolving ? "Resolving…" : "Resolve"}
+                    </button>
+                    <button
+                      type="button"
+                      className="hbtn"
+                      style={{ minHeight: 36, fontSize: 13, padding: "0 10px", flexShrink: 0 }}
+                      disabled={isResolving}
+                      onClick={() => handleSkip(m.gameNumber, m.artist, m.title)}
+                    >
+                      Skip
+                    </button>
+                  </>
+                )}
+                {rs.status === "error" && (
+                  <span style={{ fontSize: 12, color: "#e87f7f", flexBasis: "100%", paddingTop: 4 }}>
+                    {rs.error}
+                  </span>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
