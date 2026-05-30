@@ -1,11 +1,62 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
+
 import type { ScreenProps } from "@/components/screens/types";
+import type { LiveRuntimeState } from "@/lib/live/types";
+import { DEFAULT_REVEAL_CONFIG } from "@/lib/live/types";
 import { Editable } from "@/components/motifs/Editable";
 import { Ball } from "@/components/motifs/Ball";
 import { Eq } from "@/components/motifs/Eq";
 import { Chrome } from "@/components/motifs/Chrome";
 import { AlbumArt } from "@/components/screens/AlbumArt";
+
+/**
+ * Smoothly interpolates the playing track's `progressMs` between the ~2s server
+ * polls so the "Next song" countdown/bar ticks live instead of jumping. Mirrors
+ * the guest page's `useInterpolatedProgress` so the bar behaves identically on
+ * the guest TV and the host preview (both render this component via the
+ * registry). Returns `null` when there is no live, playing track.
+ */
+function useLiveProgressMs(runtime: LiveRuntimeState | null | undefined): number | null {
+  const track = runtime?.currentTrack ?? null;
+  const serverProgress = track?.progressMs ?? 0;
+  const isPlaying = track?.isPlaying ?? false;
+  const trackId = track?.trackId ?? null;
+  const updatedAt = runtime?.updatedAtMs ?? 0;
+
+  const anchor = useMemo(
+    () => ({ progress: serverProgress, updatedAt, trackId }),
+    // Re-anchor only when a fresh snapshot (new poll or new track) arrives.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [updatedAt, trackId]
+  );
+
+  const [tick, setTick] = useState(0);
+  const [lastAnchor, setLastAnchor] = useState(anchor);
+  if (anchor !== lastAnchor) {
+    setLastAnchor(anchor);
+    setTick(0);
+  }
+
+  useEffect(() => {
+    if (!isPlaying || !trackId) return;
+    const id = window.setInterval(() => setTick((value) => value + 1), 1000);
+    return () => window.clearInterval(id);
+  }, [isPlaying, trackId, anchor]);
+
+  if (!track) return null;
+  if (!isPlaying) return anchor.progress;
+  return anchor.progress + tick * 1000;
+}
+
+/** Formats milliseconds as a `m:ss` countdown string (clamped at zero). */
+function formatCountdown(ms: number): string {
+  const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
 
 /**
  * Live gameplay screen shown during Game 1 or Game 2 (music bingo album reveal).
@@ -32,10 +83,31 @@ export function GameLive({
   const track = runtime?.currentTrack ?? null;
   const reveal = runtime?.revealState ?? null;
 
-  /* When no runtime, treat everything as revealed (matches source static view). */
-  const showAlbum = reveal ? reveal.showAlbum : true;
-  const showTitle = reveal ? reveal.showTitle : true;
-  const showArtist = reveal ? reveal.showArtist : true;
+  /*
+   * Default every reveal to hidden until the runtime/reveal state has loaded.
+   * Before the first sync `reveal` is null; defaulting to `true` previously
+   * flashed the album cover (and title/artist) before their scheduled reveal
+   * points. Once the 2s poll provides `revealState`, gating takes over.
+   */
+  const showAlbum = reveal?.showAlbum ?? false;
+  const showTitle = reveal?.showTitle ?? false;
+  const showArtist = reveal?.showArtist ?? false;
+
+  /*
+   * "Next song" countdown — interpolated client-side so it ticks smoothly
+   * between polls rather than jumping every ~2s. `nextMs` is the configured
+   * advance point; the remaining time and bar fill are derived from the live
+   * (interpolated) progress. Falls back to the static design value when there
+   * is no live track yet.
+   */
+  const liveProgressMs = useLiveProgressMs(runtime);
+  const nextMs = runtime?.revealConfig?.nextMs ?? DEFAULT_REVEAL_CONFIG.nextMs;
+  const hasLiveCountdown = liveProgressMs !== null && nextMs > 0;
+  const remainingMs = hasLiveCountdown ? Math.max(0, nextMs - liveProgressMs) : 0;
+  const nextFillPct = hasLiveCountdown
+    ? Math.min(100, Math.max(0, (liveProgressMs / nextMs) * 100))
+    : 0;
+  const nextLabel = hasLiveCountdown ? formatCountdown(remainingMs) : "0:08";
 
   /** Inline style for a lit reveal badge. */
   const badgeLit: React.CSSProperties = {
@@ -83,10 +155,16 @@ export function GameLive({
       {/* Album art column */}
       <div style={{ flex: "0 0 600px", display: "grid", placeItems: "center" }}>
         <div className="an-pop d2">
-          {/* Show real artwork when runtime is present; placeholder when not */}
+          {/*
+           * Only hand the real artwork URL to AlbumArt once the album reveal has
+           * fired. AlbumArt renders the image whenever `imageUrl` is truthy
+           * (regardless of `revealed`), so passing it early would leak the cover
+           * before its scheduled reveal. When no live track, fall back to the
+           * revealed placeholder visual (the design's static view).
+           */}
           <AlbumArt
             size={600}
-            imageUrl={track ? track.albumImageUrl : null}
+            imageUrl={track && showAlbum ? track.albumImageUrl : null}
             revealed={showAlbum || !track}
           />
         </div>
@@ -160,9 +238,15 @@ export function GameLive({
               ✓ {label}
             </span>
           ))}
-          {/* "Next song" countdown — static in Phase 1 */}
+          {/*
+           * "Next song" countdown — live and interpolated. The label counts
+           * down each second; the inner fill animates smoothly (CSS width
+           * transition) so it glides between the 1s ticks and ~2s polls rather
+           * than jumping.
+           */}
           <span
             style={{
+              position: "relative",
               display: "inline-flex",
               alignItems: "center",
               gap: 12,
@@ -174,9 +258,34 @@ export function GameLive({
               fontWeight: 700,
               textTransform: "uppercase",
               letterSpacing: ".1em",
+              overflow: "hidden",
             }}
           >
-            <Eq bars={4} style={{ height: 22 }} /> Next song · 0:08
+            {/* Progress fill — only shown when a live countdown is available. */}
+            {hasLiveCountdown && (
+              <span
+                aria-hidden
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  width: `${nextFillPct}%`,
+                  background: "rgb(var(--brand-accent-rgb) / .18)",
+                  transition: "width 1s linear",
+                  pointerEvents: "none",
+                }}
+              />
+            )}
+            <span
+              style={{
+                position: "relative",
+                zIndex: 1,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 12,
+              }}
+            >
+              <Eq bars={4} style={{ height: 22 }} /> Next song · {nextLabel}
+            </span>
           </span>
         </div>
       </div>

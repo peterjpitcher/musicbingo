@@ -4,7 +4,9 @@ import React from "react";
 import type { ScreenProps } from "@/components/screens/types";
 import { Sunburst } from "@/components/motifs/Sunburst";
 import { Editable } from "@/components/motifs/Editable";
+import { useEdit } from "@/components/motifs/EditContext";
 import { Chrome } from "@/components/motifs/Chrome";
+import { ThankYou } from "@/components/screens/ThankYou";
 
 /** Individual winner/wooden-spoon card within the Winners screen. */
 type CardProps = {
@@ -80,7 +82,23 @@ function Card({ rank, place, teamField, teamPH, prizeField, prizePH, hero }: Car
  * Displays a hero card for the 1st-place champions and a secondary card for the
  * wooden-spoon team (2nd from last). All team names and prizes are editable.
  */
-export function Winners({ brand }: ScreenProps): React.ReactElement {
+export function Winners(props: ScreenProps): React.ReactElement {
+  const { brand } = props;
+  const { get } = useEdit();
+
+  /*
+   * Only show the winners screen when the host has actually entered winner
+   * content. `get` returns the raw resolved value (empty string when unset),
+   * so when both team names are blank we fall back to the thank-you / QR screen
+   * rather than putting empty "1st place: ____" slots on the TV. QR and
+   * thank-you content stay intact via the ThankYou screen.
+   */
+  const hasWinner = get("winTeam").trim() !== "";
+  const hasSpoon = get("spoonTeam").trim() !== "";
+  if (!hasWinner && !hasSpoon) {
+    return <ThankYou {...props} />;
+  }
+
   return (
     <div
       className="screen grain vignette"
