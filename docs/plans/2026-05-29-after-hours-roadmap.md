@@ -9,7 +9,7 @@ Status: ✅ done · ▶ in progress · ⬜ not started · ⛔ blocked/gated
 |---|---|---|---|---|
 | 0 | Foundations: fonts, design tokens, dark UI primitives, brand font/logo schema + migration, Vitest harness | — | ✅ (11 commits, verified, Codex-reviewed) | [phase-0-foundations.md](2026-05-29-after-hours-phase-0-foundations.md) |
 | 1a | **State contract**: `lib/live/runOfShow.ts`, `lib/live/content.ts`, additive `LiveRuntimeState`/`LiveSessionV1` fields (`screenId`, `content`, `welcomeVariant`, `titleVariant`) + validators | 0 | ✅ done (5 commits, 58 tests, reviewed) | [phase-1a-state-contract.md](2026-05-29-after-hours-phase-1a-state-contract.md) |
-| 1b | **Component library**: `components/motifs/*` + `components/screens/*` (~16 presentational components) ported from the bundle, rendered in isolation | 0, 1a | ⬜ | tbd |
+| 1b | **Component library**: `components/motifs/*` + `components/screens/*` (24 presentational components) ported from the bundle, rendered in isolation | 0, 1a | ✅ done (24 components, reviewed) | [phase-1b-component-library.md](2026-05-29-after-hours-phase-1b-component-library.md) |
 | 2 | **TV Display** (`/guest/[sessionId]`) rebuilt as a `screenId`-driven renderer over the existing sync engine | 1a, 1b | ⬜ | tbd |
 | 3 | **Host Controller** (`/host/[sessionId]`) console: preview + run-of-show + Now-Playing/Game-Flow/Timing/Content/Playlist panels + variant controls | 1a, 1b, 2 | ⬜ | tbd |
 | 4 | **Setup & Manage**: `/host` dashboard + `/prep` wizard restyle (+ derived readiness, edit-mode hydration, missing-song resolution route) | 0 (1a for content defaults) | ⬜ | tbd |
@@ -19,6 +19,8 @@ Status: ✅ done · ▶ in progress · ⬜ not started · ⛔ blocked/gated
 > Split note: spec Phase 1 → **1a** (state/lib, fast, TDD) + **1b** (component porting, large/visual) for shippability. Phases 4/5/6 can parallelise after 0+1a.
 >
 > **1a consumer note (for 1b/2/3):** `getContent` auto-derives only `g1theme`/`g2theme` (from session games) and `venueName`/`venuePresents`/`venueWeb`/`breakLede`/`tyLede` (from brand). Everything else — incl. `nextDate`, `breakMins`, `hostName`, winners — falls back to design placeholders until set via the host content panel (session/runtime `content`). Don't assume those are populated from data. (`nextDate` deliberately does **not** derive from the session's own event date — Codex review fix.)
+>
+> **1b consumer note (for Phase 2/3 — REQUIRED wiring):** screens pull ALL text via `<Editable field=...>` (which reads `EditContext` from `components/motifs/EditContext.tsx`), NOT a `content` prop. So the guest TV (Phase 2) and host preview (Phase 3) MUST wrap the rendered screen in an `EditContext.Provider` whose `get(key, fallback) = getContent(key, { runtime, session, brand }) || fallback` and `set(key, value)` writes to content (host-editing only; guest passes `editing:false`, no-op `set`). Render a screen via `SCREEN_REGISTRY[runtime.screenId ?? "welcome"]({ brand, runtime })`. Screen props are `{ brand: BrandConfig; runtime?; variant? }`.
 
 ## Cross-phase carry-over items (do NOT lose)
 - ⛔ **Apply migration `20260529120000_*` before Phase 5** (Codex CR-1). Supabase CLI is unlinked in this env → **user applies** (`supabase db push`). Not needed for 1a/1b/2/3. No current code writes the new columns.
