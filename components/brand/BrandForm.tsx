@@ -1,643 +1,569 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
-import { Notice } from "@/components/ui/Notice";
-import type { Brand, BrandInput } from "@/lib/brands/types";
+import { useMemo } from "react";
+import {
+  SUPPORTED_BRAND_FONTS,
+  DEFAULT_DISPLAY_FONT,
+  DEFAULT_BODY_FONT,
+} from "@/lib/brands/fonts";
+import type { Brand } from "@/lib/brands/types";
 
-type QrItem = { label: string; url: string };
+/** A QR link as edited in the form. */
+export type QrItem = { label: string; url: string };
 
-const FONT_OPTIONS = [
-  "Inter",
-  "Playfair Display",
-  "Poppins",
-  "Montserrat",
-  "Roboto",
-  "Open Sans",
-  "Lato",
-  "Oswald",
-  "Raleway",
-  "Nunito",
-];
+/** Logo slots the form can stage a file for, mirroring brandStorage `LogoSlot`. */
+export type EditableLogoSlot = "logo-dark" | "logo-light" | "event-logo";
 
-const COLOUR_FIELDS: { key: keyof Pick<BrandInput, "color_primary" | "color_primary_light" | "color_accent" | "color_accent_light">; label: string }[] = [
-  { key: "color_primary", label: "Primary" },
-  { key: "color_primary_light", label: "Primary Light" },
-  { key: "color_accent", label: "Accent" },
-  { key: "color_accent_light", label: "Accent Light" },
-];
-
-const DEFAULT_COLOURS: Pick<BrandInput, "color_primary" | "color_primary_light" | "color_accent" | "color_accent_light"> = {
-  color_primary: "#1a3a2a",
-  color_primary_light: "#2d5a3d",
-  color_accent: "#c8a951",
-  color_accent_light: "#d4b96a",
+/**
+ * The editable shape of a brand, owned by the page (the live-preview draft).
+ * Colours/name/fonts feed the preview directly; the API key and staged logo
+ * files are write-only and never surfaced in the preview.
+ */
+export type EditableBrand = {
+  name: string;
+  isDefault: boolean;
+  colorPrimary: string;
+  colorPrimaryLight: string;
+  colorAccent: string;
+  colorAccentLight: string;
+  fontDisplay: string;
+  fontBody: string;
+  websiteUrl: string;
+  breakMessage: string;
+  endMessage: string;
+  /**
+   * Free-form QR links (max 4). The ThankYou screen matches them by label
+   * substring ("review"; "book"/"booking"/"reserve"/"event") — there are no
+   * discrete review/booking fields (spec A8).
+   */
+  qrItems: QrItem[];
+  eventFeedType: "anchor_management" | "baronshub" | "none";
+  eventFeedBaseUrl: string;
+  eventFeedVenueId: string;
+  /** Whether a key is already stored server-side (read-only flag). */
+  eventFeedHasKey: boolean;
+  /** Public URLs for previewing already-uploaded logos. */
+  logoDarkPreview: string;
+  logoLightPreview: string;
+  eventLogoPreview: string;
 };
+
+/** Inline style for an uploaded-logo thumbnail (no bespoke CSS class). */
+const THUMB_STYLE: React.CSSProperties = {
+  marginTop: 4,
+  borderRadius: 11,
+  border: "1px solid rgb(255 255 255 / .16)",
+  minHeight: 72,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: 10,
+};
+const THUMB_IMG_STYLE: React.CSSProperties = {
+  maxHeight: 56,
+  width: "auto",
+  objectFit: "contain",
+};
+
+const DEFAULT_COLOURS = {
+  colorPrimary: "#1a3a2a",
+  colorPrimaryLight: "#2d5a3d",
+  colorAccent: "#c8a951",
+  colorAccentLight: "#d4b96a",
+} as const;
+
+/** Build a blank editable brand for the "new venue" flow. */
+export function blankEditableBrand(): EditableBrand {
+  return {
+    name: "",
+    isDefault: false,
+    ...DEFAULT_COLOURS,
+    fontDisplay: DEFAULT_DISPLAY_FONT,
+    fontBody: DEFAULT_BODY_FONT,
+    websiteUrl: "",
+    breakMessage: "",
+    endMessage: "",
+    qrItems: [],
+    eventFeedType: "none",
+    eventFeedBaseUrl: "",
+    eventFeedVenueId: "",
+    eventFeedHasKey: false,
+    logoDarkPreview: "",
+    logoLightPreview: "",
+    eventLogoPreview: "",
+  };
+}
+
+type BrandWithUrls = Brand & {
+  logo_dark_public_url?: string;
+  logo_light_public_url?: string;
+  event_logo_public_url?: string;
+};
+
+/** Convert a loaded brand (API shape) into the editable draft. */
+export function brandToEditable(brand: BrandWithUrls): EditableBrand {
+  return {
+    name: brand.name,
+    isDefault: brand.is_default,
+    colorPrimary: brand.color_primary,
+    colorPrimaryLight: brand.color_primary_light,
+    colorAccent: brand.color_accent,
+    colorAccentLight: brand.color_accent_light,
+    fontDisplay: brand.font_display ?? DEFAULT_DISPLAY_FONT,
+    fontBody: brand.font_body ?? brand.font_family ?? DEFAULT_BODY_FONT,
+    websiteUrl: brand.website_url ?? "",
+    breakMessage: brand.break_message ?? "",
+    endMessage: brand.end_message ?? "",
+    qrItems: brand.qr_items?.map((q) => ({ label: q.label, url: q.url })) ?? [],
+    eventFeedType: brand.event_feed_type,
+    eventFeedBaseUrl: brand.event_feed_base_url ?? "",
+    eventFeedVenueId: brand.event_feed_venue_id ?? "",
+    eventFeedHasKey: brand.event_feed_has_key,
+    logoDarkPreview:
+      brand.logo_dark_url === "pending-upload"
+        ? ""
+        : brand.logo_dark_public_url ?? brand.logo_dark_url,
+    logoLightPreview:
+      brand.logo_light_url === "pending-upload"
+        ? ""
+        : brand.logo_light_public_url ?? brand.logo_light_url,
+    eventLogoPreview: brand.event_logo_public_url ?? brand.event_logo_url ?? "",
+  };
+}
+
+/**
+ * Assemble the persisted `qr_items` array from the draft: the free-form QR
+ * links, trimmed and with empties dropped, capped at the schema max of 4.
+ * Returns `null` when there are none, matching the column's nullable contract.
+ */
+export function editableToQrItems(draft: EditableBrand): QrItem[] | null {
+  const items = draft.qrItems
+    .filter((q) => q.label.trim() && q.url.trim())
+    .map((q) => ({ label: q.label.trim(), url: q.url.trim() }));
+  return items.length > 0 ? items.slice(0, 4) : null;
+}
 
 type BrandFormProps = {
-  /** Existing brand to edit. If undefined, the form is in "create" mode. */
-  brand?: Brand;
-  /** Called when Save succeeds; the parent page handles redirect. */
-  onSaved?: (brand: Brand) => void;
+  /** The editable draft owned by the parent page. */
+  draft: EditableBrand;
+  /** Patch the draft on every keystroke so the live preview stays in sync. */
+  onChange: (patch: Partial<EditableBrand>) => void;
+  /** Stage a logo file for upload on the next save. */
+  onLogoFile: (slot: EditableLogoSlot, file: File | null) => void;
+  /** The API key entered this session (empty keeps the existing one). */
+  apiKey: string;
+  onApiKeyChange: (value: string) => void;
 };
 
-export function BrandForm({ brand, onSaved }: BrandFormProps): React.ReactElement {
-  const router = useRouter();
-  const isNew = !brand;
+/** A single labelled field cell. */
+function Field({
+  label,
+  help,
+  span2,
+  children,
+}: {
+  label: string;
+  help?: string;
+  span2?: boolean;
+  children: React.ReactNode;
+}): React.ReactElement {
+  return (
+    <div className={`fg${span2 ? " span2" : ""}`}>
+      <label>{label}</label>
+      {children}
+      {help ? <span className="help">{help}</span> : null}
+    </div>
+  );
+}
 
-  // Form state
-  const [name, setName] = useState(brand?.name ?? "");
-  const [colorPrimary, setColorPrimary] = useState(brand?.color_primary ?? DEFAULT_COLOURS.color_primary);
-  const [colorPrimaryLight, setColorPrimaryLight] = useState(brand?.color_primary_light ?? DEFAULT_COLOURS.color_primary_light);
-  const [colorAccent, setColorAccent] = useState(brand?.color_accent ?? DEFAULT_COLOURS.color_accent);
-  const [colorAccentLight, setColorAccentLight] = useState(brand?.color_accent_light ?? DEFAULT_COLOURS.color_accent_light);
-  const [fontFamily, setFontFamily] = useState(brand?.font_family ?? "Inter");
-  const [websiteUrl, setWebsiteUrl] = useState(brand?.website_url ?? "");
-  const [breakMessage, setBreakMessage] = useState(brand?.break_message ?? "");
-  const [endMessage, setEndMessage] = useState(brand?.end_message ?? "");
-  const [isDefault, setIsDefault] = useState(brand?.is_default ?? false);
-  const [qrItems, setQrItems] = useState<QrItem[]>(
-    brand?.qr_items?.map((item) => ({ label: item.label, url: item.url })) ?? []
+/** Colour swatch + hex text row. */
+function ColorRow({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}): React.ReactElement {
+  return (
+    <div className="fg">
+      <label>{label}</label>
+      <div className="colorrow">
+        <input
+          type="color"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          aria-label={`${label} colour picker`}
+        />
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          pattern="^#[0-9a-fA-F]{6}$"
+          maxLength={7}
+          aria-label={`${label} colour hex`}
+        />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Dark-console brand editor. Fully controlled: it renders the parent's `draft`
+ * and reports every change up via `onChange`, so the parent page can mirror the
+ * same draft into the live preview pane without any network round-trips.
+ */
+export function BrandForm({
+  draft,
+  onChange,
+  onLogoFile,
+  apiKey,
+  onApiKeyChange,
+}: BrandFormProps): React.ReactElement {
+  const displayFonts = useMemo(
+    () =>
+      Object.entries(SUPPORTED_BRAND_FONTS)
+        .filter(([, f]) => f.category === "display" || f.category === "both")
+        .map(([name]) => name),
+    []
+  );
+  const bodyFonts = useMemo(
+    () =>
+      Object.entries(SUPPORTED_BRAND_FONTS)
+        .filter(([, f]) => f.category === "body" || f.category === "both")
+        .map(([name]) => name),
+    []
   );
 
-  // Event feed state
-  const [eventFeedType, setEventFeedType] = useState<"anchor_management" | "baronshub" | "none">(
-    brand?.event_feed_type ?? "none"
-  );
-  const [eventFeedBaseUrl, setEventFeedBaseUrl] = useState(brand?.event_feed_base_url ?? "");
-  const [eventFeedVenueId, setEventFeedVenueId] = useState(brand?.event_feed_venue_id ?? "");
-  const [eventFeedApiKey, setEventFeedApiKey] = useState("");
-  const [eventFeedApiKeyTouched, setEventFeedApiKeyTouched] = useState(false);
+  const feedDisabled = draft.eventFeedType === "none";
 
-  // Logo upload state
-  const [logoDarkFile, setLogoDarkFile] = useState<File | null>(null);
-  const [logoLightFile, setLogoLightFile] = useState<File | null>(null);
-  const [logoDarkPreview, setLogoDarkPreview] = useState(
-    (brand as Brand & { logo_dark_public_url?: string })?.logo_dark_public_url ?? brand?.logo_dark_url ?? ""
-  );
-  const [logoLightPreview, setLogoLightPreview] = useState(
-    (brand as Brand & { logo_light_public_url?: string })?.logo_light_public_url ?? brand?.logo_light_url ?? ""
-  );
-
-  // UI state
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-
-  function addQrItem(): void {
-    if (qrItems.length >= 4) return;
-    setQrItems([...qrItems, { label: "", url: "" }]);
-  }
-
-  function removeQrItem(index: number): void {
-    setQrItems(qrItems.filter((_, i) => i !== index));
-  }
-
-  function updateQrItem(index: number, field: "label" | "url", value: string): void {
-    const updated = [...qrItems];
-    updated[index] = { ...updated[index], [field]: value };
-    setQrItems(updated);
-  }
-
-  function handleLogoSelect(slot: "dark" | "light", file: File | null): void {
-    if (!file) return;
-    if (slot === "dark") {
-      setLogoDarkFile(file);
-      setLogoDarkPreview(URL.createObjectURL(file));
-    } else {
-      setLogoLightFile(file);
-      setLogoLightPreview(URL.createObjectURL(file));
-    }
-  }
-
-  async function uploadLogo(brandId: string, slot: "dark" | "light", file: File): Promise<void> {
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("slot", `logo-${slot}`);
-    const res = await fetch(`/api/brands/${brandId}/logo`, {
-      method: "POST",
-      body: formData,
+  function updateQr(index: number, patch: Partial<QrItem>): void {
+    onChange({
+      qrItems: draft.qrItems.map((q, i) => (i === index ? { ...q, ...patch } : q)),
     });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw new Error((data as { error?: string }).error || `Failed to upload ${slot} logo.`);
-    }
-  }
-
-  async function handleSave(): Promise<void> {
-    setError("");
-    setSuccess("");
-
-    if (!name.trim()) {
-      setError("Brand name is required.");
-      return;
-    }
-
-    if (eventFeedType !== "none" && eventFeedType !== "anchor_management") {
-      if (!eventFeedBaseUrl.trim()) {
-        setError("API base URL is required when an event feed is configured.");
-        return;
-      }
-      if (!brand?.event_feed_has_key && !eventFeedApiKey.trim()) {
-        setError("API key is required for new event feed configurations.");
-        return;
-      }
-    }
-
-    setSaving(true);
-    try {
-      // Filter out empty QR items
-      const validQrItems = qrItems.filter((item) => item.label.trim() && item.url.trim());
-
-      const payload: BrandInput = {
-        name: name.trim(),
-        is_default: isDefault,
-        logo_dark_url: brand?.logo_dark_url ?? "pending-upload",
-        logo_light_url: brand?.logo_light_url ?? "pending-upload",
-        color_primary: colorPrimary,
-        color_primary_light: colorPrimaryLight,
-        color_accent: colorAccent,
-        color_accent_light: colorAccentLight,
-        font_family: fontFamily || null,
-        break_message: breakMessage.trim() || null,
-        end_message: endMessage.trim() || null,
-        website_url: websiteUrl.trim() || null,
-        qr_items: validQrItems.length > 0 ? validQrItems : null,
-        event_feed_type: eventFeedType,
-        event_feed_base_url: eventFeedType !== "none" ? (eventFeedBaseUrl.trim() || null) : null,
-        event_feed_venue_id: eventFeedType !== "none" ? (eventFeedVenueId.trim() || null) : null,
-      };
-
-      // Build body with optional API key (outside Zod schema for security)
-      const body: Record<string, unknown> = { ...payload };
-      if (eventFeedType !== "none" && eventFeedApiKey.trim()) {
-        body.event_feed_api_key = eventFeedApiKey.trim();
-      }
-
-      let savedBrand: Brand;
-
-      if (isNew) {
-        // Create brand
-        const res = await fetch("/api/brands", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error((data as { error?: string }).error || "Failed to create brand.");
-        }
-        savedBrand = await res.json();
-      } else {
-        // Update brand
-        const res = await fetch(`/api/brands/${brand.id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error((data as { error?: string }).error || "Failed to update brand.");
-        }
-        savedBrand = await res.json();
-      }
-
-      // Upload logos if selected
-      if (logoDarkFile) {
-        await uploadLogo(savedBrand.id, "dark", logoDarkFile);
-      }
-      if (logoLightFile) {
-        await uploadLogo(savedBrand.id, "light", logoLightFile);
-      }
-
-      // Re-fetch the brand to get updated logo URLs after upload
-      if (logoDarkFile || logoLightFile) {
-        const refreshRes = await fetch(`/api/brands/${savedBrand.id}`);
-        if (refreshRes.ok) {
-          savedBrand = await refreshRes.json();
-          const refreshed = savedBrand as Brand & { logo_dark_public_url?: string; logo_light_public_url?: string };
-          setLogoDarkPreview(refreshed.logo_dark_public_url ?? refreshed.logo_dark_url);
-          setLogoLightPreview(refreshed.logo_light_public_url ?? refreshed.logo_light_url);
-          setLogoDarkFile(null);
-          setLogoLightFile(null);
-        }
-      }
-
-      if (isNew) {
-        // Redirect to the edit page for the newly created brand
-        router.push(`/brands/${savedBrand.id}/edit`);
-      } else {
-        setSuccess("Brand saved successfully.");
-        onSaved?.(savedBrand);
-      }
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Failed to save brand.";
-      setError(message);
-    } finally {
-      setSaving(false);
-    }
   }
 
   return (
-    <div className="space-y-4">
-      {error ? <Notice variant="error">{error}</Notice> : null}
-      {success ? <Notice variant="success">{success}</Notice> : null}
+    <>
+      <div className="panel">
+        <h2>Brand Details</h2>
+        <div className="form-grid">
+          <Field label="Venue name" span2>
+            <input
+              value={draft.name}
+              onChange={(e) => onChange({ name: e.target.value })}
+              placeholder="e.g. The Anchor"
+              maxLength={100}
+            />
+          </Field>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left column: Name, Colours, Font */}
-        <div className="space-y-4">
-          <Card>
-            <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-4">
-              Brand Identity
-            </h2>
-
-            {/* Brand Name */}
-            <label className="block mb-4">
-              <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
-                Brand Name *
-              </span>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. The Anchor Pub"
-                className="mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm
-                  focus:outline-none focus:ring-2 focus:ring-brand-gold focus:border-brand-gold"
-                required
-              />
-            </label>
-
-            {/* Colour Pickers */}
-            <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">
-              Brand Colours
-            </h3>
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              {COLOUR_FIELDS.map(({ key, label }) => {
-                const value =
-                  key === "color_primary" ? colorPrimary :
-                  key === "color_primary_light" ? colorPrimaryLight :
-                  key === "color_accent" ? colorAccent :
-                  colorAccentLight;
-                const setter =
-                  key === "color_primary" ? setColorPrimary :
-                  key === "color_primary_light" ? setColorPrimaryLight :
-                  key === "color_accent" ? setColorAccent :
-                  setColorAccentLight;
-
-                return (
-                  <label key={key} className="block">
-                    <span className="text-xs text-slate-500">{label}</span>
-                    <div className="flex items-center gap-2 mt-1">
-                      <input
-                        type="color"
-                        value={value}
-                        onChange={(e) => setter(e.target.value)}
-                        className="w-10 h-10 rounded-lg border border-slate-300 cursor-pointer p-0.5"
-                      />
-                      <input
-                        type="text"
-                        value={value}
-                        onChange={(e) => setter(e.target.value)}
-                        className="flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-xs font-mono
-                          focus:outline-none focus:ring-2 focus:ring-brand-gold focus:border-brand-gold"
-                        pattern="^#[0-9a-fA-F]{6}$"
-                        maxLength={7}
-                      />
-                    </div>
-                  </label>
-                );
-              })}
-            </div>
-
-            {/* Font Family */}
-            <label className="block">
-              <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
-                Font Family
-              </span>
-              <select
-                value={fontFamily}
-                onChange={(e) => setFontFamily(e.target.value)}
-                className="mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm
-                  focus:outline-none focus:ring-2 focus:ring-brand-gold focus:border-brand-gold"
-              >
-                {FONT_OPTIONS.map((font) => (
-                  <option key={font} value={font}>
-                    {font}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </Card>
-        </div>
-
-        {/* Right column: Logos, Website, QR Items, Messages */}
-        <div className="space-y-4">
-          {/* Logo uploads */}
-          <Card>
-            <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-4">
-              Logos
-            </h2>
-
-            <div className="grid grid-cols-2 gap-4">
-              {/* Dark background logo */}
-              <div>
-                <span className="text-xs text-slate-500 block mb-1">
-                  Logo (Dark Background)
-                </span>
-                <div
-                  className="relative rounded-xl border-2 border-dashed border-slate-300 p-4 text-center
-                    hover:border-brand-gold transition-colors cursor-pointer min-h-[100px] flex items-center justify-center"
-                  style={{ backgroundColor: colorPrimary }}
-                  onClick={() => document.getElementById("logo-dark-input")?.click()}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      document.getElementById("logo-dark-input")?.click();
-                    }
-                  }}
-                >
-                  {logoDarkPreview && logoDarkPreview !== "pending-upload" ? (
-                    /* eslint-disable-next-line @next/next/no-img-element */
-                    <img
-                      src={logoDarkPreview}
-                      alt="Dark background logo"
-                      className="max-h-16 w-auto object-contain"
-                    />
-                  ) : (
-                    <span className="text-white/60 text-xs">Click to upload</span>
-                  )}
-                </div>
-                <input
-                  id="logo-dark-input"
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  className="hidden"
-                  onChange={(e) => handleLogoSelect("dark", e.target.files?.[0] ?? null)}
+          <Field
+            label="Logo for dark screens"
+            help="Shown on the TV display and host console (light / white logo)"
+          >
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              onChange={(e) => onLogoFile("logo-dark", e.target.files?.[0] ?? null)}
+            />
+            {draft.logoDarkPreview ? (
+              <div style={{ ...THUMB_STYLE, background: draft.colorPrimary }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={draft.logoDarkPreview}
+                  alt="Dark-screen logo preview"
+                  style={THUMB_IMG_STYLE}
                 />
               </div>
+            ) : null}
+          </Field>
 
-              {/* Light background logo */}
-              <div>
-                <span className="text-xs text-slate-500 block mb-1">
-                  Logo (Light Background)
-                </span>
-                <div
-                  className="relative rounded-xl border-2 border-dashed border-slate-300 p-4 text-center
-                    hover:border-brand-gold transition-colors cursor-pointer min-h-[100px] flex items-center justify-center"
-                  style={{ backgroundColor: "#f8fafc" }}
-                  onClick={() => document.getElementById("logo-light-input")?.click()}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      document.getElementById("logo-light-input")?.click();
-                    }
-                  }}
-                >
-                  {logoLightPreview && logoLightPreview !== "pending-upload" ? (
-                    /* eslint-disable-next-line @next/next/no-img-element */
-                    <img
-                      src={logoLightPreview}
-                      alt="Light background logo"
-                      className="max-h-16 w-auto object-contain"
-                    />
-                  ) : (
-                    <span className="text-slate-400 text-xs">Click to upload</span>
-                  )}
-                </div>
-                <input
-                  id="logo-light-input"
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  className="hidden"
-                  onChange={(e) => handleLogoSelect("light", e.target.files?.[0] ?? null)}
+          <Field
+            label="Logo for light / print"
+            help="Used on the bingo cards and run sheet (dark / black logo)"
+          >
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              onChange={(e) => onLogoFile("logo-light", e.target.files?.[0] ?? null)}
+            />
+            {draft.logoLightPreview ? (
+              <div style={{ ...THUMB_STYLE, background: "#f8fafc" }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={draft.logoLightPreview}
+                  alt="Light / print logo preview"
+                  style={THUMB_IMG_STYLE}
                 />
               </div>
-            </div>
-          </Card>
+            ) : null}
+          </Field>
 
-          {/* Website URL */}
-          <Card>
-            <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-4">
-              Website & QR Codes
-            </h2>
+          <div
+            className="fg span2"
+            style={{ flexDirection: "row", alignItems: "center", gap: 12 }}
+          >
+            <button
+              type="button"
+              className={`hbtn ${draft.isDefault ? "hbtn--on" : ""}`}
+              style={{ minHeight: 40 }}
+              onClick={() => onChange({ isDefault: true })}
+              disabled={draft.isDefault}
+            >
+              {draft.isDefault ? "★ Default venue" : "Set as default venue"}
+            </button>
+            <span className="help">Pre-selected when creating a new game.</span>
+          </div>
 
-            <label className="block mb-4">
-              <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
-                Website URL
-              </span>
-              <input
-                type="url"
-                value={websiteUrl}
-                onChange={(e) => setWebsiteUrl(e.target.value)}
-                placeholder="https://example.com"
-                className="mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm
-                  focus:outline-none focus:ring-2 focus:ring-brand-gold focus:border-brand-gold"
-              />
-            </label>
+          <ColorRow
+            label="Primary"
+            value={draft.colorPrimary}
+            onChange={(v) => onChange({ colorPrimary: v })}
+          />
+          <ColorRow
+            label="Primary light"
+            value={draft.colorPrimaryLight}
+            onChange={(v) => onChange({ colorPrimaryLight: v })}
+          />
+          <ColorRow
+            label="Accent"
+            value={draft.colorAccent}
+            onChange={(v) => onChange({ colorAccent: v })}
+          />
+          <ColorRow
+            label="Accent light"
+            value={draft.colorAccentLight}
+            onChange={(v) => onChange({ colorAccentLight: v })}
+          />
 
-            {/* QR Items */}
-            <div className="mb-2">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
-                  QR Code Items
-                </span>
-                {qrItems.length < 4 && (
-                  <Button variant="secondary" size="sm" onClick={addQrItem}>
-                    + Add
-                  </Button>
-                )}
+          <Field label="Display font" help="Headlines and big numbers">
+            <select
+              value={draft.fontDisplay}
+              onChange={(e) => onChange({ fontDisplay: e.target.value })}
+            >
+              {displayFonts.map((font) => (
+                <option key={font} value={font}>
+                  {font}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <Field label="Body font" help="Supporting copy and labels">
+            <select
+              value={draft.fontBody}
+              onChange={(e) => onChange({ fontBody: e.target.value })}
+            >
+              {bodyFonts.map((font) => (
+                <option key={font} value={font}>
+                  {font}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <Field
+            label="Event logo (gold)"
+            help="WEBP only — the gold lockup used on the event pack"
+            span2
+          >
+            <input
+              type="file"
+              accept="image/webp"
+              onChange={(e) => onLogoFile("event-logo", e.target.files?.[0] ?? null)}
+            />
+            {draft.eventLogoPreview ? (
+              <div style={{ ...THUMB_STYLE, background: draft.colorPrimary }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={draft.eventLogoPreview}
+                  alt="Event logo preview"
+                  style={THUMB_IMG_STYLE}
+                />
               </div>
-              {qrItems.length === 0 ? (
-                <p className="text-xs text-slate-400">No QR items added.</p>
-              ) : (
-                <div className="space-y-2">
-                  {qrItems.map((item, index) => (
-                    <div key={index} className="flex gap-2 items-start">
-                      <input
-                        type="text"
-                        value={item.label}
-                        onChange={(e) => updateQrItem(index, "label", e.target.value)}
-                        placeholder="Label"
-                        className="flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-xs
-                          focus:outline-none focus:ring-2 focus:ring-brand-gold focus:border-brand-gold"
-                        maxLength={50}
-                      />
-                      <input
-                        type="url"
-                        value={item.url}
-                        onChange={(e) => updateQrItem(index, "url", e.target.value)}
-                        placeholder="https://..."
-                        className="flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-xs
-                          focus:outline-none focus:ring-2 focus:ring-brand-gold focus:border-brand-gold"
-                      />
-                      <Button
-                        variant="danger"
-                        size="sm"
-                        onClick={() => removeQrItem(index)}
-                        aria-label={`Remove QR item ${index + 1}`}
-                      >
-                        X
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </Card>
-
-          {/* Messages */}
-          <Card>
-            <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-4">
-              Screen Messages
-            </h2>
-
-            <label className="block mb-4">
-              <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
-                Break Screen Message
-              </span>
-              <textarea
-                value={breakMessage}
-                onChange={(e) => setBreakMessage(e.target.value)}
-                placeholder="Message displayed during breaks..."
-                rows={3}
-                maxLength={500}
-                className="mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm resize-y
-                  focus:outline-none focus:ring-2 focus:ring-brand-gold focus:border-brand-gold"
-              />
-            </label>
-
-            <label className="block">
-              <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
-                End Screen Message
-              </span>
-              <textarea
-                value={endMessage}
-                onChange={(e) => setEndMessage(e.target.value)}
-                placeholder="Message displayed when game ends..."
-                rows={3}
-                maxLength={500}
-                className="mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm resize-y
-                  focus:outline-none focus:ring-2 focus:ring-brand-gold focus:border-brand-gold"
-              />
-            </label>
-          </Card>
-
-          {/* Event Feed Configuration */}
-          <Card>
-            <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-4">
-              Event Feed Configuration
-            </h2>
-
-            <label className="block mb-4">
-              <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
-                Feed Type
-              </span>
-              <select
-                value={eventFeedType}
-                onChange={(e) => setEventFeedType(e.target.value as "anchor_management" | "baronshub" | "none")}
-                className="mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm
-                  focus:outline-none focus:ring-2 focus:ring-brand-gold focus:border-brand-gold"
-              >
-                <option value="none">None</option>
-                <option value="anchor_management">Anchor Management API</option>
-                <option value="baronshub">BaronsHub API</option>
-              </select>
-            </label>
-
-            {eventFeedType !== "none" && (
-              <>
-                <label className="block mb-4">
-                  <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
-                    API Base URL *
-                  </span>
-                  <input
-                    type="url"
-                    value={eventFeedBaseUrl}
-                    onChange={(e) => setEventFeedBaseUrl(e.target.value)}
-                    placeholder="https://api.example.com"
-                    className="mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm
-                      focus:outline-none focus:ring-2 focus:ring-brand-gold focus:border-brand-gold"
-                    required
-                  />
-                </label>
-
-                {eventFeedType === "baronshub" && (
-                  <label className="block mb-4">
-                    <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
-                      Venue ID
-                    </span>
-                    <input
-                      type="text"
-                      value={eventFeedVenueId}
-                      onChange={(e) => setEventFeedVenueId(e.target.value)}
-                      placeholder="Leave blank for all venues"
-                      className="mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm
-                        focus:outline-none focus:ring-2 focus:ring-brand-gold focus:border-brand-gold"
-                    />
-                    <p className="mt-1 text-xs text-slate-400">
-                      UUID of the venue to filter events for. Leave blank to show events from all venues.
-                    </p>
-                  </label>
-                )}
-
-                <label className="block">
-                  <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
-                    API Key {!brand?.event_feed_has_key && "*"}
-                  </span>
-                  <input
-                    type="password"
-                    value={eventFeedApiKey}
-                    onChange={(e) => {
-                      setEventFeedApiKey(e.target.value);
-                      setEventFeedApiKeyTouched(true);
-                    }}
-                    placeholder={brand?.event_feed_has_key ? "Key stored securely" : "Enter API key"}
-                    className="mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm
-                      focus:outline-none focus:ring-2 focus:ring-brand-gold focus:border-brand-gold"
-                  />
-                  {brand?.event_feed_has_key && !eventFeedApiKeyTouched && (
-                    <p className="mt-1 text-xs text-slate-400">
-                      Leave blank to keep the existing key.
-                    </p>
-                  )}
-                </label>
-              </>
-            )}
-          </Card>
+            ) : null}
+          </Field>
         </div>
       </div>
 
-      {/* Footer: Default checkbox + Save/Cancel */}
-      <Card>
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={isDefault}
-              onChange={(e) => setIsDefault(e.target.checked)}
-              className="w-4 h-4 rounded border-slate-300 text-brand-gold focus:ring-brand-gold"
+      <div className="panel">
+        <h2>Messaging</h2>
+        <div className="form-grid">
+          <Field label="Break message" span2>
+            <textarea
+              value={draft.breakMessage}
+              onChange={(e) => onChange({ breakMessage: e.target.value })}
+              placeholder="Shown on the break screen…"
+              maxLength={500}
+              rows={3}
             />
-            <span className="text-sm text-slate-700">Set as default brand</span>
-          </label>
+          </Field>
+          <Field label="End message" span2>
+            <textarea
+              value={draft.endMessage}
+              onChange={(e) => onChange({ endMessage: e.target.value })}
+              placeholder="Shown when the game ends…"
+              maxLength={500}
+              rows={3}
+            />
+          </Field>
+        </div>
+      </div>
 
-          <div className="flex gap-2">
-            <Button variant="secondary" onClick={() => router.push("/brands")}>
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              onClick={() => void handleSave()}
-              disabled={saving}
+      <div className="panel">
+        <h2>Website &amp; Links</h2>
+        <div className="form-grid">
+          <Field label="Website" span2>
+            <input
+              type="url"
+              value={draft.websiteUrl}
+              onChange={(e) => onChange({ websiteUrl: e.target.value })}
+              placeholder="https://…"
+              maxLength={200}
+            />
+          </Field>
+        </div>
+      </div>
+
+      <div className="panel">
+        <h2>
+          QR Links <span className="meta">on the thank-you screen · up to 4</span>
+        </h2>
+        <p className="hint-small" style={{ marginTop: 0 }}>
+          Label a link with “review” for the Review card, or “book”, “reserve” or
+          “event” for the Book Again card.
+        </p>
+        {draft.qrItems.length === 0 ? (
+          <p className="hint-small">No QR links added.</p>
+        ) : (
+          draft.qrItems.map((q, i) => (
+            <div key={i} style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+              <input
+                style={{
+                  flex: "0 0 36%",
+                  background: "rgb(0 0 0 / .3)",
+                  border: "1px solid rgb(255 255 255 / .16)",
+                  borderRadius: 11,
+                  color: "var(--cream)",
+                  fontFamily: "inherit",
+                  fontSize: 15,
+                  padding: "11px 13px",
+                }}
+                value={q.label}
+                onChange={(e) => updateQr(i, { label: e.target.value })}
+                placeholder="Label"
+                maxLength={50}
+                aria-label={`QR link ${i + 1} label`}
+              />
+              <input
+                style={{
+                  flex: 1,
+                  background: "rgb(0 0 0 / .3)",
+                  border: "1px solid rgb(255 255 255 / .16)",
+                  borderRadius: 11,
+                  color: "var(--cream)",
+                  fontFamily: "inherit",
+                  fontSize: 15,
+                  padding: "11px 13px",
+                }}
+                value={q.url}
+                onChange={(e) => updateQr(i, { url: e.target.value })}
+                placeholder="https://…"
+                aria-label={`QR link ${i + 1} URL`}
+              />
+              <button
+                type="button"
+                className="hbtn iconbtn hbtn--danger"
+                title="Remove"
+                aria-label={`Remove QR link ${i + 1}`}
+                onClick={() =>
+                  onChange({ qrItems: draft.qrItems.filter((_, j) => j !== i) })
+                }
+              >
+                ✕
+              </button>
+            </div>
+          ))
+        )}
+        {draft.qrItems.length < 4 ? (
+          <button
+            type="button"
+            className="hbtn"
+            onClick={() => onChange({ qrItems: [...draft.qrItems, { label: "", url: "" }] })}
+          >
+            + Add QR link
+          </button>
+        ) : null}
+      </div>
+
+      <div className="panel">
+        <h2>
+          Event Feed <span className="meta">auto-fills upcoming events</span>
+        </h2>
+        <div className="form-grid">
+          <Field label="Provider">
+            <select
+              value={draft.eventFeedType}
+              onChange={(e) =>
+                onChange({
+                  eventFeedType: e.target.value as EditableBrand["eventFeedType"],
+                })
+              }
             >
-              {saving ? "Saving..." : isNew ? "Create Brand" : "Save Brand"}
-            </Button>
+              <option value="none">None</option>
+              <option value="anchor_management">Anchor Management</option>
+              <option value="baronshub">Baron&apos;s Hub</option>
+            </select>
+          </Field>
+          <Field label="Venue ID">
+            <input
+              value={draft.eventFeedVenueId}
+              onChange={(e) => onChange({ eventFeedVenueId: e.target.value })}
+              placeholder="Leave blank for all venues"
+              disabled={feedDisabled}
+              maxLength={100}
+            />
+          </Field>
+          <Field label="API base URL" span2>
+            <input
+              type="url"
+              value={draft.eventFeedBaseUrl}
+              onChange={(e) => onChange({ eventFeedBaseUrl: e.target.value })}
+              placeholder="https://…"
+              disabled={feedDisabled}
+            />
+          </Field>
+          <div
+            className="fg span2"
+            style={{ flexDirection: "row", alignItems: "center", gap: 12 }}
+          >
+            <span className={`statustag ${draft.eventFeedHasKey ? "ready" : "draft"}`}>
+              {draft.eventFeedHasKey ? "API key saved" : "No API key"}
+            </span>
+            <input
+              type="password"
+              value={apiKey}
+              onChange={(e) => onApiKeyChange(e.target.value)}
+              placeholder={
+                draft.eventFeedHasKey ? "Leave blank to keep existing" : "Enter API key"
+              }
+              disabled={feedDisabled}
+              style={{
+                flex: 1,
+                background: "rgb(0 0 0 / .3)",
+                border: "1px solid rgb(255 255 255 / .16)",
+                borderRadius: 11,
+                color: "var(--cream)",
+                fontFamily: "inherit",
+                fontSize: 15,
+                padding: "11px 13px",
+              }}
+              aria-label="Event feed API key"
+            />
           </div>
         </div>
-      </Card>
-    </div>
+      </div>
+    </>
   );
 }
