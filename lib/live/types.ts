@@ -199,7 +199,7 @@ export type LiveRuntimeState = {
   isIntroSong: boolean;
   /** Flips true after first track change post-intro. Persisted in localStorage. Prevents re-trigger after refresh. */
   introPlayed: boolean;
-  /** Current run-of-show screen on the TV. Always populated by the factory/validator; optional for back-compat with older states. */
+  /** Current run-of-show screen on the TV. Omitted unless the host explicitly sets it; when absent the render layer derives a screen (deriveScreenId). */
   screenId?: ScreenId;
   /** Live content snapshot pushed to the TV (spec A3), overrides session content. */
   content?: Partial<Record<ContentKey, string>>;
