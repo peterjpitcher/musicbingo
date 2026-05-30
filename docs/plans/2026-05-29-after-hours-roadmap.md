@@ -12,7 +12,7 @@ Status: ✅ done · ▶ in progress · ⬜ not started · ⛔ blocked/gated
 | 1b | **Component library**: `components/motifs/*` + `components/screens/*` (24 presentational components) ported from the bundle, rendered in isolation | 0, 1a | ✅ done (24 components, reviewed) | [phase-1b-component-library.md](2026-05-29-after-hours-phase-1b-component-library.md) |
 | 2 | **TV Display** (`/guest/[sessionId]`) rebuilt as a `screenId`-driven renderer over the existing sync engine | 1a, 1b | ✅ done (reviewed; e2e 6/7, Flow 3 pre-existing) | executed inline (commits `7e7d36b`..`02748d6`) |
 | 3 | **Host Controller** (`/host/[sessionId]`) console: preview + run-of-show + Now-Playing/Game-Flow/Timing/Content/Playlist panels + variant controls | 1a, 1b, 2 | ✅ done (engine preserved verbatim; reviewed; e2e 6/7) | executed inline (commits `29dd56e`..HEAD) |
-| 4 | **Setup & Manage**: `/host` dashboard + `/prep` wizard restyle (+ derived readiness, edit-mode hydration, missing-song resolution route) | 0 (1a for content defaults) | 🟡 restyle + derived-status + Duplicate/Export done (e2e 6/7); **edit-mode hydration + missing-song resolve route remaining** | inline (commits `cc44631`..`87c5a6c`) |
+| 4 | **Setup & Manage**: `/host` dashboard + `/prep` wizard restyle (+ derived readiness, edit-mode hydration, missing-song resolution route) | 0 (1a for content defaults) | ✅ done — restyle + derived status + Duplicate/Export + edit-mode hydration + resolve-missing route/UI; reviewed (2 edit-mode data-loss bugs caught + fixed); e2e 6/7 | inline (commits `cc44631`..HEAD) |
 | 5 | **Brands & Venues** three-pane editor + live preview + font/event-logo UI | 0 | ⬜ | tbd |
 | 6 | **Print/PDF**: `@pdf-lib/fontkit`, cards + What's-On restyle (≤3 events), new run-sheet PDF, `/api/generate` output modes | 0 | ⬜ | tbd |
 
@@ -29,6 +29,7 @@ Status: ✅ done · ▶ in progress · ⬜ not started · ⛔ blocked/gated
 - **Interim UI (CR-2):** Phase 0 darkened shared primitives/body; `/host`, `/prep`, `/brands` look transitional until Phases 4–5. **Don't deploy Phase 0 standalone to prod** — land surface phases first. As each admin page is rebuilt, drop `AppHeader variant="light"`.
 - **Phase 5:** enforce `SUPPORTED_BRAND_FONTS` category on brand font fields (CR-4); store WEBP with `.webp` ext (PRE-5); once `BrandForm` writes the new fields, the migration must already be live.
 - **Phase 6:** decide whether the run-sheet PDF supersedes the DOCX clipboard.
+- **Phase 4 advisories (minor, deferred):** resolve-missing maps Spotify 403/404 to opaque text (friendlier copy later); resolve is non-idempotent (re-POST duplicates a track — UI disables the button during the call, so low risk); a few `(current as any).input` casts in `StepGenerateConnect.tsx` (status-guarded, runtime-safe).
 - **Security backlog (pre-existing, separate tasks):** logo path-traversal in `brandStorage.ts` (task chip raised); default-brand non-atomic switch (PRE-2); `event_feed_base_url` should use HTTPS-only schema (PRE-3). See [Codex review](../../tasks/codex-qa-review/2026-05-29-after-hours-phase-0-adversarial-review.md).
 
 ## Invariants (spec §3, A1–A10)
