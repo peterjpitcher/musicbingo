@@ -14,14 +14,20 @@ export async function uploadBrandLogo(
   fileBuffer: Buffer,
   mimeType: string
 ): Promise<string> {
-  if (!ALLOWED_MIME_TYPES.includes(mimeType)) {
-    throw new Error(`Invalid file type: ${mimeType}. Must be PNG or JPEG.`);
+  // The event logo is rendered as the gold lockup on the printed event pack and
+  // overlaid on screens, so it must be a transparent WEBP — reject anything else.
+  if (slot === "event-logo") {
+    if (mimeType !== "image/webp") {
+      throw new Error(`Invalid file type for event logo: ${mimeType}. Must be WEBP.`);
+    }
+  } else if (!ALLOWED_MIME_TYPES.includes(mimeType)) {
+    throw new Error(`Invalid file type: ${mimeType}. Must be PNG, JPEG, or WEBP.`);
   }
   if (fileBuffer.byteLength > MAX_FILE_SIZE) {
     throw new Error(`File too large: ${(fileBuffer.byteLength / 1024 / 1024).toFixed(1)}MB. Max 2MB.`);
   }
 
-  const ext = mimeType === "image/png" ? "png" : "jpg";
+  const ext = mimeType === "image/png" ? "png" : mimeType === "image/webp" ? "webp" : "jpg";
   const objectKey = `${brandId}/${slot}.${ext}`;
   const supabase = getSupabaseClient();
 

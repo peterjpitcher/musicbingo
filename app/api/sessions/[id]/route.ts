@@ -17,11 +17,16 @@ export async function GET(
       return NextResponse.json({ error: "Session not found." }, { status: 404 });
     }
     const brand = await resolveBrandConfig(session.brandId ?? null);
-    // Resolve logo URLs server-side so client components can use them directly
+    // Resolve logo URLs server-side so client components (screens) can use them
+    // directly. event_logo_url is a Storage object key too — the Title screen
+    // binds it raw as an <img src>, so it must be resolved here as well.
     const brandWithUrls = brand ? {
       ...brand,
       logo_dark_url: getBrandLogoPublicUrl(brand.logo_dark_url),
       logo_light_url: getBrandLogoPublicUrl(brand.logo_light_url),
+      event_logo_url: brand.event_logo_url
+        ? getBrandLogoPublicUrl(brand.event_logo_url)
+        : null,
     } : null;
     return NextResponse.json({ ...session, brand: brandWithUrls }, { headers: { "Cache-Control": "no-store" } });
   } catch (err: any) {

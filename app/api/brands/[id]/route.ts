@@ -8,11 +8,22 @@ import { validateEventFeedUrl } from "@/lib/brands/validation";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
-function resolveLogoUrls(brand: Brand): Brand & { logo_dark_public_url: string; logo_light_public_url: string } {
+function resolveLogoUrls(
+  brand: Brand
+): Brand & {
+  logo_dark_public_url: string;
+  logo_light_public_url: string;
+  event_logo_public_url: string | null;
+} {
   return {
     ...brand,
     logo_dark_public_url: getBrandLogoPublicUrl(brand.logo_dark_url),
     logo_light_public_url: getBrandLogoPublicUrl(brand.logo_light_url),
+    // event_logo_url is a Storage object key; resolve it to a public URL so the
+    // editor thumbnail (and any consumer) gets a usable src instead of the key.
+    event_logo_public_url: brand.event_logo_url
+      ? getBrandLogoPublicUrl(brand.event_logo_url)
+      : null,
   };
 }
 
