@@ -13,12 +13,25 @@ export const eventFeedBaseUrlSchema = z.string().url().refine(
   { message: "Must be an HTTPS URL" }
 );
 
+/**
+ * A brand logo object key: a Supabase Storage key (e.g. "<brandId>/logo-dark.png")
+ * or a legacy "/public" path (e.g. "/logo.png"). Must not contain ".." — path
+ * traversal is rejected here as defence-in-depth alongside the filesystem
+ * confinement in brandStorage.ts.
+ */
+const logoUrlSchema = z
+  .string()
+  .min(1)
+  .refine((value) => !value.includes(".."), {
+    message: "Logo path must not contain '..'",
+  });
+
 export const brandSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1).max(100),
   is_default: z.boolean(),
-  logo_dark_url: z.string().min(1),
-  logo_light_url: z.string().min(1),
+  logo_dark_url: logoUrlSchema,
+  logo_light_url: logoUrlSchema,
   color_primary: HEX_COLOUR,
   color_primary_light: HEX_COLOUR,
   color_accent: HEX_COLOUR,
