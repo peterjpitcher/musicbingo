@@ -711,7 +711,9 @@ async function main() {
 
     await runFlow(flowResults, "Flow 6: Host and guest live screens sync with reveal progression", async () => {
       await flow6HostPage.goto(`${BASE_URL}/host/flow-live-session`, { waitUntil: "domcontentloaded" });
-      await flow6HostPage.getByRole("heading", { name: /Flow Live Session/i }).waitFor();
+      // The After Hours host console shows the session name in the top bar (not a heading).
+      await flow6HostPage.getByText(/Flow Live Session/i).first().waitFor({ timeout: 15_000 });
+      await flow6HostPage.getByRole("button", { name: "Start Game 1" }).waitFor({ timeout: 15_000 });
 
       await flow6GuestPage.goto(`${BASE_URL}/guest/flow-live-session`, { waitUntil: "domcontentloaded" });
       // The guest TV renders the run-of-show screens inside a full-bleed,
