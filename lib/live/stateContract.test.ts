@@ -55,4 +55,28 @@ describe("validateRuntimeState — screen/content/variant fields", () => {
     const out = validateRuntimeState(validRuntime({ screenId: "game2" }));
     expect(out!.screenId).toBe("game2");
   });
+  it("preserves the claim screenId (Bingo Claim screen)", () => {
+    const out = validateRuntimeState(validRuntime({ screenId: "claim" }));
+    expect(out!.screenId).toBe("claim");
+  });
+  it("carries lightweight playedTracks and drops malformed / id-less entries", () => {
+    const out = validateRuntimeState(validRuntime({
+      playedTracks: [
+        // Lighter records {trackId,title,artist}; extra fields are ignored.
+        { trackId: "t1", title: "Song A", artist: "Artist A", albumImageUrl: "x", progressMs: 9 },
+        "not-an-object",
+        { title: "No Id", artist: "Dropped" }, // missing trackId → dropped
+        { trackId: "t2", title: "Song B", artist: "Artist B" },
+      ],
+    }));
+    expect(out!.playedTracks).toHaveLength(2);
+    expect(out!.playedTracks!.map((t) => t.trackId)).toEqual(["t1", "t2"]);
+    expect(out!.playedTracks![0]).toEqual({ trackId: "t1", title: "Song A", artist: "Artist A" });
+    // Heavy snapshot fields are stripped from the stored record.
+    expect(out!.playedTracks![0]).not.toHaveProperty("albumImageUrl");
+  });
+  it("omits playedTracks when none are well-formed", () => {
+    const out = validateRuntimeState(validRuntime({ playedTracks: ["x", 1, null, { title: "no id" }] }));
+    expect(out!.playedTracks).toBeUndefined();
+  });
 });

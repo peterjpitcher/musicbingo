@@ -164,6 +164,18 @@ export type LiveTrackSnapshot = {
   isPlaying: boolean;
 };
 
+/**
+ * Minimal record of a played song for the Bingo Claim list. Deliberately lighter
+ * than `LiveTrackSnapshot` (no album art, progress or duration) because the whole
+ * `playedTracks` array rides every runtime broadcast + Supabase write, and the
+ * claim screen only ever shows the number, title and artist.
+ */
+export type PlayedTrack = {
+  trackId: string;
+  title: string;
+  artist: string;
+};
+
 export type LiveRevealState = {
   showAlbum: boolean;
   showTitle: boolean;
@@ -178,6 +190,13 @@ export type LiveRuntimeState = {
   activeGameNumber: 1 | 2 | null;
   spotifyControlAvailable: boolean;
   currentTrack: LiveTrackSnapshot | null;
+  /**
+   * Songs played so far in the active game, oldest first. Appended on each track
+   * change (deduped by trackId) and reset to [] when a game starts, so the Bingo
+   * Claim screen can list exactly the songs played this game for the host to
+   * validate a claim. Optional/back-compat: older runtimes omit it.
+   */
+  playedTracks?: PlayedTrack[];
   revealState: LiveRevealState;
   /** Normal-song reveal timing for this live run. Mirrored here so open guest screens receive timing changes. */
   revealConfig?: RevealConfig;
@@ -249,6 +268,7 @@ export function makeEmptyRuntimeState(sessionId: string): LiveRuntimeState {
     activeGameNumber: null,
     spotifyControlAvailable: true,
     currentTrack: null,
+    playedTracks: [],
     revealState: {
       showAlbum: false,
       showTitle: false,

@@ -5,7 +5,7 @@
  */
 export type ScreenId =
   | "welcome" | "order" | "quiz1" | "title" | "rules" | "dance"
-  | "game1" | "break" | "quiz2" | "sing" | "game2" | "winners" | "thanks"
+  | "game1" | "claim" | "break" | "quiz2" | "sing" | "game2" | "winners" | "thanks"
   | "sys-load" | "sys-none";
 
 export interface RunOfShowStep {
@@ -22,6 +22,14 @@ export interface RunOfShowStep {
   play?: boolean;
   /** True when the screen offers A/B/C layout variants. */
   hasVariants?: boolean;
+  /**
+   * True for on-demand screens that are NOT part of the navigable show: they are
+   * triggered by a dedicated host action (e.g. the Bingo Claim button) rather
+   * than reached via Prev/Next, and are hidden from the host's run-of-show list.
+   * They remain valid, registered ScreenIds so the guest still renders them when
+   * `screenId` is set to one.
+   */
+  overlay?: boolean;
 }
 
 export const RUN_OF_SHOW: RunOfShowStep[] = [
@@ -38,12 +46,26 @@ export const RUN_OF_SHOW: RunOfShowStep[] = [
   { id: "game2", short: "Game 2", sub: "Music Bingo", game: 2, play: true },
   { id: "winners", short: "Winners", sub: "1st & wooden spoon" },
   { id: "thanks", short: "Thank You", sub: "Reviews / next event" },
+  // On-demand overlay — triggered by the host's Bingo Claim button on a shout,
+  // not reached via Prev/Next and hidden from the run-of-show list. Still a
+  // registered ScreenId so the guest renders it when screenId === "claim".
+  { id: "claim", short: "Bingo Claim", sub: "Songs played this game", overlay: true },
   // System screens — not part of the navigable show, rendered on state.
   { id: "sys-load", short: "⚙ Loading", sub: "Connecting" },
   { id: "sys-none", short: "⚙ No Session", sub: "Standing by" },
 ];
 
 const SCREEN_IDS = new Set<string>(RUN_OF_SHOW.map((s) => s.id));
+
+/**
+ * The navigable, displayable show steps: excludes system (`sys-*`) and on-demand
+ * `overlay` screens (e.g. Bingo Claim). This is the single source of truth for
+ * both the host's run-of-show list and Prev/Next stepping, so overlays never
+ * appear as numbered steps and Prev/Next skips straight over them.
+ */
+export const SHOW_STEPS: RunOfShowStep[] = RUN_OF_SHOW.filter(
+  (s) => !s.id.startsWith("sys-") && !s.overlay
+);
 
 export function isScreenId(value: unknown): value is ScreenId {
   return typeof value === "string" && SCREEN_IDS.has(value);

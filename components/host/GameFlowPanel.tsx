@@ -12,6 +12,14 @@ export interface GameFlowPanelProps {
   onResume: () => void;
   onEnd: () => void;
   onReset: () => void;
+  /** Show the Bingo Claim screen (lists this game's played songs on the TV). */
+  onClaim: () => void;
+  /** Return the TV from the claim screen back to the active game screen. */
+  onBackToGame: () => void;
+  /** Number of songs played this game, shown on the Bingo Claim button. */
+  claimCount: number;
+  /** True when the TV is currently showing the claim screen (toggles the affordance). */
+  claimActive: boolean;
 }
 
 /**
@@ -32,7 +40,15 @@ export function GameFlowPanel({
   onResume,
   onEnd,
   onReset,
+  onClaim,
+  onBackToGame,
+  claimCount,
+  claimActive,
 }: GameFlowPanelProps) {
+  // The claim controls only make sense while a game is live (or already showing
+  // the claim screen so the host can switch back).
+  const gameRunning = mode === 'running' && activeGame != null;
+  const showClaimRow = gameRunning || claimActive;
   return (
     <div className="panel">
       <h2>
@@ -70,6 +86,25 @@ export function GameFlowPanel({
               Start Game 2
             </button>
           </div>
+
+          {/* Bingo Claim row — only while a game is live. Switches the TV to the
+              claim screen (every song played this game) and back again. */}
+          {showClaimRow && (
+            <div className="btn-row" style={{ marginBottom: 10 }}>
+              {claimActive ? (
+                <button className="hbtn hbtn--go grow" onClick={onBackToGame}>
+                  {/* Fall back to a number-less label if the game ended while the
+                      claim screen was up (avoids a dangling "Back to Game "). */}
+                  ◀ Back to Game{activeGame ? ` ${activeGame}` : ''}
+                </button>
+              ) : (
+                <button className="hbtn hbtn--primary grow" onClick={onClaim}>
+                  🎙️ Bingo Claim
+                  {claimCount > 0 ? ` · ${claimCount} ${claimCount === 1 ? 'song' : 'songs'}` : ''}
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Footer row: break screen + end/reset */}
           <div className="btn-row">

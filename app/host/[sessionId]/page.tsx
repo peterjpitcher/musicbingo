@@ -20,7 +20,7 @@ import { PlaylistPanel } from "@/components/host/PlaylistPanel";
 import { SCREEN_REGISTRY } from "@/components/screens/registry";
 import { EditContext, type EditContextValue } from "@/components/motifs/EditContext";
 import { BrandProvider } from "@/components/brand/BrandProvider";
-import { RUN_OF_SHOW, normalizeScreenId, type ScreenId } from "@/lib/live/runOfShow";
+import { SHOW_STEPS, normalizeScreenId, type ScreenId } from "@/lib/live/runOfShow";
 import { deriveScreenId } from "@/lib/live/deriveScreen";
 import { getContent, type ContentKey } from "@/lib/live/content";
 import { DEFAULT_BRAND_CONFIG } from "@/lib/brands/defaultBrand";
@@ -438,11 +438,25 @@ export default function HostSessionControllerPage() {
           trackId: track?.trackId ?? null,
           advanceTriggeredForTrackId: prev.advanceTriggeredForTrackId,
         });
+
+        // Accumulate the now-playing song into the game's played list (oldest
+        // first) so the Bingo Claim screen can list it. Only on a genuine track
+        // change, only for tracks with a real id, and deduped so repeats/polls
+        // never add the same song twice. Stored as a minimal {trackId,title,
+        // artist} record to keep every runtime broadcast/write small. Reset
+        // happens in startGame().
+        const prevPlayed = prev.playedTracks ?? [];
+        const playedTracks =
+          trackChanged && track?.trackId && !prevPlayed.some((t) => t.trackId === track.trackId)
+            ? [...prevPlayed, { trackId: track.trackId, title: track.title, artist: track.artist }]
+            : prevPlayed;
+
         return {
           ...prev,
           mode: opts?.mode ?? prev.mode,
           spotifyControlAvailable: Boolean(payload.canControlPlayback),
           currentTrack: track,
+          playedTracks,
           revealState,
           revealConfig: prev.revealConfig ?? session.revealConfig,
           isChallengeSong,
@@ -738,6 +752,8 @@ export default function HostSessionControllerPage() {
         activeGameNumber: gameNumber,
         screenId: (gameNumber === 1 ? "game1" : "game2") as ScreenId,
         advanceTriggeredForTrackId: null,
+        // Fresh game → start a new played-songs list for the Bingo Claim screen.
+        playedTracks: [],
         isIntroSong: false,
         introPlayed: false,
       }));
@@ -749,6 +765,8 @@ export default function HostSessionControllerPage() {
         mode: "running",
         activeGameNumber: gameNumber,
         spotifyControlAvailable: false,
+        // Fresh game → start a new played-songs list for the Bingo Claim screen.
+        playedTracks: [],
         warningMessage: prev.warningMessage || "Manual host control mode active.",
       }));
       setNoticeVariant("warning");
@@ -926,10 +944,19 @@ export default function HostSessionControllerPage() {
   }
 
   // ---- Screen navigation (Change 2) ----
-  // SHOW screens = everything except sys-* entries
-  const SHOW_SCREENS = RUN_OF_SHOW.filter((s) => !s.id.startsWith("sys-"));
+  // The navigable show: excludes system (sys-*) and on-demand overlay screens
+  // (e.g. Bingo Claim), so Prev/Next and the run-of-show list skip over them.
+  const SHOW_SCREENS = SHOW_STEPS;
 
   function gotoScreen(id: ScreenId): void {
+    // Every path to the break screen — Prev/Next, the run-of-show list, or the
+    // dedicated button — must also enter break mode and start the break playlist
+    // (when one is configured and Spotify is controllable). openBreakScreen owns
+    // that; route break here so no path leaves the game silently advancing.
+    if (id === "break") {
+      openBreakScreen();
+      return;
+    }
     commitRuntime((prev) => ({ ...prev, screenId: id }));
   }
 
@@ -1391,6 +1418,10 @@ export default function HostSessionControllerPage() {
                 onStart={(n) => void startGame(n)}
                 onBreak={openBreakScreen}
                 onResume={resumeFromBreak}
+                onClaim={() => gotoScreen("claim")}
+                onBackToGame={() => gotoScreen((runtime.activeGameNumber === 2 ? "game2" : "game1") as ScreenId)}
+                claimCount={runtime.playedTracks?.length ?? 0}
+                claimActive={runtime.screenId === "claim"}
                 onEnd={() =>
                   commitRuntime((prev) => ({
                     ...prev,
@@ -1405,6 +1436,7 @@ export default function HostSessionControllerPage() {
                     screenId: "welcome" as ScreenId,
                     activeGameNumber: null,
                     currentTrack: null,
+                    playedTracks: [],
                     revealState: { showAlbum: false, showTitle: false, showArtist: false, shouldAdvance: false },
                     advanceTriggeredForTrackId: null,
                     isChallengeSong: false,

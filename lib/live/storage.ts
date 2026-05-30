@@ -3,6 +3,8 @@ import {
   type LiveControlLock,
   type LiveRuntimeState,
   type LiveSessionV1,
+  type LiveTrackSnapshot,
+  type PlayedTrack,
 } from "@/lib/live/types";
 import { asNumber, asString, isObject, validateLiveSession as _validateLiveSession, validateRevealConfig } from "@/lib/live/validate";
 import { isScreenId } from "@/lib/live/runOfShow";
@@ -122,6 +124,36 @@ export function importLiveSessionJson(rawJson: string): LiveSessionV1 {
   return session;
 }
 
+/** Coerces an unknown value into a well-formed track snapshot, or null. */
+function sanitizeTrackSnapshot(input: unknown): LiveTrackSnapshot | null {
+  if (!isObject(input)) return null;
+  return {
+    trackId: typeof input.trackId === "string" ? input.trackId : null,
+    title: typeof input.title === "string" ? input.title : "",
+    artist: typeof input.artist === "string" ? input.artist : "",
+    albumImageUrl: typeof input.albumImageUrl === "string" ? input.albumImageUrl : null,
+    progressMs: asNumber(input.progressMs) ?? 0,
+    durationMs: asNumber(input.durationMs) ?? 0,
+    isPlaying: Boolean(input.isPlaying),
+  };
+}
+
+/**
+ * Coerces an unknown value into a minimal played-track record, or null. Requires
+ * a non-empty `trackId` (the claim list dedupes on it); title/artist default to
+ * empty strings so the screen can still show a numbered row.
+ */
+function sanitizePlayedTrack(input: unknown): PlayedTrack | null {
+  if (!isObject(input)) return null;
+  const trackId = asString(input.trackId);
+  if (!trackId) return null;
+  return {
+    trackId,
+    title: typeof input.title === "string" ? input.title : "",
+    artist: typeof input.artist === "string" ? input.artist : "",
+  };
+}
+
 export function validateRuntimeState(input: unknown): LiveRuntimeState | null {
   if (!isObject(input)) return null;
   const version = asString(input.version);
@@ -151,17 +183,17 @@ export function validateRuntimeState(input: unknown): LiveRuntimeState | null {
   };
   const revealConfig = validateRevealConfig(input.revealConfig);
 
-  let currentTrack: LiveRuntimeState["currentTrack"] = null;
-  if (isObject(input.currentTrack)) {
-    currentTrack = {
-      trackId: typeof input.currentTrack.trackId === "string" ? input.currentTrack.trackId : null,
-      title: typeof input.currentTrack.title === "string" ? input.currentTrack.title : "",
-      artist: typeof input.currentTrack.artist === "string" ? input.currentTrack.artist : "",
-      albumImageUrl: typeof input.currentTrack.albumImageUrl === "string" ? input.currentTrack.albumImageUrl : null,
-      progressMs: asNumber(input.currentTrack.progressMs) ?? 0,
-      durationMs: asNumber(input.currentTrack.durationMs) ?? 0,
-      isPlaying: Boolean(input.currentTrack.isPlaying),
-    };
+  const currentTrack = sanitizeTrackSnapshot(input.currentTrack);
+
+  // Only carry well-formed played-track records; partial/invalid entries (and any
+  // missing a trackId) are dropped (never throws — mirrors how screenId/content/
+  // welcomeSong are validated).
+  let playedTracks: PlayedTrack[] | undefined;
+  if (Array.isArray(input.playedTracks)) {
+    const cleaned = input.playedTracks
+      .map((entry) => sanitizePlayedTrack(entry))
+      .filter((entry): entry is PlayedTrack => entry !== null);
+    if (cleaned.length) playedTracks = cleaned;
   }
 
   // Only carry an explicit screenId. Absence is meaningful: it signals the
@@ -191,6 +223,7 @@ export function validateRuntimeState(input: unknown): LiveRuntimeState | null {
     activeGameNumber,
     spotifyControlAvailable,
     currentTrack,
+    ...(playedTracks ? { playedTracks } : {}),
     revealState,
     ...(revealConfig ? { revealConfig } : {}),
     advanceTriggeredForTrackId:

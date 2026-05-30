@@ -1,13 +1,25 @@
 import { describe, it, expect } from "vitest";
-import { RUN_OF_SHOW, isScreenId, normalizeScreenId, type ScreenId } from "@/lib/live/runOfShow";
+import { RUN_OF_SHOW, SHOW_STEPS, isScreenId, normalizeScreenId, type ScreenId } from "@/lib/live/runOfShow";
 
 describe("RUN_OF_SHOW", () => {
-  it("has the 13 show screens in canonical order", () => {
-    const ids = RUN_OF_SHOW.filter((s) => !s.id.startsWith("sys-")).map((s) => s.id);
+  it("has the 13 navigable show steps in canonical order (excludes overlays + system)", () => {
+    const ids = SHOW_STEPS.map((s) => s.id);
     expect(ids).toEqual([
       "welcome", "order", "quiz1", "title", "rules", "dance",
       "game1", "break", "quiz2", "sing", "game2", "winners", "thanks",
     ]);
+  });
+  it("steps straight from game1 to break (claim is not in the sequence)", () => {
+    const ids = SHOW_STEPS.map((s) => s.id);
+    expect(ids.indexOf("break")).toBe(ids.indexOf("game1") + 1);
+    expect(ids).not.toContain("claim");
+  });
+  it("keeps claim as a registered overlay screen (not navigable, still rendered)", () => {
+    const claim = RUN_OF_SHOW.find((s) => s.id === "claim");
+    expect(claim).toBeDefined();
+    expect(claim?.overlay).toBe(true);
+    expect(SHOW_STEPS.some((s) => s.id === "claim")).toBe(false);
+    expect(isScreenId("claim")).toBe(true);
   });
   it("includes the two system screens", () => {
     const ids = RUN_OF_SHOW.map((s) => s.id);
@@ -33,6 +45,7 @@ describe("RUN_OF_SHOW", () => {
 describe("isScreenId / normalizeScreenId", () => {
   it("accepts known ids", () => {
     expect(isScreenId("welcome")).toBe(true);
+    expect(isScreenId("claim")).toBe(true);
     expect(isScreenId("nope")).toBe(false);
   });
   it("normalises unknown/absent to welcome", () => {
