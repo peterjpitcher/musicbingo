@@ -7,6 +7,7 @@ import { resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import JSZip from "jszip";
+import { PDFDocument } from "pdf-lib";
 import { chromium } from "playwright";
 
 const HOST = "127.0.0.1";
@@ -535,6 +536,16 @@ async function validateDownloadedBundle(zipPath) {
   assert.equal(game2Bytes.subarray(0, 4).toString("utf8"), "%PDF", "Game 2 file is not a valid PDF");
   assert.equal(docxBytes.subarray(0, 2).toString("utf8"), "PK", "Clipboard file is not a ZIP-based DOCX");
   assert.equal(runSheetBytes.subarray(0, 4).toString("utf8"), "%PDF", "Run-sheet file is not a valid PDF");
+
+  // Lock the What's-On interleave: each card sheet is followed by a What's-On
+  // page, so a game PDF has an even page count >= 2. Guards against a regression
+  // to per-card re-rendering or a dropped events page (the perf fix).
+  const game1Doc = await PDFDocument.load(game1Bytes);
+  const game1Pages = game1Doc.getPageCount();
+  assert.ok(
+    game1Pages >= 2 && game1Pages % 2 === 0,
+    `Game 1 PDF should interleave a What's-On page after each card sheet (even page count >= 2), got ${game1Pages}`,
+  );
 
   const docxZip = await JSZip.loadAsync(docxBytes);
   assert.ok(docxZip.file("word/document.xml"), "DOCX missing word/document.xml");
