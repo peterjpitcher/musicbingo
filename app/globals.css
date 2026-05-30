@@ -126,16 +126,36 @@
 .editing [data-edit]:focus { box-shadow: 0 0 0 3px var(--brand-accent-light); background: rgba(0,0,0,.3); }
 [data-edit]:empty::before { content: attr(data-placeholder); opacity: .4; }
 
-/* ===== LEGACY (retained until Phase 2 rebuilds the guest page) ===== */
-.guest-projection-shell {
-  background:
-    radial-gradient(circle at 10% 20%, rgb(var(--brand-accent-rgb) / 0.14), transparent 45%),
-    radial-gradient(circle at 90% 10%, rgb(var(--brand-primary-light-rgb) / 0.22), transparent 50%),
-    linear-gradient(180deg, rgb(var(--brand-primary-rgb)) 0%, rgb(var(--brand-primary-rgb) / 0.85) 100%);
+/* ===== TV stage / 1920×1080 scaler ===== */
+.viewport {
+  position: fixed; inset: 0; overflow: hidden;
+  background: radial-gradient(120% 90% at 50% -10%, #0a0a0a 0%, #000 70%);
 }
-.challenge-projection-shell {
-  background:
-    radial-gradient(circle at 20% 15%, rgb(254 240 138 / 0.35), transparent 34%),
-    radial-gradient(circle at 80% 0%, rgb(251 191 36 / 0.35), transparent 38%),
-    linear-gradient(180deg, rgb(245 158 11) 0%, rgb(217 119 6) 48%, rgb(146 64 14) 100%);
+.stage-scaler {
+  position: absolute; top: 50%; left: 50%;
+  width: 1920px; height: 1080px; transform-origin: center center;
 }
+.stage {
+  position: absolute; inset: 0; overflow: hidden;
+  font-family: var(--brand-body), system-ui, sans-serif;
+}
+.screen-wrap { position: absolute; inset: 0; }
+.screen-wrap.in { animation: fade .5s ease backwards; }
+
+/* ===== logo lockup ===== */
+.venue-logo { height: 78px; width: auto; object-fit: contain; }
+.venue-logo--sm { height: 52px; }
+.logo-fallback {
+  font-family: var(--brand-display), sans-serif; text-transform: uppercase;
+  color: var(--cream); letter-spacing: .04em; line-height: .92;
+  border: 3px solid var(--cream); padding: 8px 16px; display: inline-block;
+}
+
+/* ===== layout utilities ===== */
+.col { display: flex; flex-direction: column; }
+.center-all { align-items: center; justify-content: center; text-align: center; }
+.fill { flex: 1; min-height: 0; }
+.pad { padding: 90px 120px; }
+.stack-tight > * + * { margin-top: 18px; }
+.muted { color: var(--cream-dim); }
+.nowrap { white-space: nowrap; }
