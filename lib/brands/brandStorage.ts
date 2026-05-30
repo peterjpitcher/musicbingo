@@ -1,4 +1,5 @@
 // lib/brands/brandStorage.ts
+import path from "node:path";
 import { getSupabaseClient } from "@/lib/supabase";
 
 const BUCKET_NAME = "brand-assets";
@@ -42,10 +43,25 @@ export async function uploadBrandLogo(
   return objectKey;
 }
 
+/**
+ * Resolve a legacy "/public" object key to an absolute filesystem path,
+ * confined to <cwd>/public. Returns null when the key escapes that root
+ * (path traversal, e.g. "/../package.json") so callers can reject it.
+ */
+function resolveLegacyPublicPath(objectKey: string): string | null {
+  const root = path.join(process.cwd(), "public");
+  const resolved = path.resolve(root, "." + objectKey);
+  if (!resolved.startsWith(root + path.sep)) return null;
+  return resolved;
+}
+
 /** Construct the full public URL for a brand logo object key. */
 export function getBrandLogoPublicUrl(objectKey: string): string {
-  // Object keys starting with "/" are legacy /public paths (seed data)
-  if (objectKey.startsWith("/")) return objectKey;
+  // Object keys starting with "/" are legacy /public paths (seed data).
+  // Confine to <cwd>/public; reject path traversal by returning "".
+  if (objectKey.startsWith("/")) {
+    return resolveLegacyPublicPath(objectKey) ? objectKey : "";
+  }
 
   const supabase = getSupabaseClient();
   const { data } = supabase.storage.from(BUCKET_NAME).getPublicUrl(objectKey);
@@ -54,12 +70,13 @@ export function getBrandLogoPublicUrl(objectKey: string): string {
 
 /** Fetch logo bytes from Storage (for PDF rendering). Only fetches from known bucket. */
 export async function fetchBrandLogoPngBytes(objectKey: string): Promise<Uint8Array | null> {
-  // Legacy /public paths — read from filesystem
+  // Legacy /public paths — read from filesystem, confined to <cwd>/public.
   if (objectKey.startsWith("/")) {
+    const safePath = resolveLegacyPublicPath(objectKey);
+    if (!safePath) return null;
     const fs = await import("node:fs/promises");
-    const path = await import("node:path");
     try {
-      const buf = await fs.readFile(path.join(process.cwd(), "public", objectKey));
+      const buf = await fs.readFile(safePath);
       return new Uint8Array(buf);
     } catch {
       return null;
