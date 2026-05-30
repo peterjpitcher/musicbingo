@@ -463,6 +463,7 @@ export async function POST(request: Request) {
     });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Failed to generate output bundle.";
+    console.error("[music-bingo] /api/generate failed:", err instanceof Error ? err.stack ?? err.message : err);
     return new Response(msg, { status: 500 });
   }
 }

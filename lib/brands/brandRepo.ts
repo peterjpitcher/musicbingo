@@ -131,12 +131,24 @@ function brandToBrandConfig(brand: Brand): BrandConfig {
 
 /** Resolve a brand for a session: use brand_id if provided, otherwise default. */
 export async function resolveBrandConfig(brandId: string | null | undefined): Promise<BrandConfig | null> {
-  if (brandId) {
-    const brand = await getBrand(brandId);
-    if (brand) return brandToBrandConfig(brand);
+  // Best-effort: brand resolution must never crash its callers (PDF generation,
+  // live TV screens, session reads). If Supabase is unavailable/misconfigured or
+  // the brand row can't be read, fall back to default branding (null) instead of
+  // throwing — the callers all treat null as "use the built-in defaults".
+  try {
+    if (brandId) {
+      const brand = await getBrand(brandId);
+      if (brand) return brandToBrandConfig(brand);
+    }
+    const defaultBrand = await getDefaultBrand();
+    return defaultBrand ? brandToBrandConfig(defaultBrand) : null;
+  } catch (err) {
+    console.warn(
+      "[music-bingo] resolveBrandConfig failed; using default branding:",
+      err instanceof Error ? err.message : err,
+    );
+    return null;
   }
-  const defaultBrand = await getDefaultBrand();
-  return defaultBrand ? brandToBrandConfig(defaultBrand) : null;
 }
 
 /** Input type for createBrand — matches DB columns, includes event_feed_api_key. */
