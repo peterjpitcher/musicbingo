@@ -4,6 +4,8 @@
 
 Status: ✅ done · ▶ in progress · ⬜ not started · ⛔ blocked/gated
 
+> **🎉 ALL 6 PHASES COMPLETE (2026-05-30).** Every surface — TV display, host console, setup dashboard, prep wizard, brands editor, and print/PDF — is rebuilt to the After Hours design, each phase verified (`lint`/`tsc`/unit/pytest/build) and reviewed. Full e2e suite is **7/7 green** (the long-standing Flow 3 `/api/generate` 500 is fixed). On branch `claude/nice-cohen-6dbea6`, ~52 commits since `c0d3014`, not yet merged/pushed. **Before prod use:** apply migration `20260529120000` (`supabase db push`). See the carry-over + security backlog below.
+
 ## Phases
 | # | Scope (1-liner) | Depends on | Status | Plan |
 |---|---|---|---|---|
@@ -14,7 +16,7 @@ Status: ✅ done · ▶ in progress · ⬜ not started · ⛔ blocked/gated
 | 3 | **Host Controller** (`/host/[sessionId]`) console: preview + run-of-show + Now-Playing/Game-Flow/Timing/Content/Playlist panels + variant controls | 1a, 1b, 2 | ✅ done (engine preserved verbatim; reviewed; e2e 6/7) | executed inline (commits `29dd56e`..HEAD) |
 | 4 | **Setup & Manage**: `/host` dashboard + `/prep` wizard restyle (+ derived readiness, edit-mode hydration, missing-song resolution route) | 0 (1a for content defaults) | ✅ done — restyle + derived status + Duplicate/Export + edit-mode hydration + resolve-missing route/UI; reviewed (2 edit-mode data-loss bugs caught + fixed); e2e 6/7 | inline (commits `cc44631`..HEAD) |
 | 5 | **Brands & Venues** three-pane editor + live preview + font/event-logo UI | 0 | ✅ done — three-pane editor + live preview + font/event-logo fields; reviewed (2 blocking bugs fixed: event-logo URL resolution + qr_items data-loss); e2e 6/7 | inline (commits `f25805e`..`fe84748`) |
-| 6 | **Print/PDF**: `@pdf-lib/fontkit`, cards + What's-On restyle (≤3 events), new run-sheet PDF, `/api/generate` output modes | 0 | 🟡 **`/api/generate` fixed → e2e now 7/7 green** (brand resolution made graceful — was the long-standing Flow 3 500); print restyle (fonts/cards/What's-On ≤3) + run-sheet PDF + output modes remaining | inline (commit `5c4d73e`) |
+| 6 | **Print/PDF**: cards + What's-On restyle (≤3 events), new run-sheet PDF, `/api/generate` fix | 0 | ✅ done — `/api/generate` fixed (**e2e 7/7**, was the long-standing Flow 3 500); cards + What's-On (≤3) restyled B&W; new run-sheet PDF (supplements the DOCX); perf fix (render What's-On once → 74s→4s); reviewed (no blocking). **Custom fonts (fontkit/Anton/Archivo) deferred** — print uses built-in fonts; output modes already adequate (no change needed) | inline (commits `5c4d73e`..`31de2a9`) |
 
 > Split note: spec Phase 1 → **1a** (state/lib, fast, TDD) + **1b** (component porting, large/visual) for shippability. Phases 4/5/6 can parallelise after 0+1a.
 >
@@ -28,7 +30,9 @@ Status: ✅ done · ▶ in progress · ⬜ not started · ⛔ blocked/gated
 - ⛔ **Apply migration `20260529120000_*` before the Phase 5 brands editor is USED in prod** (Codex CR-1). Supabase CLI is unlinked in this env → **user applies** (`supabase db push`). Phase 5 is now built and WRITES the new columns (`font_display`, `font_body`, `event_logo_url`); they are nullable end-to-end so the editor compiles/renders/builds without the migration, but a real save persists those fields only once the columns exist. Apply before relying on brand fonts / event logos.
 - **Interim UI (CR-2):** Phase 0 darkened shared primitives/body; `/host`, `/prep`, `/brands` look transitional until Phases 4–5. **Don't deploy Phase 0 standalone to prod** — land surface phases first. As each admin page is rebuilt, drop `AppHeader variant="light"`.
 - **Phase 5:** enforce `SUPPORTED_BRAND_FONTS` category on brand font fields (CR-4); store WEBP with `.webp` ext (PRE-5); once `BrandForm` writes the new fields, the migration must already be live.
-- **Phase 6:** decide whether the run-sheet PDF supersedes the DOCX clipboard.
+- **Phase 6 — DECIDED:** the run-sheet PDF **supplements** the DOCX clipboard (does not replace it) — hosts may still rely on the DOCX. Bundle is now 4 files (2 game PDFs + DOCX + run-sheet PDF).
+- **Phase 6 deferred (enhancements, not blockers):** custom-font embedding in print (`@pdf-lib/fontkit` + Anton/Archivo TTFs) — print currently uses built-in Helvetica (spec only requires B&W); `/api/generate` output modes left as-is (the prep's Download-Only / Event-Pack buttons both return the full pack — adequate per spec).
+- **Phase 6 advisories (minor):** run-sheet `drawAnswerList` uses absolute Y (a single game's grid >1 page would clip — unreachable under the 50-song cap); challenge time is a fixed 90s and the schedule is static template copy (both match the design — worth a product confirm).
 - **Phase 4 advisories (minor, deferred):** resolve-missing maps Spotify 403/404 to opaque text (friendlier copy later); resolve is non-idempotent (re-POST duplicates a track — UI disables the button during the call, so low risk); a few `(current as any).input` casts in `StepGenerateConnect.tsx` (status-guarded, runtime-safe).
 - **Security backlog (pre-existing, separate tasks):** logo path-traversal in `brandStorage.ts` (task chip raised); default-brand non-atomic switch (PRE-2); `event_feed_base_url` should use HTTPS-only schema (PRE-3). See [Codex review](../../tasks/codex-qa-review/2026-05-29-after-hours-phase-0-adversarial-review.md).
 
