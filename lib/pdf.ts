@@ -188,6 +188,11 @@ export async function renderCardsPdf(cards: Card[], opts: RenderOptions): Promis
   const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
 
   const black = rgb(0, 0, 0);
+  // Soft grey used for the inner grid rules, mirroring `--p-line-soft` in the
+  // After Hours print stylesheet. Still B&W (greyscale) — no block colour.
+  const softLine = rgb(0.53, 0.53, 0.53);
+  // Muted ink for the card footer caption (`--p-mute` in the stylesheet).
+  const muted = rgb(0.33, 0.33, 0.33);
 
   // Landscape A4: swap width and height
   const pageW = A4_HEIGHT; // 842
@@ -195,10 +200,11 @@ export async function renderCardsPdf(cards: Card[], opts: RenderOptions): Promis
 
   const marginX = mmToPt(14);
   const marginY = mmToPt(10);
-  const headerH = mmToPt(28);
-  const colGap = mmToPt(8);
-  const rowGap = mmToPt(6);
-  const cardIdSpace = mmToPt(4); // space below grid for card ID text
+  // Header band carrying the logo + "MUSIC BINGO" lockup (After Hours .sheet-head).
+  const headerH = mmToPt(22);
+  const headerRuleW = 1.5;
+  const colGap = mmToPt(5);
+  const rowGap = mmToPt(5);
 
   const COLS = 3;
   const ROWS = 2;
@@ -206,12 +212,19 @@ export async function renderCardsPdf(cards: Card[], opts: RenderOptions): Promis
   const GRID_COLS = 5;
   const GRID_ROWS = 3;
 
+  // Each card carries its own header + footer bands inside the border, with the
+  // 5×3 number grid filling the middle (After Hours .bcard layout).
+  const cardHeaderH = mmToPt(6);
+  const cardFooterH = mmToPt(5);
+
   const availableW = pageW - 2 * marginX - (COLS - 1) * colGap;
-  const availableH = pageH - 2 * marginY - headerH - (ROWS - 1) * rowGap - ROWS * cardIdSpace;
+  const availableH = pageH - 2 * marginY - headerH - (ROWS - 1) * rowGap;
   const cardW = availableW / COLS;
   const cardH = availableH / ROWS;
+  // Grid occupies the space between the card's header and footer bands.
+  const gridH = cardH - cardHeaderH - cardFooterH;
   const cellW = cardW / GRID_COLS;
-  const cellH = cardH / GRID_ROWS;
+  const cellH = gridH / GRID_ROWS;
 
   const logoLeftImage =
     opts.logoLeftPngBytes && opts.logoLeftPngBytes.length ? await pdf.embedPng(opts.logoLeftPngBytes) : null;
@@ -221,82 +234,99 @@ export async function renderCardsPdf(cards: Card[], opts: RenderOptions): Promis
   const showCardId = opts.showCardId ?? true;
   const totalPages = Math.ceil(cards.length / CARDS_PER_PAGE);
 
+  // Brand / venue name shown on the right of the sheet header. Falls back to a
+  // generic label when no brand is configured.
+  const venueName = sanitizePdfText(opts.brandConfig?.name?.trim() || "Music Bingo", fontBold);
+
   for (let pageIdx = 0; pageIdx < totalPages; pageIdx++) {
     const page = pdf.addPage([pageW, pageH]);
 
-    // --- Header ---
+    // --- Sheet header (After Hours .sheet-head: logo + title left, meta right) ---
     const headerTop = pageH - marginY;
     const headerBottom = headerTop - headerH;
-
-    // Logos
-    const logoMaxH = headerH * 0.65;
+    const headerCenterY = (headerTop + headerBottom) / 2;
     const headerLeft = marginX;
     const headerRight = pageW - marginX;
-    const logoMaxW = (headerRight - headerLeft) / 2 - mmToPt(20);
 
+    // Left lockup: optional logo followed by the "MUSIC BINGO" wordmark.
+    let titleX = headerLeft;
+    const logoMaxH = headerH * 0.6;
     if (logoLeftImage) {
-      const scale = Math.min(logoMaxW / logoLeftImage.width, logoMaxH / logoLeftImage.height);
+      const scale = Math.min(mmToPt(40) / logoLeftImage.width, logoMaxH / logoLeftImage.height);
       const w = logoLeftImage.width * scale;
       const h = logoLeftImage.height * scale;
       page.drawImage(logoLeftImage, {
         x: headerLeft,
-        y: headerTop - h,
+        y: headerCenterY - h / 2,
         width: w,
         height: h,
       });
+      titleX = headerLeft + w + mmToPt(4);
     }
 
-    if (logoRightImage) {
-      const scale = Math.min(logoMaxW / logoRightImage.width, logoMaxH / logoRightImage.height);
-      const w = logoRightImage.width * scale;
-      const h = logoRightImage.height * scale;
-      page.drawImage(logoRightImage, {
-        x: headerRight - w,
-        y: headerTop - h,
-        width: w,
-        height: h,
-      });
-    }
-
-    // "MUSIC BINGO" centred 18pt bold
+    // "MUSIC BINGO" wordmark (Anton in the design → large HelveticaBold here).
     const titleText = "MUSIC BINGO";
-    const titleSize = 18;
-    const titleW = fontBold.widthOfTextAtSize(titleText, titleSize);
+    const titleSize = 22;
     page.drawText(titleText, {
-      x: (pageW - titleW) / 2,
-      y: headerTop - titleSize - 2,
+      x: titleX,
+      y: headerCenterY - titleSize * 0.36,
       size: titleSize,
       font: fontBold,
       color: black,
     });
 
-    // Theme centred 10pt bold
-    if (opts.theme) {
-      const theme = sanitizePdfText(opts.theme, fontBold);
-      const themeSize = 10;
-      const themeW = fontBold.widthOfTextAtSize(theme, themeSize);
-      page.drawText(theme, {
-        x: (pageW - themeW) / 2,
-        y: headerTop - titleSize - themeSize - 4,
-        size: themeSize,
-        font: fontBold,
+    // Optional right-hand logo, drawn flush right; the meta block sits to its
+    // left when present so a caller-supplied second logo is never dropped.
+    let metaRight = headerRight;
+    if (logoRightImage) {
+      const scale = Math.min(mmToPt(30) / logoRightImage.width, logoMaxH / logoRightImage.height);
+      const w = logoRightImage.width * scale;
+      const h = logoRightImage.height * scale;
+      page.drawImage(logoRightImage, {
+        x: headerRight - w,
+        y: headerCenterY - h / 2,
+        width: w,
+        height: h,
+      });
+      metaRight = headerRight - w - mmToPt(4);
+    }
+
+    // Right-hand meta block: venue name above, theme · date below.
+    const metaSize = 9;
+    const metaLineGap = 2;
+    const themeBits = [opts.theme, opts.eventDate]
+      .map((part) => (part ? sanitizePdfText(part, font) : ""))
+      .filter(Boolean);
+    const metaSubline = themeBits.join("  ·  ");
+    const venueNameW = fontBold.widthOfTextAtSize(venueName, metaSize);
+    const metaSublineW = metaSubline ? font.widthOfTextAtSize(metaSubline, metaSize) : 0;
+    const metaTopY = metaSubline
+      ? headerCenterY + metaLineGap / 2 + 1
+      : headerCenterY - metaSize * 0.36;
+    page.drawText(venueName, {
+      x: metaRight - venueNameW,
+      y: metaTopY,
+      size: metaSize,
+      font: fontBold,
+      color: black,
+    });
+    if (metaSubline) {
+      page.drawText(metaSubline, {
+        x: metaRight - metaSublineW,
+        y: metaTopY - metaSize - metaLineGap,
+        size: metaSize,
+        font,
         color: black,
       });
     }
 
-    // Date centred 9pt bold
-    if (opts.eventDate) {
-      const eventDate = sanitizePdfText(opts.eventDate, fontBold);
-      const dateSize = 9;
-      const dateW = fontBold.widthOfTextAtSize(eventDate, dateSize);
-      page.drawText(eventDate, {
-        x: (pageW - dateW) / 2,
-        y: headerBottom + 2,
-        size: dateSize,
-        font: fontBold,
-        color: black,
-      });
-    }
+    // Header rule beneath the lockup.
+    page.drawLine({
+      start: { x: headerLeft, y: headerBottom },
+      end: { x: headerRight, y: headerBottom },
+      thickness: headerRuleW,
+      color: black,
+    });
 
     // --- Cards ---
     for (let ci = 0; ci < CARDS_PER_PAGE; ci++) {
@@ -307,40 +337,71 @@ export async function renderCardsPdf(cards: Card[], opts: RenderOptions): Promis
       const colIdx = ci % COLS;
       const rowIdx = Math.floor(ci / COLS);
 
-      const gridX = marginX + colIdx * (cardW + colGap);
-      const gridY = headerBottom - marginY - rowIdx * (cardH + rowGap + cardIdSpace) - cardH;
+      // Card bottom-left corner.
+      const cardX = marginX + colIdx * (cardW + colGap);
+      const cardY = headerBottom - marginY - rowIdx * (cardH + rowGap) - cardH;
 
-      // Outer border 1.5pt
+      // Band geometry (header at top, footer at bottom, grid between).
+      const headerBandBottom = cardY + cardH - cardHeaderH;
+      const footerBandTop = cardY + cardFooterH;
+      const gridX = cardX;
+      const gridY = footerBandTop; // grid sits directly above the footer band
+
+      // Outer border (After Hours .bcard 1.4pt).
       page.drawRectangle({
-        x: gridX,
-        y: gridY,
+        x: cardX,
+        y: cardY,
         width: cardW,
         height: cardH,
         borderColor: black,
-        borderWidth: 1.5,
+        borderWidth: 1.4,
       });
 
-      // Inner vertical lines 1pt
-      for (let c = 1; c < GRID_COLS; c++) {
-        page.drawLine({
-          start: { x: gridX + c * cellW, y: gridY },
-          end: { x: gridX + c * cellW, y: gridY + cardH },
-          thickness: 1,
+      // --- Card header band: theme (left) + #NNN number (right) ---
+      const headerPad = mmToPt(3);
+      const headerBandCenterY = headerBandBottom + cardHeaderH / 2;
+
+      // Card number is always shown (right-aligned).
+      const numberText = `#${String(cardIdx + 1).padStart(3, "0")}`;
+      const numberSize = 10;
+      const numberW = fontBold.widthOfTextAtSize(numberText, numberSize);
+      page.drawText(numberText, {
+        x: cardX + cardW - headerPad - numberW,
+        y: headerBandCenterY - numberSize * 0.36,
+        size: numberSize,
+        font: fontBold,
+        color: black,
+      });
+
+      // Theme label (left), clipped so it never collides with the number.
+      if (opts.theme) {
+        const themeLabel = sanitizePdfText(opts.theme.toUpperCase(), fontBold);
+        const themeSize = 8;
+        const themeMaxW = cardW - 2 * headerPad - numberW - mmToPt(3);
+        let themeOut = themeLabel;
+        while (themeOut.length > 1 && fontBold.widthOfTextAtSize(themeOut, themeSize) > themeMaxW) {
+          themeOut = themeOut.slice(0, -1);
+        }
+        if (themeOut !== themeLabel && themeOut.length > 0) {
+          themeOut = `${themeOut.slice(0, -1)}…`;
+        }
+        page.drawText(themeOut, {
+          x: cardX + headerPad,
+          y: headerBandCenterY - themeSize * 0.36,
+          size: themeSize,
+          font: fontBold,
           color: black,
         });
       }
+      // Header band bottom rule (1pt).
+      page.drawLine({
+        start: { x: cardX, y: headerBandBottom },
+        end: { x: cardX + cardW, y: headerBandBottom },
+        thickness: 1,
+        color: black,
+      });
 
-      // Inner horizontal lines 1pt
-      for (let r = 1; r < GRID_ROWS; r++) {
-        page.drawLine({
-          start: { x: gridX, y: gridY + r * cellH },
-          end: { x: gridX + cardW, y: gridY + r * cellH },
-          thickness: 1,
-          color: black,
-        });
-      }
-
-      // Cell text
+      // --- Grid: blank-cell shading first, then soft rules, then text ---
       const padding = 2;
       for (let idx = 0; idx < GRID_COLS * GRID_ROWS; idx++) {
         const row = Math.floor(idx / GRID_COLS);
@@ -348,6 +409,58 @@ export async function renderCardsPdf(cards: Card[], opts: RenderOptions): Promis
         const cX = gridX + col * cellW;
         const cY = gridY + (GRID_ROWS - 1 - row) * cellH; // row 0 at top = highest Y
         const text = card.items[idx] ?? "";
+
+        // Blank cells get a light greyscale shade + a centred note marker,
+        // mirroring the hatched "free space" treatment in the design.
+        if (text.trim().length === 0) {
+          page.drawRectangle({
+            x: cX,
+            y: cY,
+            width: cellW,
+            height: cellH,
+            color: rgb(0.9, 0.9, 0.9),
+          });
+          const markerSize = Math.min(cellH, cellW) * 0.4;
+          const marker = "•"; // bullet — Helvetica-safe stand-in for the note glyph
+          const markerW = font.widthOfTextAtSize(marker, markerSize);
+          page.drawText(marker, {
+            x: cX + (cellW - markerW) / 2,
+            y: cY + (cellH - markerSize) / 2,
+            size: markerSize,
+            font,
+            color: softLine,
+          });
+        }
+      }
+
+      // Inner vertical lines (soft, 0.6pt).
+      for (let c = 1; c < GRID_COLS; c++) {
+        page.drawLine({
+          start: { x: gridX + c * cellW, y: gridY },
+          end: { x: gridX + c * cellW, y: gridY + gridH },
+          thickness: 0.6,
+          color: softLine,
+        });
+      }
+
+      // Inner horizontal lines (soft, 0.6pt).
+      for (let r = 1; r < GRID_ROWS; r++) {
+        page.drawLine({
+          start: { x: gridX, y: gridY + r * cellH },
+          end: { x: gridX + cardW, y: gridY + r * cellH },
+          thickness: 0.6,
+          color: softLine,
+        });
+      }
+
+      // Cell text (drawn last so it sits above shading and rules).
+      for (let idx = 0; idx < GRID_COLS * GRID_ROWS; idx++) {
+        const row = Math.floor(idx / GRID_COLS);
+        const col = idx % GRID_COLS;
+        const cX = gridX + col * cellW;
+        const cY = gridY + (GRID_ROWS - 1 - row) * cellH;
+        const text = card.items[idx] ?? "";
+        if (text.trim().length === 0) continue;
         const innerW = cellW - 2 * padding;
         const innerH = cellH - 2 * padding;
 
@@ -373,18 +486,33 @@ export async function renderCardsPdf(cards: Card[], opts: RenderOptions): Promis
         }
       }
 
-      // Card ID below grid
+      // --- Card footer band: caption (left) + card id (right) ---
+      // Footer band top rule (1pt).
+      page.drawLine({
+        start: { x: cardX, y: footerBandTop },
+        end: { x: cardX + cardW, y: footerBandTop },
+        thickness: 1,
+        color: black,
+      });
+      const footerPad = mmToPt(3);
+      const footerSize = 6;
+      const footerCenterY = cardY + cardFooterH / 2;
+      page.drawText("Dab a song when you hear it", {
+        x: cardX + footerPad,
+        y: footerCenterY - footerSize * 0.36,
+        size: footerSize,
+        font,
+        color: muted,
+      });
       if (showCardId) {
-        const label = sanitizePdfText(`Card ${String(cardIdx + 1).padStart(3, "0")} • ${card.cardId}`, font);
-        const idSize = 6;
-        const labelW = font.widthOfTextAtSize(label, idSize);
-        const labelX = gridX + (cardW - labelW) / 2;
-        page.drawText(label, {
-          x: labelX,
-          y: gridY - idSize - 2,
-          size: idSize,
+        const idLabel = sanitizePdfText(card.cardId, font);
+        const idW = font.widthOfTextAtSize(idLabel, footerSize);
+        page.drawText(idLabel, {
+          x: cardX + cardW - footerPad - idW,
+          y: footerCenterY - footerSize * 0.36,
+          size: footerSize,
           font,
-          color: black,
+          color: muted,
         });
       }
     }
@@ -419,56 +547,83 @@ export async function renderEventsPage(
 
   const black = rgb(0, 0, 0);
 
+  const muted = rgb(0.33, 0.33, 0.33);
+
+  // Optional left logo, mirroring the cards sheet header treatment.
+  const logoLeftImage =
+    opts.logoLeftPngBytes && opts.logoLeftPngBytes.length ? await pdf.embedPng(opts.logoLeftPngBytes) : null;
+
   const page = pdf.addPage([pageW, pageH]);
 
   const contentTop = pageH - marginY;
   const contentBottom = marginY;
 
-  // --- Header ---
-  const headerTextY = contentTop - 22;
+  // --- Header (After Hours .ev-head: logo + "What's On" left, meta right) ---
+  const headerH = mmToPt(20);
+  const headerTop = contentTop;
+  const headerBottom = headerTop - headerH;
+  const headerCenterY = (headerTop + headerBottom) / 2;
+  const headerRight = pageW - marginX;
+
+  let titleX = marginX;
+  if (logoLeftImage) {
+    const logoMaxH = headerH * 0.6;
+    const scale = Math.min(mmToPt(40) / logoLeftImage.width, logoMaxH / logoLeftImage.height);
+    const w = logoLeftImage.width * scale;
+    const h = logoLeftImage.height * scale;
+    page.drawImage(logoLeftImage, {
+      x: marginX,
+      y: headerCenterY - h / 2,
+      width: w,
+      height: h,
+    });
+    titleX = marginX + w + mmToPt(4);
+  }
+
+  const titleSize = 22;
   page.drawText("What's On", {
-    x: marginX,
-    y: headerTextY,
-    size: 22,
+    x: titleX,
+    y: headerCenterY - titleSize * 0.36,
+    size: titleSize,
     font: fontBold,
     color: black,
   });
 
-  const whatsOnW = fontBold.widthOfTextAtSize("What's On", 22);
-  const venueName = opts.brandConfig?.name
-    ? sanitizePdfText(`AT ${opts.brandConfig.name.toUpperCase()}`, fontBold)
-    : "AT THE ANCHOR";
+  // Right-hand meta: venue name above, strapline below.
+  const venueName = sanitizePdfText(opts.brandConfig?.name?.trim() || "The Anchor", fontBold);
+  const metaSize = 9;
+  const venueNameW = fontBold.widthOfTextAtSize(venueName, metaSize);
+  const strapline = "More great nights out";
+  const straplineW = font.widthOfTextAtSize(strapline, metaSize);
   page.drawText(venueName, {
-    x: marginX + whatsOnW + 8,
-    y: headerTextY + 4,
-    size: 8,
+    x: headerRight - venueNameW,
+    y: headerCenterY + 2,
+    size: metaSize,
     font: fontBold,
     color: black,
   });
-
-  const siteUrl = sanitizePdfText(opts.brandConfig?.website_url || "the-anchor.pub", font);
-  const siteUrlW = font.widthOfTextAtSize(siteUrl, 8);
-  page.drawText(siteUrl, {
-    x: pageW - marginX - siteUrlW,
-    y: headerTextY + 4,
-    size: 8,
+  page.drawText(strapline, {
+    x: headerRight - straplineW,
+    y: headerCenterY + 2 - metaSize - 2,
+    size: metaSize,
     font,
-    color: black,
+    color: muted,
   });
 
-  const headerRuleY = headerTextY - 6;
+  const headerRuleY = headerBottom;
   page.drawLine({
     start: { x: marginX, y: headerRuleY },
     end: { x: pageW - marginX, y: headerRuleY },
-    thickness: 2,
+    thickness: 1.5,
     color: black,
   });
 
-  // --- Footer ---
+  // --- Footer (After Hours .ev-foot) ---
+  const footerWeb = opts.brandConfig?.website_url?.trim() || "the-anchor.pub";
   const footerText = sanitizePdfText(
     opts.brandConfig?.qr_items?.length
-      ? opts.brandConfig.qr_items.map((item) => item.label).join("  \u00b7  ")
-      : opts.brandConfig?.website_url || "the-anchor.pub",
+      ? `${opts.brandConfig.qr_items.map((item) => item.label).join("  \u00b7  ")}  \u00b7  Book online at ${footerWeb}`
+      : `Book online at ${footerWeb}  \u00b7  or just ask at the bar`,
     font,
   );
   const footerSize = 7;
@@ -508,306 +663,259 @@ export async function renderEventsPage(
     return;
   }
 
-  // --- Left panel: featured event ---
-  const leftPanelW = mmToPt(60);
-  const leftX = marginX;
-  const rightPanelX = leftX + leftPanelW + mmToPt(6);
-  const _rightPanelW = pageW - marginX - rightPanelX;
-
   const featured = opts.events[0];
-  const timelineEvents = opts.events.slice(1, 12); // up to 11
+  // Timeline capped to at most three upcoming events (After Hours .ev-grid).
+  const upcomingEvents = opts.events.slice(1, 4);
 
-  // Left panel border
+  const contentW = pageW - 2 * marginX;
+
+  // --- Featured event card (full-width, After Hours .ev-feature) ---
+  const featuredH = upcomingEvents.length > 0 ? bodyH * 0.42 : bodyH;
+  const featuredTop = bodyTop;
+  const featuredBottom = featuredTop - featuredH;
+  const featPad = mmToPt(5);
+
   page.drawRectangle({
-    x: leftX,
-    y: bodyBottom,
-    width: leftPanelW,
-    height: bodyH,
+    x: marginX,
+    y: featuredBottom,
+    width: contentW,
+    height: featuredH,
     borderColor: black,
-    borderWidth: 1.5,
+    borderWidth: 1.4,
   });
 
-  const panelPad = 6;
-  let cursorY = bodyTop - panelPad;
+  // Featured QR sits on the right; the text column fills the remaining width.
+  const featQrSize = Math.min(mmToPt(32), featuredH - 2 * featPad - mmToPt(5));
+  const featQrX = marginX + contentW - featPad - featQrSize;
+  const featTextX = marginX + featPad;
+  const featTextMaxW = featQrX - mmToPt(5) - featTextX;
 
-  // "NEXT EVENT" label
-  const nextEvtSize = 6.5;
-  page.drawText("NEXT EVENT", {
-    x: leftX + panelPad,
-    y: cursorY - nextEvtSize,
-    size: nextEvtSize,
+  let featCursorY = featuredTop - featPad;
+
+  // "FEATURED · DON'T MISS" eyebrow label.
+  const featLabel = sanitizePdfText("FEATURED · DON'T MISS", fontBold);
+  const featLabelSize = 7;
+  page.drawText(featLabel, {
+    x: featTextX,
+    y: featCursorY - featLabelSize,
+    size: featLabelSize,
     font: fontBold,
-    color: black,
+    color: muted,
   });
-  // underline
-  const neW = fontBold.widthOfTextAtSize("NEXT EVENT", nextEvtSize);
-  page.drawLine({
-    start: { x: leftX + panelPad, y: cursorY - nextEvtSize - 1 },
-    end: { x: leftX + panelPad + neW, y: cursorY - nextEvtSize - 1 },
-    thickness: 0.5,
-    color: black,
-  });
-  cursorY -= nextEvtSize + 8;
+  featCursorY -= featLabelSize + mmToPt(2.5);
 
-  // Featured event name (15pt bold, wrapped)
-  const featNameMaxW = leftPanelW - 2 * panelPad;
+  // Featured name (large, bold, wrapped).
   const featNameResult = wrapTextLines({
     text: featured.name,
-    maxWidth: featNameMaxW,
+    maxWidth: featTextMaxW,
     font: fontBold,
-    fontSize: 15,
-    minFontSize: 10,
-    maxHeight: 60,
-    leadingRatio: 1.2,
+    fontSize: 20,
+    minFontSize: 12,
+    maxHeight: featuredH * 0.4,
+    leadingRatio: 1.05,
   });
   for (let li = 0; li < featNameResult.lines.length; li++) {
-    const lineY = cursorY - li * featNameResult.lineHeight;
     page.drawText(featNameResult.lines[li], {
-      x: leftX + panelPad,
-      y: lineY - featNameResult.fontSize,
+      x: featTextX,
+      y: featCursorY - featNameResult.fontSize - li * featNameResult.lineHeight,
       size: featNameResult.fontSize,
       font: fontBold,
       color: black,
     });
   }
-  cursorY -= featNameResult.lines.length * featNameResult.lineHeight + 6;
+  featCursorY -= featNameResult.lines.length * featNameResult.lineHeight + mmToPt(2);
 
-  // Date + time (7.5pt bold)
-  const featDateTime = sanitizePdfText(`${featured.dateFormatted} \u2022 ${featured.time}`, fontBold);
-  page.drawText(featDateTime, {
-    x: leftX + panelPad,
-    y: cursorY - 7.5,
-    size: 7.5,
+  // When line: date · time · price (bold).
+  const featWhen = sanitizePdfText(
+    `${featured.dateFormatted} · ${featured.time} · ${featured.price}`,
+    fontBold,
+  );
+  const featWhenSize = 9;
+  page.drawText(featWhen, {
+    x: featTextX,
+    y: featCursorY - featWhenSize,
+    size: featWhenSize,
     font: fontBold,
     color: black,
   });
-  cursorY -= 14;
+  featCursorY -= featWhenSize + mmToPt(2.5);
 
-  // Price (7pt)
-  page.drawText(sanitizePdfText(featured.price, font), {
-    x: leftX + panelPad,
-    y: cursorY - 7,
-    size: 7,
-    font,
-    color: black,
-  });
-  cursorY -= 12;
-
-  // Description + highlights
-  const descMaxH = cursorY - bodyBottom - panelPad - mmToPt(28); // leave room for larger QR
-  if (descMaxH > 10) {
-    // Description text
-    const descResult = wrapTextLines({
-      text: featured.description,
-      maxWidth: featNameMaxW,
+  // Description (with highlights appended), wrapped to fill remaining height.
+  const featDescText = featured.highlights.length > 0
+    ? `${featured.description}  ·  ${featured.highlights.join("  ·  ")}`
+    : featured.description;
+  const featDescMaxH = featCursorY - featuredBottom - featPad;
+  if (featDescMaxH > 10 && featDescText.trim().length > 0) {
+    const featDescResult = wrapTextLines({
+      text: featDescText,
+      maxWidth: featTextMaxW,
       font,
-      fontSize: 7,
-      minFontSize: 5,
-      maxHeight: descMaxH * 0.4,
+      fontSize: 8,
+      minFontSize: 6,
+      maxHeight: featDescMaxH,
       leadingRatio: 1.3,
     });
-    for (let li = 0; li < descResult.lines.length; li++) {
-      const lineY = cursorY - li * descResult.lineHeight;
-      page.drawText(descResult.lines[li], {
-        x: leftX + panelPad,
-        y: lineY - descResult.fontSize,
-        size: descResult.fontSize,
+    for (let li = 0; li < featDescResult.lines.length; li++) {
+      page.drawText(featDescResult.lines[li], {
+        x: featTextX,
+        y: featCursorY - featDescResult.fontSize - li * featDescResult.lineHeight,
+        size: featDescResult.fontSize,
         font,
-        color: black,
+        color: muted,
       });
-    }
-    cursorY -= descResult.lines.length * descResult.lineHeight + 6;
-
-    // Highlights as bullet points
-    if (featured.highlights.length > 0) {
-      const bulletMaxH = cursorY - bodyBottom - panelPad - mmToPt(28);
-      const bulletSize = 6.5;
-      const bulletLineH = font.heightAtSize(bulletSize) * 1.3;
-      const maxBullets = Math.min(featured.highlights.length, Math.floor(bulletMaxH / bulletLineH));
-      for (let bi = 0; bi < maxBullets; bi++) {
-        const bulletText = `•  ${featured.highlights[bi]}`;
-        const bulletResult = wrapTextLines({
-          text: bulletText,
-          maxWidth: featNameMaxW,
-          font,
-          fontSize: bulletSize,
-          minFontSize: 5,
-          maxHeight: bulletLineH * 2,
-          leadingRatio: 1.2,
-        });
-        for (let li = 0; li < bulletResult.lines.length; li++) {
-          const lineY = cursorY - li * bulletResult.lineHeight;
-          page.drawText(bulletResult.lines[li], {
-            x: leftX + panelPad,
-            y: lineY - bulletResult.fontSize,
-            size: bulletResult.fontSize,
-            font,
-            color: black,
-          });
-        }
-        cursorY -= bulletResult.lines.length * bulletResult.lineHeight;
-      }
     }
   }
 
-  // QR code at bottom of left panel
+  // Featured QR (centred vertically) with "SCAN TO BOOK" caption beneath.
   if (featured.eventUrl) {
-    const qrSize = mmToPt(22);
-    const qrY = bodyBottom + panelPad;
-    const qrX = leftX + panelPad;
+    const capSize = 6.5;
+    const qrBlockY = featuredBottom + (featuredH - featQrSize - capSize - mmToPt(1.5)) / 2;
     try {
       const qrBytes = await qrPng(featured.eventUrl);
       const qrImage = await pdf.embedPng(qrBytes);
-      page.drawImage(qrImage, { x: qrX, y: qrY, width: qrSize, height: qrSize });
-
-      // "Scan to book" label
-      page.drawText("Scan to book", {
-        x: qrX + qrSize + 4,
-        y: qrY + qrSize / 2 - 3,
-        size: 6,
-        font,
+      page.drawImage(qrImage, {
+        x: featQrX,
+        y: qrBlockY + capSize + mmToPt(1.5),
+        width: featQrSize,
+        height: featQrSize,
+      });
+      const cap = "SCAN TO BOOK";
+      const capW = fontBold.widthOfTextAtSize(cap, capSize);
+      page.drawText(cap, {
+        x: featQrX + (featQrSize - capW) / 2,
+        y: qrBlockY,
+        size: capSize,
+        font: fontBold,
         color: black,
       });
     } catch {
-      // QR generation failed; skip silently
+      // QR generation failed; skip silently.
     }
   }
 
-  // --- Right panel: timeline ---
-  if (timelineEvents.length === 0) return;
+  // --- Upcoming events grid (up to three cards, After Hours .ev-grid) ---
+  if (upcomingEvents.length === 0) return;
 
-  const rowH = bodyH / Math.min(timelineEvents.length, 11);
-  const dateBlockW = mmToPt(16);
-  const dividerX = rightPanelX + dateBlockW + 4;
-  const detailX = dividerX + 6;
-  const qrColW = mmToPt(16);
-  const detailMaxW = pageW - marginX - qrColW - detailX - 4;
+  const gridTop = featuredBottom - mmToPt(5);
+  const gridBottom = bodyBottom;
+  const gridCardH = gridTop - gridBottom;
+  const gridGap = mmToPt(5);
+  const gridCardW = (contentW - (upcomingEvents.length - 1) * gridGap) / upcomingEvents.length;
+  const cardPad = mmToPt(4);
 
-  for (let i = 0; i < timelineEvents.length; i++) {
-    const ev = timelineEvents[i];
-    const rowTop = bodyTop - i * rowH;
-    const rowBottom = rowTop - rowH;
+  for (let i = 0; i < upcomingEvents.length; i++) {
+    const ev = upcomingEvents[i];
+    const cardX = marginX + i * (gridCardW + gridGap);
 
-    // Horizontal divider between rows (not above first)
-    if (i > 0) {
-      page.drawLine({
-        start: { x: rightPanelX, y: rowTop },
-        end: { x: pageW - marginX, y: rowTop },
-        thickness: 0.5,
-        color: black,
-      });
-    }
-
-    const rowCenterY = rowBottom + rowH / 2;
-
-    // Date block — all centred within dateBlockW
-    const dateCenterX = rightPanelX + dateBlockW / 2;
-
-    // Day-of-week (5.5pt uppercase)
-    const dowText = sanitizePdfText(ev.dayOfWeek.toUpperCase(), font);
-    const dowW = font.widthOfTextAtSize(dowText, 5.5);
-    page.drawText(dowText, {
-      x: dateCenterX - dowW / 2,
-      y: rowCenterY + 12,
-      size: 5.5,
-      font,
-      color: black,
+    // Card border (1pt).
+    page.drawRectangle({
+      x: cardX,
+      y: gridBottom,
+      width: gridCardW,
+      height: gridCardH,
+      borderColor: black,
+      borderWidth: 1,
     });
 
-    // Day number (20pt bold)
-    const dayNumber = sanitizePdfText(ev.dayNumber, fontBold);
-    const dayNumW = fontBold.widthOfTextAtSize(dayNumber, 20);
-    page.drawText(dayNumber, {
-      x: dateCenterX - dayNumW / 2,
-      y: rowCenterY - 4,
-      size: 20,
+    const innerX = cardX + cardPad;
+    const innerMaxW = gridCardW - 2 * cardPad;
+    let cardCursorY = gridTop - cardPad;
+
+    // Date line: "FRI 11 JUL" (bold uppercase).
+    const dateLine = sanitizePdfText(
+      `${ev.dayOfWeek} ${ev.dayNumber} ${ev.monthShort}`.toUpperCase(),
+      fontBold,
+    );
+    const dateSize = 10;
+    page.drawText(dateLine, {
+      x: innerX,
+      y: cardCursorY - dateSize,
+      size: dateSize,
       font: fontBold,
       color: black,
     });
+    cardCursorY -= dateSize + mmToPt(2);
 
-    // Month (6.5pt bold uppercase)
-    const monthText = sanitizePdfText(ev.monthShort.toUpperCase(), fontBold);
-    const monthW = fontBold.widthOfTextAtSize(monthText, 6.5);
-    page.drawText(monthText, {
-      x: dateCenterX - monthW / 2,
-      y: rowCenterY - 16,
-      size: 6.5,
-      font: fontBold,
-      color: black,
-    });
-
-    // Vertical divider
-    page.drawLine({
-      start: { x: dividerX, y: rowTop - 4 },
-      end: { x: dividerX, y: rowBottom + 4 },
-      thickness: 0.5,
-      color: black,
-    });
-
-    // Event name (8.5pt bold)
+    // Event name (bold, wrapped).
     const nameResult = wrapTextLines({
       text: ev.name,
-      maxWidth: detailMaxW,
+      maxWidth: innerMaxW,
       font: fontBold,
-      fontSize: 8.5,
-      minFontSize: 6,
-      maxHeight: rowH * 0.4,
-      leadingRatio: 1.15,
+      fontSize: 9,
+      minFontSize: 7,
+      maxHeight: gridCardH * 0.3,
+      leadingRatio: 1.1,
     });
     for (let li = 0; li < nameResult.lines.length; li++) {
       page.drawText(nameResult.lines[li], {
-        x: detailX,
-        y: rowCenterY + 8 - li * nameResult.lineHeight,
+        x: innerX,
+        y: cardCursorY - nameResult.fontSize - li * nameResult.lineHeight,
         size: nameResult.fontSize,
         font: fontBold,
         color: black,
       });
     }
+    cardCursorY -= nameResult.lines.length * nameResult.lineHeight + mmToPt(1.5);
 
-    // Time + price (6.5pt)
-    const timePriceText = sanitizePdfText(`${ev.time} \u2022 ${ev.price}`, font);
-    page.drawText(timePriceText, {
-      x: detailX,
-      y: rowCenterY - 4,
-      size: 6.5,
+    // Time · price (muted).
+    const timePrice = sanitizePdfText(`${ev.time} · ${ev.price}`, font);
+    const timePriceSize = 7.5;
+    page.drawText(timePrice, {
+      x: innerX,
+      y: cardCursorY - timePriceSize,
+      size: timePriceSize,
       font,
-      color: black,
+      color: muted,
     });
+    cardCursorY -= timePriceSize + mmToPt(2);
 
-    // Description + highlights (6.5pt, wrapped)
-    const timelineDesc = ev.highlights.length > 0
-      ? `${ev.description}  ·  ${ev.highlights.join("  ·  ")}`
-      : ev.description;
-    const descResult2 = wrapTextLines({
-      text: timelineDesc,
-      maxWidth: detailMaxW,
-      font,
-      fontSize: 6.5,
-      minFontSize: 5,
-      maxHeight: rowH * 0.35,
-      leadingRatio: 1.1,
-    });
-    for (let li = 0; li < descResult2.lines.length; li++) {
-      page.drawText(descResult2.lines[li], {
-        x: detailX,
-        y: rowCenterY - 14 - li * descResult2.lineHeight,
-        size: descResult2.fontSize,
+    // QR row sits at the bottom of the card; the description fills the gap above.
+    const smallQr = mmToPt(14);
+    const qrRowY = gridBottom + cardPad;
+    const descMaxH = cardCursorY - (qrRowY + smallQr) - mmToPt(1.5);
+    if (descMaxH > 8 && ev.description.trim().length > 0) {
+      const descResult = wrapTextLines({
+        text: ev.description,
+        maxWidth: innerMaxW,
         font,
-        color: black,
+        fontSize: 7.5,
+        minFontSize: 6,
+        maxHeight: descMaxH,
+        leadingRatio: 1.25,
       });
+      for (let li = 0; li < descResult.lines.length; li++) {
+        page.drawText(descResult.lines[li], {
+          x: innerX,
+          y: cardCursorY - descResult.fontSize - li * descResult.lineHeight,
+          size: descResult.fontSize,
+          font,
+          color: rgb(0.27, 0.27, 0.27),
+        });
+      }
     }
 
-    // QR code (14mm)
+    // QR + "Scan to book" caption at the bottom-left of the card.
     if (ev.eventUrl) {
-      const smallQr = mmToPt(14);
-      const qrX2 = pageW - marginX - smallQr;
-      const qrY2 = rowCenterY - smallQr / 2;
       try {
         const qrBytes = await qrPng(ev.eventUrl);
         const qrImage = await pdf.embedPng(qrBytes);
-        page.drawImage(qrImage, { x: qrX2, y: qrY2, width: smallQr, height: smallQr });
+        page.drawImage(qrImage, { x: innerX, y: qrRowY, width: smallQr, height: smallQr });
+        page.drawText("Scan to", {
+          x: innerX + smallQr + mmToPt(2),
+          y: qrRowY + smallQr / 2 + 1,
+          size: 6.5,
+          font: fontBold,
+          color: muted,
+        });
+        page.drawText("book", {
+          x: innerX + smallQr + mmToPt(2),
+          y: qrRowY + smallQr / 2 - 7,
+          size: 6.5,
+          font: fontBold,
+          color: muted,
+        });
       } catch {
-        // skip
+        // QR generation failed; skip silently.
       }
     }
   }
