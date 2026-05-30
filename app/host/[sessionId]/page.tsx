@@ -984,14 +984,17 @@ export default function HostSessionControllerPage() {
         ...prev,
         content: { ...(prev.content ?? {}), [key as ContentKey]: value },
       }));
-      // Also persist onto the session record so it survives a page refresh.
-      if (session) {
+      // Persist onto the session record (functional updater reads the latest
+      // session, avoiding a stale closure if a poll/timing-save mutated it).
+      setSession((prevSession) => {
+        if (!prevSession) return prevSession;
         const updatedSession = {
-          ...session,
-          content: { ...(session.content ?? {}), [key as ContentKey]: value },
+          ...prevSession,
+          content: { ...(prevSession.content ?? {}), [key as ContentKey]: value },
         };
         void upsertLiveSession(updatedSession).catch(() => {});
-      }
+        return updatedSession;
+      });
     },
   };
 
@@ -1002,16 +1005,15 @@ export default function HostSessionControllerPage() {
     return idx >= 0 ? idx : 0;
   })();
 
-  // Effective reveal config (for timing panel)
+  // Base reveal config in SECONDS for NowPlayingPanel. The panel applies the
+  // +30s extension itself (via `extendedMs`), so pass the UN-extended config
+  // here — otherwise the host readout would double-count the extension.
   const baseCfgForPanel = isChallenge ? CHALLENGE_REVEAL_CONFIG : normalRevealConfig;
-  const effectiveCfgForPanel = getRevealConfigWithExtension(baseCfgForPanel, runtime.extensionMs);
-
-  // Timing in seconds for NowPlayingPanel
   const timingForPanel = {
-    song: Math.round(effectiveCfgForPanel.nextMs / 1000),
-    album: Math.round(effectiveCfgForPanel.albumMs / 1000),
-    title: Math.round(effectiveCfgForPanel.titleMs / 1000),
-    artist: Math.round(effectiveCfgForPanel.artistMs / 1000),
+    song: Math.round(baseCfgForPanel.nextMs / 1000),
+    album: Math.round(baseCfgForPanel.albumMs / 1000),
+    title: Math.round(baseCfgForPanel.titleMs / 1000),
+    artist: Math.round(baseCfgForPanel.artistMs / 1000),
   };
 
   // Current step is a play screen
