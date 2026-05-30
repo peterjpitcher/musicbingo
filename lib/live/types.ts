@@ -259,7 +259,6 @@ export function makeEmptyRuntimeState(sessionId: string): LiveRuntimeState {
     freePlay: false,
     isIntroSong: false,
     introPlayed: false,
-    screenId: "welcome",
     updatedAtMs: 0,
   };
 }

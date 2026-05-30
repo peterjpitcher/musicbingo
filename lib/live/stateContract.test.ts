@@ -38,16 +38,16 @@ describe("validateRuntimeState — screen/content/variant fields", () => {
   function validRuntime(extra: Record<string, unknown> = {}) {
     return { ...makeEmptyRuntimeState("s1"), updatedAtMs: 1, ...extra };
   }
-  it("defaults screenId to welcome when absent", () => {
+  it("omits screenId when absent (the render layer derives a default)", () => {
     const raw = validRuntime();
     delete (raw as Record<string, unknown>).screenId;
     const out = validateRuntimeState(raw);
     expect(out).not.toBeNull();
-    expect(out!.screenId).toBe("welcome");
+    expect(out!.screenId).toBeUndefined();
   });
-  it("normalises an unknown screenId to welcome and sanitises content", () => {
+  it("omits an unknown screenId and sanitises content", () => {
     const out = validateRuntimeState(validRuntime({ screenId: "bogus", content: { winTeam: "Curls", junk: 1 }, welcomeVariant: "C" }));
-    expect(out!.screenId).toBe("welcome");
+    expect(out!.screenId).toBeUndefined();
     expect(out!.content).toEqual({ winTeam: "Curls" });
     expect(out!.welcomeVariant).toBe("C");
   });
