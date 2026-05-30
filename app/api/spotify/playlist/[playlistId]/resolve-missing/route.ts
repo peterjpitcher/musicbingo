@@ -50,10 +50,12 @@ export async function POST(
   const secure = process.env.NODE_ENV === "production";
 
   // --- Auth: require the refresh-token cookie ---
+  // All non-200 responses use JSON { error } so the client (which reads
+  // res.json().error) can surface the real reason instead of a generic code.
   const refreshToken = request.cookies.get(COOKIE_REFRESH)?.value ?? "";
   if (!refreshToken.trim()) {
-    return new Response(
-      'Spotify is not connected. Click "Connect Spotify" and try again.',
+    return NextResponse.json(
+      { error: 'Spotify is not connected. Click "Connect Spotify" and try again.' },
       { status: 401 },
     );
   }
@@ -63,7 +65,7 @@ export async function POST(
   try {
     body = await request.json();
   } catch {
-    return new Response("Invalid JSON body.", { status: 400 });
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
   if (
@@ -71,8 +73,8 @@ export async function POST(
     body === null ||
     !Array.isArray((body as Record<string, unknown>).resolutions)
   ) {
-    return new Response(
-      'Body must be JSON with a "resolutions" array.',
+    return NextResponse.json(
+      { error: 'Body must be JSON with a "resolutions" array.' },
       { status: 400 },
     );
   }
@@ -89,8 +91,8 @@ export async function POST(
       typeof (item as Record<string, unknown>).title !== "string" ||
       typeof (item as Record<string, unknown>).spotifyTrackUrl !== "string"
     ) {
-      return new Response(
-        `resolutions[${i}] must have string fields: artist, title, spotifyTrackUrl.`,
+      return NextResponse.json(
+        { error: `resolutions[${i}] must have string fields: artist, title, spotifyTrackUrl.` },
         { status: 400 },
       );
     }
@@ -108,7 +110,10 @@ export async function POST(
     newRefreshToken = refreshed.refreshToken;
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Failed to refresh Spotify token.";
-    return new Response(`${msg}\n\nTry clicking "Connect Spotify" again.`, { status: 401 });
+    return NextResponse.json(
+      { error: `${msg}\n\nTry clicking "Connect Spotify" again.` },
+      { status: 401 },
+    );
   }
 
   // --- Process each resolution ---

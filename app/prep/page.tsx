@@ -14,7 +14,15 @@ import {
   getDefaultRevealConfigForSongInput,
   parseRevealConfigInputs,
 } from "@/lib/live/timing";
-import { DEFAULT_REVEAL_CONFIG, LIVE_SESSION_VERSION, type IntroSong, type LiveSessionV1 } from "@/lib/live/types";
+import {
+  DEFAULT_REVEAL_CONFIG,
+  getChallengeSongs,
+  getIntroSongs,
+  LIVE_SESSION_VERSION,
+  type IntroSong,
+  type LiveGameConfig,
+  type LiveSessionV1,
+} from "@/lib/live/types";
 import { parseSongListText } from "@/lib/parser";
 import type { Song } from "@/lib/types";
 import { sanitizeFilenamePart } from "@/lib/utils";
@@ -74,6 +82,25 @@ function parseChallengeSongSelection(selection: string): { artist: string; title
     return { artist: selection.slice(0, delim).trim(), title: selection.slice(delim + 3).trim() };
   }
   return { artist: "", title: "" };
+}
+
+/**
+ * Build the wizard's ChallengeEntry[] (length 5) from a persisted game config.
+ * Reads the AUTHORITATIVE challenge songs (with their real type) via
+ * getChallengeSongs — prepData would lose the dance-along/sing-along type.
+ * The `value` is encoded as `${artist}|||${title}` to match
+ * makeSongSelectionValue / parseChallengeSongSelection so it survives the
+ * song-list pruning effects and round-trips correctly on save.
+ */
+function challengeEntriesFromGame(game: LiveGameConfig): ChallengeEntry[] {
+  const entries: ChallengeEntry[] = Array(5).fill(null).map(() => ({ value: "", type: "sing-along" as const }));
+  getChallengeSongs(game)
+    .slice(0, 5)
+    .forEach((cs, idx) => {
+      if (!cs.artist || !cs.title) return;
+      entries[idx] = { value: `${cs.artist}|||${cs.title}`, type: cs.type };
+    });
+  return entries;
 }
 
 function makeSessionId(): string {
@@ -254,6 +281,13 @@ function PrepPageInner() {
         }
 
         const pd = loaded.prepData;
+        // The persisted game configs are AUTHORITATIVE for challenge-song types
+        // and intro songs (prepData is lossy: it drops intro songs and the
+        // dance-along/sing-along type). Read scalars from prepData, but read
+        // challenge/intro songs from loaded.games[i].
+        const games = Array.isArray(loaded.games) ? loaded.games : [];
+        const findGame = (n: 1 | 2): LiveGameConfig | undefined =>
+          games.find((g) => g?.gameNumber === n);
 
         // Hydrate step-0 fields
         if (loaded.eventDateInput) setEventDate(loaded.eventDateInput);
@@ -274,23 +308,23 @@ function PrepPageInner() {
         // Hydrate step-1 fields
         if (pd.game1Theme) setGame1Theme(pd.game1Theme);
         if (pd.game1SongsText) setGame1SongsText(pd.game1SongsText);
-        if (pd.game1ChallengeSongs && pd.game1ChallengeSongs.length > 0) {
-          const entries: ChallengeEntry[] = Array(5).fill(null).map(() => ({ value: "", type: "sing-along" as const }));
-          pd.game1ChallengeSongs.slice(0, 5).forEach((val, idx) => {
-            entries[idx] = { value: val, type: "sing-along" };
-          });
-          setGame1ChallengeSongs(entries);
+        const game1 = findGame(1);
+        if (game1) {
+          const entries = challengeEntriesFromGame(game1);
+          if (entries.some((c) => c.value)) setGame1ChallengeSongs(entries);
+          const intros = getIntroSongs(game1);
+          if (intros.length > 0) setGame1IntroSongs(intros);
         }
 
         // Hydrate step-2 fields
         if (pd.game2Theme) setGame2Theme(pd.game2Theme);
         if (pd.game2SongsText) setGame2SongsText(pd.game2SongsText);
-        if (pd.game2ChallengeSongs && pd.game2ChallengeSongs.length > 0) {
-          const entries: ChallengeEntry[] = Array(5).fill(null).map(() => ({ value: "", type: "sing-along" as const }));
-          pd.game2ChallengeSongs.slice(0, 5).forEach((val, idx) => {
-            entries[idx] = { value: val, type: "sing-along" };
-          });
-          setGame2ChallengeSongs(entries);
+        const game2 = findGame(2);
+        if (game2) {
+          const entries = challengeEntriesFromGame(game2);
+          if (entries.some((c) => c.value)) setGame2ChallengeSongs(entries);
+          const intros = getIntroSongs(game2);
+          if (intros.length > 0) setGame2IntroSongs(intros);
         }
 
         // Preserve the session id so save overwrites the same record
