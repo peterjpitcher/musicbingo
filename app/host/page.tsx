@@ -4,13 +4,13 @@ import { useEffect, useState } from "react";
 
 import { BrandSelector } from "@/components/brand/BrandSelector";
 import { AppHeader } from "@/components/layout/AppHeader";
-import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
 import { Notice } from "@/components/ui/Notice";
 import {
   deleteLiveSession,
+  exportLiveSessionJson,
   importLiveSessionJson,
   listLiveSessions,
+  upsertLiveSession,
 } from "@/lib/live/sessionApi";
 import { migrateLocalSessionsToSupabase } from "@/lib/live/migrateToSupabase";
 import type { LiveSessionV1 } from "@/lib/live/types";
@@ -25,6 +25,21 @@ function downloadBlob(blob: Blob, filename: string): void {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+/** A session is "Ready" when both games have a playlist and at least 1 song each. */
+function deriveStatus(session: LiveSessionV1): "ready" | "draft" {
+  const game1 = session.games.find((g) => g.gameNumber === 1);
+  const game2 = session.games.find((g) => g.gameNumber === 2);
+  if (
+    game1?.playlistId &&
+    game2?.playlistId &&
+    (game1.totalSongs ?? game1.addedCount ?? 0) >= 1 &&
+    (game2.totalSongs ?? game2.addedCount ?? 0) >= 1
+  ) {
+    return "ready";
+  }
+  return "draft";
 }
 
 
@@ -80,9 +95,9 @@ export default function HostDashboardPage() {
       const imported = await importLiveSessionJson(text);
       await refreshSessions();
       setNotice(`Imported session: ${imported.name}`);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setNotice("");
-      setError(err?.message ?? "Failed to import session file.");
+      setError(err instanceof Error ? err.message : "Failed to import session file.");
     }
   }
 
@@ -93,9 +108,34 @@ export default function HostDashboardPage() {
       await refreshSessions();
       setNotice(`Deleted session: ${session.name}`);
       setError("");
-    } catch (err: any) {
+    } catch (err: unknown) {
       setNotice("");
-      setError(err?.message ?? "Failed to delete session.");
+      setError(err instanceof Error ? err.message : "Failed to delete session.");
+    }
+  }
+
+  function onExportJson(session: LiveSessionV1) {
+    const json = exportLiveSessionJson(session);
+    const blob = new Blob([json], { type: "application/json" });
+    const safeName = session.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+    downloadBlob(blob, `${safeName}.json`);
+    setNotice(`Exported session: ${session.name}`);
+  }
+
+  async function onDuplicate(session: LiveSessionV1) {
+    try {
+      const copy: LiveSessionV1 = {
+        ...JSON.parse(JSON.stringify(session)) as LiveSessionV1,
+        id: crypto.randomUUID(),
+        name: `${session.name} (copy)`,
+        createdAt: new Date().toISOString(),
+      };
+      await upsertLiveSession(copy);
+      await refreshSessions();
+      setNotice(`Duplicated session: ${session.name}`);
+    } catch (err: unknown) {
+      setNotice("");
+      setError(err instanceof Error ? err.message : "Failed to duplicate session.");
     }
   }
 
@@ -112,11 +152,11 @@ export default function HostDashboardPage() {
         };
         const onMessage = (event: MessageEvent) => {
           if (event.origin !== window.location.origin) return;
-          const data = event.data as any;
-          if (!data || typeof data !== "object" || data.type !== "spotify-auth") return;
+          const data = event.data as Record<string, unknown>;
+          if (!data || typeof data !== "object" || data["type"] !== "spotify-auth") return;
           cleanup();
-          if (data.ok) resolve();
-          else reject(new Error(data.error || "Spotify auth failed."));
+          if (data["ok"]) resolve();
+          else reject(new Error(typeof data["error"] === "string" ? data["error"] : "Spotify auth failed."));
         };
         const timer = window.setInterval(() => {
           if (w.closed) {
@@ -138,8 +178,8 @@ export default function HostDashboardPage() {
         .catch(() => ({ connected: false }));
       setSpotifyConnected(Boolean(status.connected));
       return Boolean(status.connected);
-    } catch (err: any) {
-      setError(err?.message ?? "Failed to connect Spotify.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to connect Spotify.");
       setSpotifyConnected(false);
       return false;
     }
@@ -227,26 +267,24 @@ export default function HostDashboardPage() {
         "music-bingo-event-pack.zip";
       downloadBlob(blob, filename);
       setNotice(`Downloaded event pack for: ${session.name}`);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setNotice("");
-      setError(err?.message ?? "Failed to download event pack.");
+      setError(err instanceof Error ? err.message : "Failed to download event pack.");
     } finally {
       setDownloading(null);
     }
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="host-root">
       <AppHeader
-        title="Music Bingo Host"
-        subtitle="Live session dashboard"
-        variant="light"
+        title="Music Bingo"
+        subtitle="Setup &amp; Manage"
         actions={
           <>
-            <label className="cursor-pointer">
-              <span className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-800 px-4 py-2.5 text-sm font-semibold tracking-wide transition-colors cursor-pointer">
-                Import Session JSON
-              </span>
+            <a href="/brands" className="hbtn">Manage Brands</a>
+            <label className="hbtn" style={{ cursor: "pointer" }}>
+              &#8595; Import Session JSON
               <input
                 type="file"
                 accept="application/json,.json"
@@ -259,132 +297,173 @@ export default function HostDashboardPage() {
                 }}
               />
             </label>
-            <Button as="link" href="/brands" variant="secondary" size="sm">
-              Manage Brands
-            </Button>
-            <Button as="link" href="/prep" variant="primary" size="sm">
-              New Game
-            </Button>
+            <a href="/prep" className="hbtn hbtn--primary">+ New Game</a>
           </>
         }
       />
 
-      <main className="max-w-7xl mx-auto px-4 py-8 space-y-4">
-        {notice ? <Notice variant="success">{notice}</Notice> : null}
-        {error ? <Notice variant="error">{error}</Notice> : null}
+      <div className="host-main" style={{ display: "block" }}>
+        {notice ? (
+          <div style={{ marginBottom: 16 }}>
+            <Notice variant="success">{notice}</Notice>
+          </div>
+        ) : null}
+        {error ? (
+          <div style={{ marginBottom: 16 }}>
+            <Notice variant="error">{error}</Notice>
+          </div>
+        ) : null}
+
+        <div className="dash-head">
+          <div>
+            <h1>Your Games</h1>
+            <p>Create a new game, or open any existing one to edit songs, themes, timing and details — nothing gets locked.</p>
+          </div>
+        </div>
 
         {loading ? (
-          <Card>
-            <p className="text-slate-500 text-sm">Loading sessions...</p>
-          </Card>
+          <div className="newcard" style={{ textAlign: "center", padding: "48px 24px" }}>
+            <p style={{ margin: 0, opacity: 0.6 }}>Loading sessions&hellip;</p>
+          </div>
         ) : !sessions.length ? (
-          <Card>
-            <h2 className="text-lg font-bold text-slate-800 mb-2">No saved live sessions</h2>
-            <p className="text-slate-500 text-sm mb-4">
-              Generate playlists on the prep screen, then click &quot;Save Live Session&quot;.
+          <div className="newcard" style={{ textAlign: "center", padding: "48px 24px" }}>
+            <div className="plus">+</div>
+            <div className="t">No saved live sessions</div>
+            <p style={{ margin: "12px 0 20px", opacity: 0.6, fontSize: 14 }}>
+              Generate playlists on the prep screen, then click &ldquo;Save Live Session&rdquo;.
             </p>
-            <Button as="link" href="/prep" variant="primary">
-              New Game
-            </Button>
-          </Card>
+            <a href="/prep" className="hbtn hbtn--primary">+ New Game</a>
+          </div>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-            <table className="w-full text-sm text-left table-fixed">
-              <colgroup>
-                <col className="w-[22%]" />
-                <col className="w-[14%]" />
-                <col className="w-[28%]" />
-                <col className="w-[18%]" />
-                <col className="w-[18%]" />
-              </colgroup>
+          <div className="gtable-wrap">
+            <table className="gtable">
               <thead>
-                <tr className="border-b border-slate-200 bg-slate-50">
-                  <th scope="col" className="px-4 py-3 font-semibold text-slate-700">Session</th>
-                  <th scope="col" className="px-4 py-3 font-semibold text-slate-700">Event Date</th>
-                  <th scope="col" className="px-4 py-3 font-semibold text-slate-700">Games</th>
-                  <th scope="col" className="px-4 py-3 font-semibold text-slate-700">Brand</th>
-                  <th scope="col" className="px-4 py-3 font-semibold text-slate-700 text-right">Actions</th>
+                <tr>
+                  <th>Game</th>
+                  <th>Venue</th>
+                  <th>Date</th>
+                  <th>Status</th>
+                  <th>Game 1</th>
+                  <th>Game 2</th>
+                  <th className="right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
-                {sessions.map((session) => (
-                  <tr key={session.id} className="hover:bg-slate-50/60 transition-colors align-top">
-                    <td className="px-4 py-3">
-                      <a
-                        href={`/host/${session.id}`}
-                        className="font-semibold text-slate-800 hover:text-blue-600 hover:underline underline-offset-2"
-                      >
-                        {session.name}
-                      </a>
-                      <p className="text-xs text-slate-400 mt-0.5">
-                        Created {new Date(session.createdAt).toLocaleDateString()}
-                      </p>
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">
-                      {session.eventDateDisplay}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-col gap-1">
-                        {session.games
-                          .slice()
-                          .sort((a, b) => a.gameNumber - b.gameNumber)
-                          .map((game) => (
-                            <span key={game.gameNumber} className="text-xs text-slate-600">
-                              <span className="font-semibold text-slate-500">G{game.gameNumber}:</span> {game.theme}
-                            </span>
-                          ))}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <BrandSelector
-                        value={session.brandId ?? null}
-                        disabled={updatingBrand === session.id}
-                        onChange={async (brandId) => {
-                          setUpdatingBrand(session.id);
-                          try {
-                            const res = await fetch(`/api/sessions/${session.id}/brand`, {
-                              method: "PUT",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ brand_id: brandId }),
-                            });
-                            if (!res.ok) throw new Error("Failed to update brand");
-                            await refreshSessions();
-                            setNotice(`Updated brand for: ${session.name}`);
-                          } catch (err: any) {
-                            setError(err?.message ?? "Failed to update brand.");
-                          } finally {
-                            setUpdatingBrand(null);
-                          }
-                        }}
-                        className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs"
-                      />
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-start justify-end gap-2 whitespace-nowrap">
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          disabled={downloading === session.id || updatingBrand === session.id}
-                          onClick={() => void onRedownload(session)}
-                        >
-                          {downloading === session.id ? "Generating..." : "Re-download"}
-                        </Button>
-                        <Button
-                          variant="danger"
-                          size="sm"
-                          onClick={() => void onDelete(session)}
-                        >
-                          Delete
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+              <tbody>
+                {sessions.map((session) => {
+                  const game1 = session.games.find((g) => g.gameNumber === 1);
+                  const game2 = session.games.find((g) => g.gameNumber === 2);
+                  const status = deriveStatus(session);
+                  const isDownloading = downloading === session.id;
+                  const isBrandUpdating = updatingBrand === session.id;
+
+                  return (
+                    <tr key={session.id}>
+                      {/* Game */}
+                      <td>
+                        <div className="gt-name">{session.name || "Untitled game"}</div>
+                        <div style={{ fontSize: 11, opacity: 0.5, marginTop: 3 }}>
+                          Created {new Date(session.createdAt).toLocaleDateString("en-GB")}
+                        </div>
+                      </td>
+
+                      {/* Venue — brand chip + selector to change */}
+                      <td>
+                        <BrandSelector
+                          value={session.brandId ?? null}
+                          disabled={isBrandUpdating}
+                          onChange={async (brandId) => {
+                            setUpdatingBrand(session.id);
+                            try {
+                              const res = await fetch(`/api/sessions/${session.id}/brand`, {
+                                method: "PUT",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ brand_id: brandId }),
+                              });
+                              if (!res.ok) throw new Error("Failed to update brand");
+                              await refreshSessions();
+                              setNotice(`Updated brand for: ${session.name}`);
+                            } catch (err: unknown) {
+                              setError(err instanceof Error ? err.message : "Failed to update brand.");
+                            } finally {
+                              setUpdatingBrand(null);
+                            }
+                          }}
+                          className="hbtn"
+                        />
+                      </td>
+
+                      {/* Date */}
+                      <td className="gt-when">{session.eventDateDisplay}</td>
+
+                      {/* Status — derived, never persisted */}
+                      <td>
+                        <span className={`statustag ${status}`}>
+                          {status === "ready" ? "Ready" : "Draft"}
+                        </span>
+                      </td>
+
+                      {/* Game 1 */}
+                      <td className="gt-game">
+                        <b>{game1?.theme || "Game 1"}</b>
+                        <br />
+                        <span>{game1 ? (game1.totalSongs ?? game1.addedCount ?? 0) : 0} songs</span>
+                      </td>
+
+                      {/* Game 2 */}
+                      <td className="gt-game">
+                        <b>{game2?.theme || "Game 2"}</b>
+                        <br />
+                        <span>{game2 ? (game2.totalSongs ?? game2.addedCount ?? 0) : 0} songs</span>
+                      </td>
+
+                      {/* Actions */}
+                      <td>
+                        <div className="gt-actions">
+                          <a className="hbtn hbtn--primary" href={`/host/${session.id}`}>
+                            &#9654; Control
+                          </a>
+                          <a className="hbtn" href={`/prep?session=${session.id}`}>
+                            &#9998; Edit
+                          </a>
+                          <button
+                            className="hbtn"
+                            title="Re-download event pack"
+                            disabled={isDownloading || isBrandUpdating}
+                            onClick={() => void onRedownload(session)}
+                          >
+                            {isDownloading ? "Generating…" : "Event Pack"}
+                          </button>
+                          <button
+                            className="hbtn iconbtn"
+                            title="Export session JSON"
+                            onClick={() => onExportJson(session)}
+                          >
+                            &#8679;
+                          </button>
+                          <button
+                            className="hbtn iconbtn"
+                            title="Duplicate session"
+                            onClick={() => void onDuplicate(session)}
+                          >
+                            &#10697;
+                          </button>
+                          <button
+                            className="hbtn iconbtn hbtn--danger"
+                            title="Delete session"
+                            onClick={() => void onDelete(session)}
+                          >
+                            &#128465;
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
-      </main>
+      </div>
     </div>
   );
 }
