@@ -1,6 +1,7 @@
 import JSZip from "jszip";
 
 import { renderClipboardDocx } from "@/lib/clipboardDocx";
+import { renderRunSheetPdf, makeRunSheetFilename } from "@/lib/pdfRunSheet";
 import { formatEventDateDisplay } from "@/lib/eventDate";
 import { generateCards } from "@/lib/generator";
 import {
@@ -237,20 +238,25 @@ async function renderGamePdfWithEvents(params: {
   const pdf = await PDFDocument.load(cardsPdfBytes);
   const cardPageCount = pdf.getPageCount();
 
+  // The What's-On page is identical for every card sheet. Render it ONCE, then
+  // copy it in after each card page. (It was previously re-rendered in full —
+  // fresh fonts + QR codes included — once per card page, which scaled O(cards)
+  // and dominated generation time.)
+  const eventsPdf = await PDFDocument.create();
+  const eventsFont = await eventsPdf.embedFont(StandardFonts.Helvetica);
+  const eventsFontBold = await eventsPdf.embedFont(StandardFonts.HelveticaBold);
+  await renderEventsPage(eventsPdf, eventsFont, eventsFontBold, {
+    events: params.events,
+    logoLeftPngBytes: params.logoLeftPngBytes,
+    logoRightPngBytes: params.logoRightPngBytes,
+    brandConfig: params.brandConfig,
+  });
+
+  // copyPages shares the source page's resources (e.g. the QR image) across all
+  // copies made within a single call, so this stays cheap and compact.
+  const eventsCopies = await pdf.copyPages(eventsPdf, new Array(cardPageCount).fill(0));
   for (let i = cardPageCount - 1; i >= 0; i--) {
-    const tempPdf = await PDFDocument.create();
-    const tempFont = await tempPdf.embedFont(StandardFonts.Helvetica);
-    const tempFontBold = await tempPdf.embedFont(StandardFonts.HelveticaBold);
-
-    await renderEventsPage(tempPdf, tempFont, tempFontBold, {
-      events: params.events,
-      logoLeftPngBytes: params.logoLeftPngBytes,
-      logoRightPngBytes: params.logoRightPngBytes,
-      brandConfig: params.brandConfig,
-    });
-
-    const [copiedPage] = await pdf.copyPages(tempPdf, [0]);
-    pdf.insertPage(i + 1, copiedPage);
+    pdf.insertPage(i + 1, eventsCopies[i]);
   }
 
   return new Uint8Array(await pdf.save());
@@ -398,6 +404,44 @@ export async function POST(request: Request) {
       logoLeftPngBytes = await loadDefaultEventLogoPngBytes({ origin });
     }
 
+    // Shared input shape for the host run-of-show artefacts (DOCX clipboard +
+    // PDF run sheet) so the two stay consistent.
+    const runOfShowInput = {
+      eventDateInput,
+      game1: {
+        theme: game1Theme,
+        songs: sortedGame1Songs,
+        challengeSongs: game1ChallengeSongsList,
+        introSong: game1IntroSong,
+        challengeTypes: g1ChallengeTypes.length > 0 ? g1ChallengeTypes : undefined,
+        introSongs: g1IntroSongs.length > 0 ? g1IntroSongs : undefined,
+      },
+      game2: {
+        theme: game2Theme,
+        songs: sortedGame2Songs,
+        challengeSongs: game2ChallengeSongsList,
+        introSong: game2IntroSong,
+        challengeTypes: g2ChallengeTypes.length > 0 ? g2ChallengeTypes : undefined,
+        introSongs: g2IntroSongs.length > 0 ? g2IntroSongs : undefined,
+      },
+      upcomingEvents,
+      normalSongSeconds,
+    };
+
+    // Render the run sheet concurrently with the rest of the bundle, but in an
+    // isolated promise: a run-sheet failure must NOT 500 the whole route. We log
+    // and ship the cards + DOCX regardless (preserves the graceful behaviour of
+    // this endpoint).
+    const runSheetPromise: Promise<Uint8Array | null> = renderRunSheetPdf(runOfShowInput).catch(
+      (err: unknown) => {
+        console.error(
+          "[music-bingo] /api/generate run-sheet render failed (skipping run sheet):",
+          err instanceof Error ? err.stack ?? err.message : err,
+        );
+        return null;
+      },
+    );
+
     const [pdfGame1Bytes, pdfGame2Bytes, clipboardDocxBytes] = await Promise.all([
       renderGamePdfWithEvents({
         cards: cardsGame1,
@@ -417,33 +461,21 @@ export async function POST(request: Request) {
         events: upcomingEvents,
         brandConfig,
       }),
-      renderClipboardDocx({
-        eventDateInput,
-        game1: {
-          theme: game1Theme,
-          songs: sortedGame1Songs,
-          challengeSongs: game1ChallengeSongsList,
-          introSong: game1IntroSong,
-          challengeTypes: g1ChallengeTypes.length > 0 ? g1ChallengeTypes : undefined,
-          introSongs: g1IntroSongs.length > 0 ? g1IntroSongs : undefined,
-        },
-        game2: {
-          theme: game2Theme,
-          songs: sortedGame2Songs,
-          challengeSongs: game2ChallengeSongsList,
-          introSong: game2IntroSong,
-          challengeTypes: g2ChallengeTypes.length > 0 ? g2ChallengeTypes : undefined,
-          introSongs: g2IntroSongs.length > 0 ? g2IntroSongs : undefined,
-        },
-        upcomingEvents,
-        normalSongSeconds,
-      }),
+      renderClipboardDocx(runOfShowInput),
     ]);
+
+    // Await the isolated run-sheet render (already in flight above).
+    const runSheetBytes = await runSheetPromise;
 
     const zip = new JSZip();
     zip.file(makeGamePdfFilename(eventDateDisplay, 1), pdfGame1Bytes);
     zip.file(makeGamePdfFilename(eventDateDisplay, 2), pdfGame2Bytes);
     zip.file(makeClipboardFilename(eventDateDisplay), clipboardDocxBytes);
+    // SUPPLEMENT (not replace) the DOCX: hosts may still rely on it. Only add the
+    // run sheet when it rendered successfully.
+    if (runSheetBytes) {
+      zip.file(makeRunSheetFilename(eventDateDisplay), runSheetBytes);
+    }
 
     const zipBytes = await zip.generateAsync({
       type: "uint8array",
