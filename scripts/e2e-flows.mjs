@@ -714,37 +714,28 @@ async function main() {
       await flow6HostPage.getByRole("heading", { name: /Flow Live Session/i }).waitFor();
 
       await flow6GuestPage.goto(`${BASE_URL}/guest/flow-live-session`, { waitUntil: "domcontentloaded" });
-      await flow6GuestPage.getByRole("heading", { name: /Flow Live Session/i }).waitFor();
+      // The guest TV renders the run-of-show screens inside a full-bleed,
+      // 1920×1080 scaler (the "After Hours" TV display).
+      await flow6GuestPage.locator(".viewport").waitFor({ timeout: 15_000 });
+      await flow6GuestPage.locator(".stage-scaler").first().waitFor({ timeout: 15_000 });
 
       const guestStyles = await flow6GuestPage.evaluate(() => {
-        const shell = document.querySelector(".guest-projection-shell");
-        const title = shell?.querySelector("h1");
-        const shellRect = shell?.getBoundingClientRect();
-        const shellStyles = shell ? getComputedStyle(shell) : null;
-        const titleStyles = title ? getComputedStyle(title) : null;
-
+        const viewport = document.querySelector(".viewport");
+        const rect = viewport?.getBoundingClientRect();
         return {
           viewportWidth: window.innerWidth,
-          shellWidth: shellRect?.width ?? 0,
-          shellMaxWidth: shellStyles?.maxWidth ?? "",
-          titleTextFill: titleStyles?.webkitTextFillColor ?? "",
-          titleColor: titleStyles?.color ?? "",
+          shellWidth: rect?.width ?? 0,
         };
       });
-
       assert.ok(
         guestStyles.shellWidth >= guestStyles.viewportWidth - 1,
-        `Guest projection shell should be full-bleed (shell ${guestStyles.shellWidth}, viewport ${guestStyles.viewportWidth})`
+        `Guest TV viewport should be full-bleed (viewport ${guestStyles.shellWidth}, window ${guestStyles.viewportWidth})`
       );
-      assert.ok(
-        guestStyles.shellMaxWidth === "none" || guestStyles.shellMaxWidth === "",
-        `Guest projection shell should not inherit prep max-width (got ${guestStyles.shellMaxWidth})`
-      );
-      assert.notEqual(guestStyles.titleTextFill, "rgba(0, 0, 0, 0)", "Guest title should not be transparent text-fill");
-      assert.equal(guestStyles.titleColor, "rgb(255, 255, 255)", "Guest title color should be white");
 
       await flow6HostPage.getByRole("button", { name: "Start Game 1" }).click();
 
+      // Guest (no explicit screenId from the legacy host) derives the game screen
+      // and reflects the synced track + reveal progression.
       await flow6GuestPage.locator("text=Flow Live Song One").waitFor({ timeout: 15_000 });
       await flow6GuestPage.locator("text=Flow Live Artist A").waitFor({ timeout: 15_000 });
       await flow6GuestPage.locator("text=Flow Live Song Two").waitFor({ timeout: 20_000 });
@@ -766,8 +757,11 @@ async function main() {
       await flow7HostPage.getByRole("button", { name: "Start Game 1" }).click();
       await flow7HostPage.locator("text=Manual host control mode").first().waitFor({ timeout: 15_000 });
 
+      // The audience TV intentionally does NOT show the manual-mode chip — that
+      // operational warning lives on the host controller (asserted above). Verify
+      // the guest still renders correctly while Spotify control is unavailable.
       await flow7GuestPage.goto(`${BASE_URL}/guest/flow-live-fallback`, { waitUntil: "domcontentloaded" });
-      await flow7GuestPage.locator("text=Manual host control mode").first().waitFor({ timeout: 10_000 });
+      await flow7GuestPage.locator(".viewport").waitFor({ timeout: 10_000 });
     });
 
     await flow7Context.close();
