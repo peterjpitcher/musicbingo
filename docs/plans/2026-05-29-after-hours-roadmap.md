@@ -14,7 +14,7 @@ Status: ✅ done · ▶ in progress · ⬜ not started · ⛔ blocked/gated
 | 3 | **Host Controller** (`/host/[sessionId]`) console: preview + run-of-show + Now-Playing/Game-Flow/Timing/Content/Playlist panels + variant controls | 1a, 1b, 2 | ✅ done (engine preserved verbatim; reviewed; e2e 6/7) | executed inline (commits `29dd56e`..HEAD) |
 | 4 | **Setup & Manage**: `/host` dashboard + `/prep` wizard restyle (+ derived readiness, edit-mode hydration, missing-song resolution route) | 0 (1a for content defaults) | ✅ done — restyle + derived status + Duplicate/Export + edit-mode hydration + resolve-missing route/UI; reviewed (2 edit-mode data-loss bugs caught + fixed); e2e 6/7 | inline (commits `cc44631`..HEAD) |
 | 5 | **Brands & Venues** three-pane editor + live preview + font/event-logo UI | 0 | ✅ done — three-pane editor + live preview + font/event-logo fields; reviewed (2 blocking bugs fixed: event-logo URL resolution + qr_items data-loss); e2e 6/7 | inline (commits `f25805e`..`fe84748`) |
-| 6 | **Print/PDF**: `@pdf-lib/fontkit`, cards + What's-On restyle (≤3 events), new run-sheet PDF, `/api/generate` output modes | 0 | ⬜ | tbd |
+| 6 | **Print/PDF**: `@pdf-lib/fontkit`, cards + What's-On restyle (≤3 events), new run-sheet PDF, `/api/generate` output modes | 0 | 🟡 **`/api/generate` fixed → e2e now 7/7 green** (brand resolution made graceful — was the long-standing Flow 3 500); print restyle (fonts/cards/What's-On ≤3) + run-sheet PDF + output modes remaining | inline (commit `5c4d73e`) |
 
 > Split note: spec Phase 1 → **1a** (state/lib, fast, TDD) + **1b** (component porting, large/visual) for shippability. Phases 4/5/6 can parallelise after 0+1a.
 >
