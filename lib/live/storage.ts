@@ -171,6 +171,19 @@ export function validateRuntimeState(input: unknown): LiveRuntimeState | null {
   const welcomeVariant = normalizeVariant(input.welcomeVariant);
   const titleVariant = normalizeVariant(input.titleVariant);
 
+  // Only carry a well-formed welcome song; a partial/invalid value is dropped
+  // (mirrors how screenId/content are validated — never throws).
+  let welcomeSong: LiveRuntimeState["welcomeSong"] | undefined;
+  if (isObject(input.welcomeSong)) {
+    const trackId = asString(input.welcomeSong.trackId);
+    const uri = asString(input.welcomeSong.uri);
+    const title = asString(input.welcomeSong.title);
+    const artist = asString(input.welcomeSong.artist);
+    if (trackId && uri && title && artist) {
+      welcomeSong = { trackId, uri, title, artist };
+    }
+  }
+
   return {
     version: LIVE_RUNTIME_VERSION,
     sessionId,
@@ -205,6 +218,7 @@ export function validateRuntimeState(input: unknown): LiveRuntimeState | null {
     ...(Object.keys(content).length ? { content } : {}),
     ...(welcomeVariant ? { welcomeVariant } : {}),
     ...(titleVariant ? { titleVariant } : {}),
+    ...(welcomeSong ? { welcomeSong } : {}),
     updatedAtMs,
   };
 }

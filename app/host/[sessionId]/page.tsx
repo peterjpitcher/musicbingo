@@ -15,6 +15,7 @@ import { NowPlayingPanel } from "@/components/host/NowPlayingPanel";
 import { GameFlowPanel } from "@/components/host/GameFlowPanel";
 import { TimingPanel } from "@/components/host/TimingPanel";
 import { ContentPanel } from "@/components/host/ContentPanel";
+import { WelcomeSongPanel } from "@/components/host/WelcomeSongPanel";
 import { PlaylistPanel } from "@/components/host/PlaylistPanel";
 import { SCREEN_REGISTRY } from "@/components/screens/registry";
 import { EditContext, type EditContextValue } from "@/components/motifs/EditContext";
@@ -163,6 +164,9 @@ export default function HostSessionControllerPage() {
   const [spotifyDisconnected, setSpotifyDisconnected] = useState<boolean>(false);
   const [lockOwnerLabel, setLockOwnerLabel] = useState<string>("");
   const [_commandBusy, setCommandBusy] = useState<boolean>(false);
+  // Welcome Song control: in-flight flag and inline error for the "Set song" resolve step.
+  const [welcomeSongBusy, setWelcomeSongBusy] = useState<boolean>(false);
+  const [welcomeSongError, setWelcomeSongError] = useState<string | null>(null);
   const [_playedTrackIds, setPlayedTrackIds] = useState<Set<string>>(new Set());
   const lastPlayedTrackIdRef = useRef<string | null>(null);
   const [playlistTracks, setPlaylistTracks] = useState<{ trackId: string; title: string; artist: string }[]>([]);
@@ -998,6 +1002,65 @@ export default function HostSessionControllerPage() {
     },
   };
 
+  // ---- Welcome Song handlers ----
+  // Resolve a pasted Spotify track link, push the song text to the TV (introTitle/
+  // introArtist content keys) and store the resolved track on the runtime so the
+  // Play button always has the URI and the choice survives a refresh.
+  const setWelcomeSongFromLink = async (url: string): Promise<void> => {
+    setWelcomeSongBusy(true);
+    setWelcomeSongError(null);
+    try {
+      const res = await fetch("/api/spotify/resolve-track", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const data = (await res.json().catch(() => null)) as
+        | { trackId: string; uri: string; title: string; artist: string; error?: string }
+        | null;
+      if (!res.ok || !data || data.error) {
+        setWelcomeSongError(data?.error ?? "Could not resolve that Spotify track.");
+        return;
+      }
+      // Update the live on-screen display (Welcome screen reads these keys).
+      editValue.set("introTitle", data.title);
+      editValue.set("introArtist", data.artist);
+      // Back the Play button with the resolved track.
+      commitRuntime((prev) => ({
+        ...prev,
+        welcomeSong: {
+          trackId: data.trackId,
+          uri: data.uri,
+          title: data.title,
+          artist: data.artist,
+        },
+      }));
+    } catch (err) {
+      setWelcomeSongError(err instanceof Error ? err.message : "Could not resolve that Spotify track.");
+    } finally {
+      setWelcomeSongBusy(false);
+    }
+  };
+
+  const playWelcomeSong = async (): Promise<void> => {
+    const song = runtimeRef.current.welcomeSong;
+    if (!song) return;
+    await sendCommand("play_track", { trackId: song.trackId });
+  };
+
+  const pauseWelcomeSong = async (): Promise<void> => {
+    await sendCommand("pause");
+  };
+
+  // Disable Play when no welcome song is set, or Spotify control is unavailable
+  // (mirrors how the transport buttons gate on spotifyControlAvailable/disconnected).
+  const welcomeSongPlayDisabled =
+    !runtime.welcomeSong || spotifyDisconnected || !runtime.spotifyControlAvailable;
+
+  // Prefer the resolved track's labels; fall back to the live content keys.
+  const welcomeSongTitle = runtime.welcomeSong?.title ?? editValue.get("introTitle", "");
+  const welcomeSongArtist = runtime.welcomeSong?.artist ?? editValue.get("introArtist", "");
+
   // Playlist current index (0-based)
   const currentTrackIdx = (() => {
     if (!runtime.currentTrack?.trackId || playlistTracks.length === 0) return 0;
@@ -1360,6 +1423,18 @@ export default function HostSessionControllerPage() {
                 set={editValue.set}
                 collapsed={contentCollapsed}
                 onToggle={() => setContentCollapsed((c) => !c)}
+              />
+
+              {/* Welcome Song panel — sets the idle-screen song line + manual play */}
+              <WelcomeSongPanel
+                title={welcomeSongTitle}
+                artist={welcomeSongArtist}
+                busy={welcomeSongBusy}
+                playDisabled={welcomeSongPlayDisabled}
+                error={welcomeSongError}
+                onSetSong={(url) => void setWelcomeSongFromLink(url)}
+                onPlay={() => void playWelcomeSong()}
+                onPause={() => void pauseWelcomeSong()}
               />
 
               {/* Timing panel — converts ms ↔ seconds */}

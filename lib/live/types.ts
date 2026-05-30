@@ -206,6 +206,13 @@ export type LiveRuntimeState = {
   /** Host-selected layout variants for the Welcome / Title screens. */
   welcomeVariant?: "A" | "B" | "C";
   titleVariant?: "A" | "B" | "C";
+  /**
+   * Resolved Spotify track for the Welcome (idle) screen's song line. Set by the host from a
+   * pasted track link; persisted on the runtime so the Play button always has the URI and the
+   * choice survives a refresh. The on-screen song text is driven separately by the
+   * `introTitle`/`introArtist` content keys — this field exists purely to back manual playback.
+   */
+  welcomeSong?: { trackId: string; uri: string; title: string; artist: string };
   updatedAtMs: number;
 };
 
