@@ -15,7 +15,17 @@ import { NowPlaying } from "@/components/screens/NowPlaying";
  * Variant B: split-panel — text left, spinning vinyl right.
  * Variant C: marquee-framed card centred on a sunburst.
  */
-export function Welcome({ brand, variant = "A" }: ScreenProps): JSX.Element {
+export function Welcome({ brand, runtime, variant = "A" }: ScreenProps): JSX.Element {
+  // The "Now Playing" pill only appears once the host has actually played the
+  // welcome song — i.e. it is the live, currently-playing track. In design /
+  // preview contexts (no runtime) we keep showing it so the layout stays
+  // representative.
+  const welcomeSong = runtime?.welcomeSong ?? null;
+  const current = runtime?.currentTrack ?? null;
+  const showNowPlaying =
+    !runtime ||
+    Boolean(welcomeSong && current?.isPlaying && current.trackId === welcomeSong.trackId);
+
   /* ── Variant B: split panel ─────────────────────────────── */
   if (variant === "B") {
     return (
@@ -46,14 +56,16 @@ export function Welcome({ brand, variant = "A" }: ScreenProps): JSX.Element {
             </b>{" "}
             is about to take the mic.
           </p>
-          <div className="an-rise d4" style={{ marginTop: 10 }}>
-            <NowPlaying
-              titleField="introTitle"
-              artistField="introArtist"
-              titlePH="Yes Sir, I Can Boogie"
-              artistPH="Baccara"
-            />
-          </div>
+          {showNowPlaying && (
+            <div className="an-rise d4" style={{ marginTop: 10 }}>
+              <NowPlaying
+                titleField="introTitle"
+                artistField="introArtist"
+                titlePH="Yes Sir, I Can Boogie"
+                artistPH="Baccara"
+              />
+            </div>
+          )}
         </div>
 
         {/* Right panel — vinyl hero */}
@@ -174,15 +186,19 @@ export function Welcome({ brand, variant = "A" }: ScreenProps): JSX.Element {
               </b>{" "}
               is on in a moment.
             </p>
-            <hr className="rule an-fade d5" style={{ margin: "34px auto 28px", maxWidth: 520 }} />
-            <div className="an-rise d6">
-              <NowPlaying
-                titleField="introTitle"
-                artistField="introArtist"
-                titlePH="Yes Sir, I Can Boogie"
-                artistPH="Baccara"
-              />
-            </div>
+            {showNowPlaying && (
+              <>
+                <hr className="rule an-fade d5" style={{ margin: "34px auto 28px", maxWidth: 520 }} />
+                <div className="an-rise d6">
+                  <NowPlaying
+                    titleField="introTitle"
+                    artistField="introArtist"
+                    titlePH="Yes Sir, I Can Boogie"
+                    artistPH="Baccara"
+                  />
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -223,14 +239,16 @@ export function Welcome({ brand, variant = "A" }: ScreenProps): JSX.Element {
           </b>{" "}
           is about to take the mic.
         </p>
-        <div className="an-rise d4" style={{ marginTop: 18 }}>
-          <NowPlaying
-            titleField="introTitle"
-            artistField="introArtist"
-            titlePH="Yes Sir, I Can Boogie"
-            artistPH="Baccara"
-          />
-        </div>
+        {showNowPlaying && (
+          <div className="an-rise d4" style={{ marginTop: 18 }}>
+            <NowPlaying
+              titleField="introTitle"
+              artistField="introArtist"
+              titlePH="Yes Sir, I Can Boogie"
+              artistPH="Baccara"
+            />
+          </div>
+        )}
       </div>
       <Chrome
         left="Welcome"
