@@ -4,7 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 
 import type { ScreenProps } from "@/components/screens/types";
 import type { LiveRuntimeState } from "@/lib/live/types";
-import { DEFAULT_REVEAL_CONFIG } from "@/lib/live/types";
+import {
+  CHALLENGE_REVEAL_CONFIG,
+  DEFAULT_REVEAL_CONFIG,
+  getRevealConfigWithExtension,
+} from "@/lib/live/types";
 import { Editable } from "@/components/motifs/Editable";
 import { Ball } from "@/components/motifs/Ball";
 import { Eq } from "@/components/motifs/Eq";
@@ -58,6 +62,29 @@ function formatCountdown(ms: number): string {
   return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
+function fitTitleSize(value: string): number {
+  const length = value.trim().length;
+  if (length > 50) return 64;
+  if (length > 36) return 76;
+  if (length > 26) return 90;
+  if (length > 18) return 108;
+  return 130;
+}
+
+function fitArtistSize(value: string): number {
+  const length = value.trim().length;
+  if (length > 54) return 34;
+  if (length > 40) return 40;
+  if (length > 28) return 46;
+  return 56;
+}
+
+function challengeLabel(type: LiveRuntimeState["challengeType"]): string {
+  if (type === "dance-along") return "Dance challenge";
+  if (type === "sing-along") return "Sing challenge";
+  return "Challenge";
+}
+
 /**
  * Live gameplay screen shown during Game 1 or Game 2 (music bingo album reveal).
  * Ported faithfully from docs/design/after-hours/screens-b.jsx — GameLive.
@@ -92,6 +119,10 @@ export function GameLive({
   const showAlbum = reveal?.showAlbum ?? false;
   const showTitle = reveal?.showTitle ?? false;
   const showArtist = reveal?.showArtist ?? false;
+  const titleText = track && showTitle ? track.title : "";
+  const artistText = track && showArtist ? track.artist : "";
+  const titleFontSize = titleText ? fitTitleSize(titleText) : 130;
+  const artistFontSize = artistText ? fitArtistSize(artistText) : 56;
 
   /*
    * "Next song" countdown — interpolated client-side so it ticks smoothly
@@ -101,8 +132,14 @@ export function GameLive({
    * is no live track yet.
    */
   const liveProgressMs = useLiveProgressMs(runtime);
-  const nextMs = runtime?.revealConfig?.nextMs ?? DEFAULT_REVEAL_CONFIG.nextMs;
-  const hasLiveCountdown = liveProgressMs !== null && nextMs > 0;
+  const playsInFull = Boolean(runtime?.isIntroSong || runtime?.freePlay);
+  const isChallenge = Boolean(runtime?.isChallengeSong);
+  const baseRevealConfig = isChallenge
+    ? CHALLENGE_REVEAL_CONFIG
+    : runtime?.revealConfig ?? DEFAULT_REVEAL_CONFIG;
+  const revealConfig = getRevealConfigWithExtension(baseRevealConfig, runtime?.extensionMs ?? 0);
+  const nextMs = revealConfig.nextMs;
+  const hasLiveCountdown = !playsInFull && liveProgressMs !== null && nextMs > 0;
   const remainingMs = hasLiveCountdown ? Math.max(0, nextMs - liveProgressMs) : 0;
   const nextFillPct = hasLiveCountdown
     ? Math.min(100, Math.max(0, (liveProgressMs / nextMs) * 100))
@@ -201,30 +238,57 @@ export function GameLive({
         {/* Track title — live or placeholder */}
         <h1
           className="display display--gold an-rise d2"
-          style={{ fontSize: 130, lineHeight: 0.92 }}
+          style={{
+            fontSize: titleFontSize,
+            lineHeight: titleFontSize < 100 ? 0.98 : 0.92,
+            maxWidth: "100%",
+            overflowWrap: "anywhere",
+            whiteSpace: "normal",
+          }}
         >
           {track && showTitle ? (
-            <span>{track.title}</span>
+            <span style={{ display: "block", overflowWrap: "anywhere", whiteSpace: "normal" }}>
+              {track.title}
+            </span>
           ) : track && !showTitle ? (
             /* Title not yet revealed — show nothing but hold layout space */
-            <span style={{ opacity: 0 }}>&#8203;</span>
+            <span style={{ display: "block", opacity: 0, whiteSpace: "normal" }}>&#8203;</span>
           ) : (
-            <Editable field={`${t}title`} placeholder="Mr. Brightside" />
+            <Editable
+              field={`${t}title`}
+              placeholder="Mr. Brightside"
+              style={{ display: "block", overflowWrap: "anywhere", whiteSpace: "normal" }}
+            />
           )}
         </h1>
 
         {/* Track artist — live or placeholder */}
         <p
           className="an-rise d3"
-          style={{ fontSize: 56, fontWeight: 700, margin: 0, color: "var(--cream)" }}
+          style={{
+            fontSize: artistFontSize,
+            fontWeight: 700,
+            lineHeight: 1.1,
+            margin: 0,
+            maxWidth: "100%",
+            color: "var(--cream)",
+            overflowWrap: "anywhere",
+            whiteSpace: "normal",
+          }}
         >
           {track && showArtist ? (
-            <span>{track.artist}</span>
+            <span style={{ display: "block", overflowWrap: "anywhere", whiteSpace: "normal" }}>
+              {track.artist}
+            </span>
           ) : track && !showArtist ? (
             /* Artist not yet revealed */
-            <span style={{ opacity: 0 }}>&#8203;</span>
+            <span style={{ display: "block", opacity: 0, whiteSpace: "normal" }}>&#8203;</span>
           ) : (
-            <Editable field={`${t}artist`} placeholder="The Killers" />
+            <Editable
+              field={`${t}artist`}
+              placeholder="The Killers"
+              style={{ display: "block", overflowWrap: "anywhere", whiteSpace: "normal" }}
+            />
           )}
         </p>
 
@@ -233,6 +297,27 @@ export function GameLive({
           className="an-rise d4"
           style={{ display: "flex", gap: 14, marginTop: 14, flexWrap: "wrap" }}
         >
+          {isChallenge && (
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 10,
+                padding: "12px 22px",
+                borderRadius: 999,
+                background: "rgb(var(--brand-accent-rgb) / .9)",
+                border: "2px solid var(--brand-accent-light)",
+                fontSize: 22,
+                fontWeight: 800,
+                textTransform: "uppercase",
+                letterSpacing: ".1em",
+                color: "var(--ink)",
+              }}
+            >
+              <Eq bars={4} style={{ height: 22 }} /> {challengeLabel(runtime?.challengeType ?? null)} ·{" "}
+              {Math.round(CHALLENGE_REVEAL_CONFIG.nextMs / 1000)}s
+            </span>
+          )}
           {badges.map(([label, lit]) => (
             <span key={label} style={lit ? badgeLit : badgeDim}>
               ✓ {label}
@@ -284,7 +369,8 @@ export function GameLive({
                 gap: 12,
               }}
             >
-              <Eq bars={4} style={{ height: 22 }} /> Next song · {nextLabel}
+              <Eq bars={4} style={{ height: 22 }} />{" "}
+              {playsInFull ? "Plays in full" : `Next song · ${nextLabel}`}
             </span>
           </span>
         </div>

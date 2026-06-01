@@ -26,7 +26,7 @@ export interface GameFlowPanelProps {
  * Host console panel — controls game-flow transitions.
  * Ported faithfully from docs/design/after-hours/host-panels.jsx.
  *
- * Break mode shows Resume + End only.
+ * Break mode shows Continue + End only.
  * All other modes show the 4-button intro/start grid plus a footer row whose
  * secondary action toggles between "End Session" and "Reset to Lobby" depending
  * on whether the session has already ended.
@@ -60,10 +60,10 @@ export function GameFlowPanel({
       </h2>
 
       {mode === 'break' ? (
-        /* Break mode — resume or end the session */
+        /* Break mode — continue to the next screen or end the session */
         <div className="btn-row">
           <button className="hbtn hbtn--go hbtn--lg grow" onClick={onResume}>
-            ▶ Resume Game
+            ▶ Continue Show
           </button>
           <button className="hbtn hbtn--danger" onClick={onEnd}>
             End Session

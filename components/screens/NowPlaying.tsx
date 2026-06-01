@@ -40,10 +40,11 @@ export function NowPlaying({
         border: "2px solid rgb(var(--brand-accent-light-rgb) / .55)",
         background: "rgba(0,0,0,.28)",
         backdropFilter: "blur(6px)",
+        maxWidth: "100%",
       }}
     >
       <Vinyl size={70} />
-      <div style={{ textAlign: "left" }}>
+      <div style={{ minWidth: 0, textAlign: "left" }}>
         <div
           style={{
             fontSize: 16,
@@ -55,17 +56,30 @@ export function NowPlaying({
         >
           {label}
         </div>
-        <div style={{ fontSize: 30, fontWeight: 700, lineHeight: 1.1 }}>
-          <Editable field={titleField} placeholder={titlePH} />
+        <div
+          style={{
+            fontSize: 30,
+            fontWeight: 700,
+            lineHeight: 1.12,
+            maxWidth: 880,
+            overflowWrap: "anywhere",
+            whiteSpace: "normal",
+          }}
+        >
+          <Editable
+            field={titleField}
+            placeholder={titlePH}
+            style={{ overflowWrap: "anywhere", whiteSpace: "normal" }}
+          />
           <span style={{ opacity: 0.45, margin: "0 12px" }}>·</span>
           <Editable
             field={artistField}
             placeholder={artistPH}
-            style={{ fontWeight: 500, opacity: 0.8 }}
+            style={{ fontWeight: 500, opacity: 0.8, overflowWrap: "anywhere", whiteSpace: "normal" }}
           />
         </div>
       </div>
-      <Eq bars={7} style={{ height: 44 }} />
+      <Eq bars={7} style={{ flexShrink: 0, height: 44 }} />
     </div>
   );
 }

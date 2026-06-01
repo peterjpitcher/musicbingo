@@ -101,10 +101,17 @@ export function Warmup({
               borderRadius: 999,
               background: dance ? "rgba(4,19,12,.16)" : "rgba(0,0,0,.3)",
               border: `2px solid ${dance ? "rgba(4,19,12,.3)" : "rgb(var(--brand-accent-light-rgb) / .55)"}`,
+              maxWidth: "100%",
             }}
           >
-            <Eq bars={6} style={{ height: 40 }} />
-            <div style={{ textAlign: "left", color: dance ? "var(--ink)" : "var(--cream)" }}>
+            <Eq bars={6} style={{ flexShrink: 0, height: 40 }} />
+            <div
+              style={{
+                minWidth: 0,
+                textAlign: "left",
+                color: dance ? "var(--ink)" : "var(--cream)",
+              }}
+            >
               <div
                 style={{
                   fontSize: 14,
@@ -116,25 +123,49 @@ export function Warmup({
               >
                 Now Playing · Full Track
               </div>
-              <div style={{ fontSize: 30, fontWeight: 700 }}>
+              <div
+                style={{
+                  fontSize: 30,
+                  fontWeight: 700,
+                  lineHeight: 1.12,
+                  maxWidth: 820,
+                  overflowWrap: "anywhere",
+                  whiteSpace: "normal",
+                }}
+              >
                 {/* Live track title — falls back to Editable placeholder when no runtime */}
                 {track ? (
-                  <span>{track.title}</span>
+                  <span style={{ overflowWrap: "anywhere", whiteSpace: "normal" }}>
+                    {track.title}
+                  </span>
                 ) : (
                   <Editable
                     field={dance ? "danceTitle" : "singTitle"}
                     placeholder={dance ? "Dancing Queen" : "Don't Look Back in Anger"}
+                    style={{ overflowWrap: "anywhere", whiteSpace: "normal" }}
                   />
                 )}
                 <span style={{ opacity: 0.5, margin: "0 10px" }}>·</span>
                 {/* Live track artist — falls back to Editable placeholder when no runtime */}
                 {track ? (
-                  <span style={{ fontWeight: 500 }}>{track.artist}</span>
+                  <span
+                    style={{
+                      fontWeight: 500,
+                      overflowWrap: "anywhere",
+                      whiteSpace: "normal",
+                    }}
+                  >
+                    {track.artist}
+                  </span>
                 ) : (
                   <Editable
                     field={dance ? "danceArtist" : "singArtist"}
                     placeholder={dance ? "ABBA" : "Oasis"}
-                    style={{ fontWeight: 500 }}
+                    style={{
+                      fontWeight: 500,
+                      overflowWrap: "anywhere",
+                      whiteSpace: "normal",
+                    }}
                   />
                 )}
               </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import type { ScreenProps } from "@/components/screens/types";
 import type { PlayedTrack } from "@/lib/live/types";
 import { Editable } from "@/components/motifs/Editable";
@@ -16,42 +17,94 @@ import { Chrome } from "@/components/motifs/Chrome";
  * game's songs. The screen is read-only on the guest TV; it just renders the
  * synced state.
  *
- * Layout: After-Hours styling on the 1920×1080 stage. The list flows down 1/2/3
- * columns (by count) and each row is given an explicit, computed height so the
- * whole list always fits the fixed vertical budget — even a full ~50-song game
- * never overflows 1080 (it just tightens the rows and shrinks the type). See
- * `planLayout` for the maths.
+ * Layout: After-Hours styling on the 1920×1080 stage. Once the list gets long,
+ * it scrolls slowly and continuously instead of compressing every played song
+ * into tiny multi-column rows.
  */
 
 /** Vertical budget (px) available to the song list once the header + chrome are laid out. */
 const LIST_BUDGET_PX = 760;
 /** Gap between rows. */
-const ROW_GAP_PX = 6;
-/** Cap so sparse lists don't stretch into oversized rows / type. */
-const MAX_ROW_PX = 84;
-const MAX_FONT_PX = 32;
-const MIN_FONT_PX = 15;
+const ROW_GAP_PX = 10;
+const ROW_HEIGHT_PX = 82;
+const LOOP_SPACER_PX = 28;
+const SCROLL_START_COUNT = 9;
 
-type ClaimLayout = { columns: number; rows: number; rowHeight: number; fontSize: number };
-
-/** Chooses column count and a row height/font size that guarantees the list fits the budget. */
-function planLayout(count: number): ClaimLayout {
-  const columns = count <= 8 ? 1 : count <= 20 ? 2 : 3;
-  const rows = Math.max(1, Math.ceil(count / columns));
-  const gapTotal = (rows - 1) * ROW_GAP_PX;
-  // Largest uniform row height that keeps every row inside the budget, capped so
-  // short lists stay sensibly sized rather than ballooning.
-  const fitRowHeight = Math.floor((LIST_BUDGET_PX - gapTotal) / rows);
-  const rowHeight = Math.max(1, Math.min(MAX_ROW_PX, fitRowHeight));
-  // Single-line type sized to the row (leaving room for padding + border).
-  const fontSize = Math.max(MIN_FONT_PX, Math.min(MAX_FONT_PX, rowHeight - 14));
-  return { columns, rows, rowHeight, fontSize };
+function scrollDurationSeconds(count: number): number {
+  return Math.max(42, count * 4);
 }
 
 export function ClaimScreen({ brand, runtime }: ScreenProps): JSX.Element {
   const played: PlayedTrack[] = runtime?.playedTracks ?? [];
   const count = played.length;
-  const { columns, rows, rowHeight, fontSize } = planLayout(count);
+  const shouldScroll = count >= SCROLL_START_COUNT;
+  const scrollDistance = count * ROW_HEIGHT_PX + (count + 1) * ROW_GAP_PX + LOOP_SPACER_PX;
+  const rows = (ariaHidden = false) =>
+    played.map((track, index) => (
+      <div
+        key={`${ariaHidden ? "loop" : "song"}-${track.trackId ?? "x"}-${index}`}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 22,
+          height: ROW_HEIGHT_PX,
+          padding: "0 26px",
+          borderRadius: 12,
+          background: "rgba(0,0,0,.26)",
+          border: "1px solid rgb(var(--brand-accent-rgb) / .35)",
+          minWidth: 0,
+          overflow: "hidden",
+        }}
+      >
+        <span
+          style={{
+            flex: "0 0 auto",
+            fontFamily: "var(--brand-display)",
+            fontSize: 34,
+            lineHeight: 1,
+            color: "var(--brand-accent-light)",
+            minWidth: "1.8em",
+            textAlign: "right",
+          }}
+        >
+          {index + 1}
+        </span>
+        <span
+          style={{
+            minWidth: 0,
+            display: "flex",
+            flexDirection: "column",
+            gap: 4,
+            lineHeight: 1.05,
+          }}
+        >
+          <span
+            style={{
+              color: "var(--cream)",
+              fontSize: 30,
+              fontWeight: 800,
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
+            {track.title || "Unknown title"}
+          </span>
+          <span
+            className="muted"
+            style={{
+              fontSize: 24,
+              fontWeight: 600,
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
+            {track.artist || "Unknown artist"}
+          </span>
+        </span>
+      </div>
+    ));
 
   return (
     <div className="screen grain vignette" style={{ padding: "40px 88px 64px" }}>
@@ -66,15 +119,19 @@ export function ClaimScreen({ brand, runtime }: ScreenProps): JSX.Element {
         </h1>
       </div>
 
-      {/* Song list — explicit height so it can never overflow the stage. */}
+      {/* Song list — slow marquee scroll for long claim histories. */}
       <div
         className="an-rise d3"
         style={{
           height: LIST_BUDGET_PX,
           marginTop: 18,
-          display: "flex",
-          alignItems: "stretch",
           overflow: "hidden",
+          maskImage: shouldScroll
+            ? "linear-gradient(180deg, transparent 0, #000 9%, #000 91%, transparent 100%)"
+            : undefined,
+          WebkitMaskImage: shouldScroll
+            ? "linear-gradient(180deg, transparent 0, #000 9%, #000 91%, transparent 100%)"
+            : undefined,
         }}
       >
         {count === 0 ? (
@@ -96,66 +153,22 @@ export function ClaimScreen({ brand, runtime }: ScreenProps): JSX.Element {
           </div>
         ) : (
           <div
+            className={shouldScroll ? "claim-scroll-track" : undefined}
             style={{
-              flex: 1,
-              display: "grid",
-              gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
-              gridTemplateRows: `repeat(${rows}, ${rowHeight}px)`,
-              gridAutoFlow: "column",
-              columnGap: 26,
+              display: "flex",
+              flexDirection: "column",
               rowGap: ROW_GAP_PX,
-              alignContent: "start",
-            }}
+              ["--claim-scroll-distance" as string]: `-${scrollDistance}px`,
+              ["--claim-scroll-duration" as string]: `${scrollDurationSeconds(count)}s`,
+            } as CSSProperties}
           >
-            {played.map((track, index) => (
-              <div
-                key={`${track.trackId ?? "x"}-${index}`}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 12,
-                  height: rowHeight,
-                  padding: "0 16px",
-                  borderRadius: 12,
-                  background: "rgba(0,0,0,.26)",
-                  border: "1px solid rgb(var(--brand-accent-rgb) / .35)",
-                  minWidth: 0,
-                  overflow: "hidden",
-                }}
-              >
-                <span
-                  style={{
-                    flex: "0 0 auto",
-                    fontFamily: "var(--brand-display)",
-                    fontSize: fontSize + 1,
-                    lineHeight: 1,
-                    color: "var(--brand-accent-light)",
-                    minWidth: "1.7em",
-                    textAlign: "right",
-                  }}
-                >
-                  {index + 1}
-                </span>
-                <span
-                  style={{
-                    minWidth: 0,
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    fontSize,
-                    lineHeight: 1.15,
-                  }}
-                >
-                  <span style={{ fontWeight: 700, color: "var(--cream)" }}>
-                    {track.title || "Unknown title"}
-                  </span>
-                  <span className="muted" style={{ fontWeight: 500 }}>
-                    {"  —  "}
-                    {track.artist || "Unknown artist"}
-                  </span>
-                </span>
-              </div>
-            ))}
+            {rows()}
+            {shouldScroll && (
+              <>
+                <div aria-hidden style={{ height: LOOP_SPACER_PX, flex: "0 0 auto" }} />
+                {rows(true)}
+              </>
+            )}
           </div>
         )}
       </div>

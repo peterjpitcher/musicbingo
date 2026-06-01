@@ -142,6 +142,20 @@
 .screen-wrap { position: absolute; inset: 0; }
 .screen-wrap.in { animation: fade .5s ease backwards; }
 
+.claim-scroll-track {
+  animation: claim-scroll var(--claim-scroll-duration, 72s) linear infinite;
+  will-change: transform;
+}
+
+@keyframes claim-scroll {
+  from { transform: translateY(0); }
+  to { transform: translateY(var(--claim-scroll-distance, -50%)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .claim-scroll-track { animation: none; }
+}
+
 /* ===== logo lockup ===== */
 .venue-logo { height: 78px; width: auto; object-fit: contain; }
 .venue-logo--sm { height: 52px; }

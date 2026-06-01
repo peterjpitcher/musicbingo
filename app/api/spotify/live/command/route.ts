@@ -6,6 +6,7 @@ import {
   playTrackByUri,
   resumePlayback,
   seekToPositionMs,
+  setShuffleMode,
   skipNext,
   skipPrevious,
   SpotifyLiveError,
@@ -109,6 +110,7 @@ async function runCommand(params: {
     if (!playlistId) {
       throw new SpotifyLiveError("API_ERROR", "`playlistId` is required for play_game.");
     }
+    await setShuffleMode({ accessToken: params.accessToken, state: false, deviceId });
     await startPlaylistPlayback({ accessToken: params.accessToken, playlistId, deviceId });
     return;
   }
@@ -138,7 +140,12 @@ async function runCommand(params: {
     if (!playlistId) {
       throw new SpotifyLiveError("API_ERROR", "`playlistId` is required for play_break.");
     }
-    await startPlaylistPlayback({ accessToken: params.accessToken, playlistId, deviceId });
+    await startPlaylistPlayback({
+      accessToken: params.accessToken,
+      playlistId,
+      deviceId,
+      shuffle: true,
+    });
     return;
   }
 
@@ -146,8 +153,10 @@ async function runCommand(params: {
     const playlistId = asString(params.payload.playlistId);
     const trackId = asString(params.payload.trackId);
     if (playlistId && trackId) {
+      await setShuffleMode({ accessToken: params.accessToken, state: false, deviceId });
       await startTrackInPlaylistPlayback({ accessToken: params.accessToken, playlistId, trackId, deviceId });
     } else if (playlistId) {
+      await setShuffleMode({ accessToken: params.accessToken, state: false, deviceId });
       await startPlaylistPlayback({ accessToken: params.accessToken, playlistId, deviceId });
     } else {
       await resumePlayback({ accessToken: params.accessToken, deviceId });

@@ -843,26 +843,43 @@ export default function HostSessionControllerPage() {
     }
   }
 
-  function resumeFromBreak() {
-    const trackId = runtimeRef.current.preBreakTrackId;
-    const playlistId = runtimeRef.current.preBreakPlaylistId;
-
+  function leaveBreakToScreen(screenId: ScreenId) {
     commitRuntime((prev) => ({
       ...prev,
-      mode: "running",
-      screenId: (prev.activeGameNumber === 2 ? "game2" : "game1") as ScreenId,
+      mode: "idle",
+      screenId,
       preBreakTrackId: null,
       preBreakPlaylistId: null,
+      isIntroSong: false,
+      isChallengeSong: false,
+      challengeType: null,
+      advanceTriggeredForTrackId: null,
+      extensionMs: 0,
     }));
 
-    void sendCommand(
-      "resume_from_track",
-      {
-        ...(trackId ? { trackId } : {}),
-        ...(playlistId ? { playlistId } : {}),
-      },
-      { modeOnSuccess: "running" }
-    );
+    if (runtimeRef.current.spotifyControlAvailable) {
+      void sendCommand("pause", undefined, { modeOnSuccess: "idle" });
+    }
+  }
+
+  function resumeFromBreak() {
+    const currentId = normalizeScreenId(runtimeRef.current.screenId, deriveScreenId(runtimeRef.current));
+    const currentIdx = SHOW_STEPS.findIndex((s) => s.id === currentId);
+    const baseIdx = currentIdx >= 0 ? currentIdx : SHOW_STEPS.findIndex((s) => s.id === "break");
+    const nextIdx = Math.max(0, Math.min(SHOW_STEPS.length - 1, baseIdx + 1));
+    leaveBreakToScreen(SHOW_STEPS[nextIdx].id);
+  }
+
+  function openClaimScreen() {
+    commitRuntime((prev) => ({
+      ...prev,
+      mode: "paused",
+      screenId: "claim" as ScreenId,
+    }));
+
+    if (runtimeRef.current.spotifyControlAvailable) {
+      void sendCommand("pause", undefined, { modeOnSuccess: "paused" });
+    }
   }
 
   function restartSong() {
@@ -970,6 +987,10 @@ export default function HostSessionControllerPage() {
     // that; route break here so no path leaves the game silently advancing.
     if (id === "break") {
       openBreakScreen();
+      return;
+    }
+    if (runtimeRef.current.mode === "break") {
+      leaveBreakToScreen(id);
       return;
     }
     commitRuntime((prev) => ({ ...prev, screenId: id }));
@@ -1424,6 +1445,7 @@ export default function HostSessionControllerPage() {
                   commitRuntime((prev) => ({
                     ...prev,
                     extensionMs: Math.min(prev.extensionMs + 30_000, MAX_SONG_EXTENSION_MS),
+                    advanceTriggeredForTrackId: null,
                   }))
                 }
                 onSkip={() => {
@@ -1437,6 +1459,7 @@ export default function HostSessionControllerPage() {
                   commitRuntime((prev) => ({
                     ...prev,
                     extensionMs: Math.min(prev.extensionMs + skippedMs, MAX_SONG_EXTENSION_MS),
+                    advanceTriggeredForTrackId: null,
                   }));
                   void sendCommand("seek", { positionMs: newPos });
                 }}
@@ -1451,7 +1474,7 @@ export default function HostSessionControllerPage() {
                 onStart={(n) => void startGame(n)}
                 onBreak={openBreakScreen}
                 onResume={resumeFromBreak}
-                onClaim={() => gotoScreen("claim")}
+                onClaim={openClaimScreen}
                 onBackToGame={() => gotoScreen((runtime.activeGameNumber === 2 ? "game2" : "game1") as ScreenId)}
                 claimCount={runtime.playedTracks?.length ?? 0}
                 claimActive={runtime.screenId === "claim"}

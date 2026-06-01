@@ -40,8 +40,23 @@ function fuzzyContains(left: string, right: string): boolean {
   );
 }
 
+function tokenSubsetContains(left: string, right: string): boolean {
+  const leftTokens = new Set(normalizeComparable(left).split(" ").filter(Boolean));
+  const rightTokens = new Set(normalizeComparable(right).split(" ").filter(Boolean));
+  if (leftTokens.size === 0 || rightTokens.size === 0) return false;
+
+  const [smaller, larger] =
+    leftTokens.size <= rightTokens.size ? [leftTokens, rightTokens] : [rightTokens, leftTokens];
+
+  return [...smaller].every((token) => larger.has(token));
+}
+
+function artistFieldsMatch(left: string, right: string): boolean {
+  return fuzzyContains(left, right) || tokenSubsetContains(left, right);
+}
+
 function fieldsMatch(track: { title: string; artist: string }, challenge: { title: string; artist: string }): boolean {
-  return fuzzyContains(track.title, challenge.title) && fuzzyContains(track.artist, challenge.artist);
+  return fuzzyContains(track.title, challenge.title) && artistFieldsMatch(track.artist, challenge.artist);
 }
 
 function swappedFieldsMatch(track: { title: string; artist: string }, challenge: { title: string; artist: string }): boolean {

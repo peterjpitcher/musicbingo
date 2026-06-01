@@ -88,7 +88,7 @@ export function ContentPanel({ get, set, collapsed, onToggle }: ContentPanelProp
         </div>
 
         <Row field="nextDate" label="Next event date" ph="Fri 27 June · 8PM" get={get} set={set} />
-        <Row field="hostName" label="Host name" ph="Nikki" get={get} set={set} />
+        <Row field="hostName" label="Host name" ph="Nikki Manfadge" get={get} set={set} />
 
         {/* Game themes side-by-side */}
         <div className="ed-two">

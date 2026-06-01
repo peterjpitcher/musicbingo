@@ -35,7 +35,7 @@ const CONTENT_KEY_SET = new Set<string>(CONTENT_KEYS);
 
 /** Static fallbacks lifted verbatim from the design bundle (screens-a/b.jsx placeholders). */
 export const CONTENT_PLACEHOLDERS: Record<ContentKey, string> = {
-  venueName: "The Anchor", venuePresents: "The Anchor Presents", venueWeb: "theanchor.pub", hostName: "Nikki",
+  venueName: "The Anchor", venuePresents: "The Anchor Presents", venueWeb: "theanchor.pub", hostName: "Nikki Manfadge",
   welcomeTitle: "Music", welcomeTitle2: "Bingo", welcomeTitleC: "Welcome To The Show",
   welcomeLede: "Grab a drink, find your table and settle in — your host", welcomeLedeA: "Grab a drink, settle in —",
   welcomeDate: "Friday · 8:00 PM", introTitle: "Yes Sir, I Can Boogie", introArtist: "Baccara",
@@ -57,7 +57,7 @@ export const CONTENT_PLACEHOLDERS: Record<ContentKey, string> = {
   g1theme: "Pop Anthems", g1title: "Mr. Brightside", g1artist: "The Killers",
   g2theme: "Throwback Bangers", g2title: "Take On Me", g2artist: "a-ha",
   breakL1: "We're On", breakL2: "A Break", breakLede: "Grab a refill, stretch your legs and keep your cards safe.", breakMins: "10",
-  winTeam: "The Spice Curls", winPrize: "£100 Bar Tab", spoonTeam: "Quiztopher Biggins", spoonPrize: "A Round of Shots",
+  winTeam: "The Spice Curls", winPrize: "£25 bar voucher", spoonTeam: "Quiztopher Biggins", spoonPrize: "Bottle of house wine",
   nextDate: "Fri 27 June · 8PM", tyL1: "Thank You", tyL2: "& Goodnight",
   tyLede: "We hope you had a brilliant night. If you did, a Google review means the world to us.",
   nfL1: "Nothing", nfL2: "On Yet",

@@ -140,7 +140,7 @@ export function Winners(props: ScreenProps): React.ReactElement {
           teamField="winTeam"
           teamPH="The Spice Curls"
           prizeField="winPrize"
-          prizePH="£100 Bar Tab"
+          prizePH="£25 bar voucher"
           hero
         />
         <Card
@@ -149,7 +149,7 @@ export function Winners(props: ScreenProps): React.ReactElement {
           teamField="spoonTeam"
           teamPH="Quiztopher Biggins"
           prizeField="spoonPrize"
-          prizePH="A Round of Shots"
+          prizePH="Bottle of house wine"
           hero={false}
         />
       </div>

@@ -52,7 +52,7 @@ export function Welcome({ brand, runtime, variant = "A" }: ScreenProps): JSX.Ele
               placeholder="Grab a drink, find your table and settle in — your host"
             />{" "}
             <b style={{ color: "var(--brand-accent-light)" }}>
-              <Editable field="hostName" placeholder="Nikki" />
+              <Editable field="hostName" placeholder="Nikki Manfadge" />
             </b>{" "}
             is about to take the mic.
           </p>
@@ -182,7 +182,7 @@ export function Welcome({ brand, runtime, variant = "A" }: ScreenProps): JSX.Ele
             <p className="lede an-rise d4" style={{ maxWidth: 900, margin: "0 auto" }}>
               The room&apos;s filling up and the records are warming. Your host{" "}
               <b style={{ color: "var(--brand-accent-light)" }}>
-                <Editable field="hostName" placeholder="Nikki" />
+                <Editable field="hostName" placeholder="Nikki Manfadge" />
               </b>{" "}
               is on in a moment.
             </p>
@@ -235,7 +235,7 @@ export function Welcome({ brand, runtime, variant = "A" }: ScreenProps): JSX.Ele
         <p className="lede an-rise d3" style={{ maxWidth: 1120 }}>
           <Editable field="welcomeLedeA" placeholder="Grab a drink, settle in —" />{" "}
           <b style={{ color: "var(--brand-accent-light)" }}>
-            <Editable field="hostName" placeholder="Nikki" />
+            <Editable field="hostName" placeholder="Nikki Manfadge" />
           </b>{" "}
           is about to take the mic.
         </p>

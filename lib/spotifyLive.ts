@@ -232,10 +232,19 @@ export async function startPlaylistPlayback(params: {
   accessToken: string;
   playlistId: string;
   deviceId?: string;
+  shuffle?: boolean;
 }): Promise<void> {
   const normalizedPlaylistId = normalizePlaylistId(params.playlistId);
   if (!normalizedPlaylistId) {
     throw new SpotifyLiveError("API_ERROR", "Invalid playlist id for live playback.");
+  }
+
+  if (typeof params.shuffle === "boolean") {
+    await setShuffleMode({
+      accessToken: params.accessToken,
+      state: params.shuffle,
+      deviceId: params.deviceId,
+    });
   }
 
   await runPlayerCommand({
@@ -245,8 +254,8 @@ export async function startPlaylistPlayback(params: {
     query: { device_id: params.deviceId },
     body: {
       context_uri: `spotify:playlist:${normalizedPlaylistId}`,
-      offset: { position: 0 },
       position_ms: 0,
+      ...(params.shuffle ? {} : { offset: { position: 0 } }),
     },
     actionLabel: "Start playback",
   });
@@ -275,6 +284,23 @@ export async function startTrackInPlaylistPlayback(params: {
       position_ms: 0,
     },
     actionLabel: "Resume track from beginning",
+  });
+}
+
+export async function setShuffleMode(params: {
+  accessToken: string;
+  state: boolean;
+  deviceId?: string;
+}): Promise<void> {
+  await runPlayerCommand({
+    accessToken: params.accessToken,
+    method: "PUT",
+    path: "/me/player/shuffle",
+    query: {
+      state: params.state ? "true" : "false",
+      device_id: params.deviceId,
+    },
+    actionLabel: params.state ? "Enable shuffle" : "Disable shuffle",
   });
 }
 
