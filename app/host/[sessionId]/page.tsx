@@ -1416,6 +1416,9 @@ export default function HostSessionControllerPage() {
                     void sendCommand("previous");
                   }
                 }}
+                welcomeIntroActive={currentScreenId === "welcome"}
+                welcomeIntroDisabled={welcomeSongPlayDisabled}
+                onWelcomeIntro={() => void playWelcomeSong()}
                 onFree={() => commitRuntime((prev) => ({ ...prev, freePlay: !prev.freePlay }))}
                 onExtend={() =>
                   commitRuntime((prev) => ({
@@ -1444,8 +1447,6 @@ export default function HostSessionControllerPage() {
               <GameFlowPanel
                 mode={runtime.mode}
                 activeGame={runtime.activeGameNumber}
-                onWelcomeIntro={() => void playWelcomeSong()}
-                welcomeIntroDisabled={welcomeSongPlayDisabled}
                 onIntro={(n) => void playIntroSong(n)}
                 onStart={(n) => void startGame(n)}
                 onBreak={openBreakScreen}

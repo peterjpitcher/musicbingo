@@ -14,6 +14,9 @@ export interface NowPlayingPanelProps {
   /** Extra milliseconds added by the host via +30s */
   extendedMs: number;
   onTransport: (action: 'previous' | 'pause' | 'resume' | 'next') => void;
+  welcomeIntroActive?: boolean;
+  welcomeIntroDisabled?: boolean;
+  onWelcomeIntro?: () => void;
   onFree: () => void;
   onExtend: () => void;
   onSkip: () => void;
@@ -34,6 +37,9 @@ export function NowPlayingPanel({
   freePlay,
   extendedMs,
   onTransport,
+  welcomeIntroActive = false,
+  welcomeIntroDisabled = false,
+  onWelcomeIntro,
   onFree,
   onExtend,
   onSkip,
@@ -127,9 +133,16 @@ export function NowPlayingPanel({
         </button>
         <button
           className="hbtn hbtn--icon hbtn--primary grow"
-          onClick={() => onTransport(playing ? 'pause' : 'resume')}
+          onClick={() => {
+            if (welcomeIntroActive && !playing) {
+              onWelcomeIntro?.();
+              return;
+            }
+            onTransport(playing ? 'pause' : 'resume');
+          }}
+          disabled={welcomeIntroActive && !playing && welcomeIntroDisabled}
         >
-          {playing ? '❚❚ Pause' : '▶ Resume'}
+          {welcomeIntroActive && !playing ? '▶ Play Welcome Intro' : playing ? '❚❚ Pause' : '▶ Resume'}
         </button>
         <button
           className="hbtn hbtn--icon"
