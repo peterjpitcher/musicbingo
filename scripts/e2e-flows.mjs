@@ -702,12 +702,28 @@ async function main() {
 
     await flow4Context.close();
 
+    const flowConnectedPrepContext = await browser.newContext();
+    await installAppDataMocks(flowConnectedPrepContext);
+    await installSpotifyMocks(flowConnectedPrepContext, { initialConnected: true });
+    const flowConnectedPrepPage = await flowConnectedPrepContext.newPage();
+
+    await runFlow(flowResults, "Flow 5: Connected Spotify user can proceed without intro songs", async () => {
+      await openPrep(flowConnectedPrepPage);
+      await flowConnectedPrepPage.getByRole("button", { name: /Next: Game 1/i }).click();
+      await flowConnectedPrepPage.getByRole("heading", { name: /Game 1/i }).waitFor();
+      await fillCurrentGameStep(flowConnectedPrepPage, songListA);
+
+      await waitUntilEnabled(flowConnectedPrepPage.getByRole("button", { name: /Next: Game 2/i }));
+    });
+
+    await flowConnectedPrepContext.close();
+
     const flow5Context = await browser.newContext();
     await installAppDataMocks(flow5Context);
     const spotifyFlow5 = await installSpotifyMocks(flow5Context, { initialConnected: false });
     const flow5Page = await flow5Context.newPage();
 
-    await runFlow(flowResults, "Flow 5: Connected Spotify user can disconnect", async () => {
+    await runFlow(flowResults, "Flow 6: Connected Spotify user can disconnect", async () => {
       await fillPrepWizardToGenerate(flow5Page, songListA, songListB);
 
       await flow5Page.getByRole("button", { name: "Connect Spotify" }).click();
@@ -731,7 +747,7 @@ async function main() {
     const flow6HostPage = await flow6Context.newPage();
     const flow6GuestPage = await flow6Context.newPage();
 
-    await runFlow(flowResults, "Flow 6: Host and guest live screens sync with reveal progression", async () => {
+    await runFlow(flowResults, "Flow 7: Host and guest live screens sync with reveal progression", async () => {
       await flow6HostPage.goto(`${BASE_URL}/host/flow-live-session`, { waitUntil: "domcontentloaded" });
       // The After Hours host console shows the session name in the top bar (not a heading).
       await flow6HostPage.getByText(/Flow Live Session/i).first().waitFor({ timeout: 15_000 });
@@ -776,7 +792,7 @@ async function main() {
     const flow7HostPage = await flow7Context.newPage();
     const flow7GuestPage = await flow7Context.newPage();
 
-    await runFlow(flowResults, "Flow 7: Live fallback warning appears when Spotify control is unavailable", async () => {
+    await runFlow(flowResults, "Flow 8: Live fallback warning appears when Spotify control is unavailable", async () => {
       await flow7HostPage.goto(`${BASE_URL}/host/flow-live-fallback`, { waitUntil: "domcontentloaded" });
       await flow7HostPage.getByRole("button", { name: "Start Game 1" }).click();
       await flow7HostPage.locator("text=Manual host control mode").first().waitFor({ timeout: 15_000 });

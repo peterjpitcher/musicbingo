@@ -10,12 +10,12 @@ import { getRevealConfigWithExtension, makeRevealConfigForSongPlayMs } from "@/l
 
 test("getRevealPhase follows relative 45s default thresholds", () => {
   expect(getRevealPhase(0)).toBe("hidden");
-  expect(getRevealPhase(11_249)).toBe("hidden");
-  expect(getRevealPhase(11_250)).toBe("album");
-  expect(getRevealPhase(22_499)).toBe("album");
-  expect(getRevealPhase(22_500)).toBe("title");
-  expect(getRevealPhase(29_999)).toBe("title");
-  expect(getRevealPhase(30_000)).toBe("artist");
+  expect(getRevealPhase(9_999)).toBe("hidden");
+  expect(getRevealPhase(10_000)).toBe("album");
+  expect(getRevealPhase(14_999)).toBe("album");
+  expect(getRevealPhase(15_000)).toBe("title");
+  expect(getRevealPhase(19_999)).toBe("title");
+  expect(getRevealPhase(20_000)).toBe("artist");
   expect(getRevealPhase(44_999)).toBe("artist");
   expect(getRevealPhase(45_000)).toBe("advance");
 });
@@ -28,21 +28,21 @@ test("computeRevealState maps phases to reveal booleans", () => {
     shouldAdvance: false,
   });
 
-  expect(computeRevealState(11_250)).toEqual({
+  expect(computeRevealState(10_000)).toEqual({
     showAlbum: true,
     showTitle: false,
     showArtist: false,
     shouldAdvance: false,
   });
 
-  expect(computeRevealState(22_500)).toEqual({
+  expect(computeRevealState(15_000)).toEqual({
     showAlbum: true,
     showTitle: true,
     showArtist: false,
     shouldAdvance: false,
   });
 
-  expect(computeRevealState(30_000)).toEqual({
+  expect(computeRevealState(20_000)).toEqual({
     showAlbum: true,
     showTitle: true,
     showArtist: true,
@@ -59,15 +59,15 @@ test("computeRevealState maps phases to reveal booleans", () => {
 
 test("makeRevealConfigForSongPlayMs scales milestones with song play time", () => {
   expect(makeRevealConfigForSongPlayMs(60_000)).toEqual({
-    albumMs: 15_000,
-    titleMs: 30_000,
-    artistMs: 40_000,
+    albumMs: 13_333,
+    titleMs: 20_000,
+    artistMs: 26_667,
     nextMs: 60_000,
   });
   expect(makeRevealConfigForSongPlayMs(45_000)).toEqual({
-    albumMs: 11_250,
-    titleMs: 22_500,
-    artistMs: 30_000,
+    albumMs: 10_000,
+    titleMs: 15_000,
+    artistMs: 20_000,
     nextMs: 45_000,
   });
 });
@@ -76,12 +76,12 @@ test("getRevealConfigWithExtension preserves relative timing after skip or exten
   const cfg = makeRevealConfigForSongPlayMs(45_000);
   const extended = getRevealConfigWithExtension(cfg, 30_000);
   expect(extended).toEqual({
-    albumMs: 18_750,
-    titleMs: 37_500,
-    artistMs: 50_000,
+    albumMs: 16_667,
+    titleMs: 25_000,
+    artistMs: 33_333,
     nextMs: 75_000,
   });
-  expect(getRevealPhase(30_000, extended)).toBe("album");
+  expect(getRevealPhase(30_000, extended)).toBe("title");
   expect(getRevealPhase(75_000, extended)).toBe("advance");
 });
 

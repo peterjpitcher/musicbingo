@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/Button";
 import { MAX_SONGS_PER_GAME, makeSongSelectionValue } from "@/lib/gameInput";
 import { CHALLENGE_REVEAL_CONFIG, DEFAULT_REVEAL_CONFIG, type IntroSong } from "@/lib/live/types";
+import { parseSpotifyTrackUrl } from "@/lib/spotifyTrackUrl";
 import type { Song } from "@/lib/types";
 
 type ParsedResult = {
@@ -32,6 +33,8 @@ type StepGameConfigProps = {
   onSongsText: (v: string) => void;
   challengeSongs: ChallengeEntry[];
   onChallengeSongs: (v: ChallengeEntry[]) => void;
+  introUrl: string;
+  onIntroUrlChange: (v: string) => void;
   introSongs: IntroSong[];
   onIntroSongsChange: (songs: IntroSong[]) => void;
   spotifyConnected: boolean;
@@ -53,53 +56,17 @@ function songLabel(song: Song): string {
   return `${song.artist} - ${song.title}`;
 }
 
-function parseSpotifyTrackUrl(
-  input: string
-): { trackId: string } | { error: string } {
-  const trimmed = input.trim();
-  if (!trimmed) {
-    return { error: "Please paste a valid Spotify track URL" };
-  }
-  const uriMatch = trimmed.match(/^spotify:track:([A-Za-z0-9]+)$/);
-  if (uriMatch) {
-    return { trackId: uriMatch[1] };
-  }
-  let url: URL;
-  try {
-    url = new URL(trimmed);
-  } catch {
-    return { error: "Please paste a valid Spotify track URL" };
-  }
-  if (url.hostname === "spotify.link") {
-    return { error: "Please paste the full track URL from Spotify" };
-  }
-  if (url.hostname !== "open.spotify.com") {
-    return { error: "Please paste a valid Spotify track URL" };
-  }
-  const pathSegments = url.pathname.split("/").filter(Boolean);
-  if (pathSegments.length < 2) {
-    return { error: "Please paste a valid Spotify track URL" };
-  }
-  const resourceType = pathSegments[0];
-  if (resourceType === "playlist") {
-    return { error: "Please paste a track URL, not a playlist" };
-  }
-  if (resourceType === "album") {
-    return { error: "Please paste a track URL, not an album" };
-  }
-  if (resourceType !== "track") {
-    return { error: "Please paste a valid Spotify track URL" };
-  }
-  const trackId = pathSegments[1];
-  if (!trackId || !/^[A-Za-z0-9]+$/.test(trackId)) {
-    return { error: "Please paste a valid Spotify track URL" };
-  }
-  return { trackId };
-}
-
 function getAvailableOptions(songs: Song[], excludeValues: string[]): Song[] {
   const excluded = new Set(excludeValues.filter(Boolean));
   return songs.filter((s) => !excluded.has(makeSongSelectionValue(s)));
+}
+
+function hasResolvedIntroSong(introSongs: IntroSong[], type: IntroSong["type"], spotifyUrl?: string): boolean {
+  const normalizedUrl = spotifyUrl?.trim();
+  return introSongs.some((song) => {
+    if (song.type !== type || !song.trackId) return false;
+    return !normalizedUrl || song.spotifyUrl?.trim() === normalizedUrl;
+  });
 }
 
 export function StepGameConfig({
@@ -111,6 +78,8 @@ export function StepGameConfig({
   onSongsText,
   challengeSongs,
   onChallengeSongs,
+  introUrl,
+  onIntroUrlChange,
   introSongs,
   onIntroSongsChange,
   spotifyConnected,
@@ -128,23 +97,28 @@ export function StepGameConfig({
 
   const introSlot = INTRO_CONFIG[gameNumber];
 
-  const [introUrls, setIntroUrls] = useState<Record<string, string>>(() => {
-    const existing = introSongs.find((s) => s.type === introSlot.type);
-    return { [introSlot.type]: existing?.spotifyUrl ?? "" };
-  });
-
   const [introState, setIntroState] = useState<IntroInputState>({});
 
-  const introResolved = spotifyConnected
-    ? introSongs.some((s) => s.type === introSlot.type && s.trackId)
-    : true;
+  const trimmedIntroUrl = introUrl.trim();
+  const introUrlParseResult = trimmedIntroUrl ? parseSpotifyTrackUrl(trimmedIntroUrl) : null;
+  const introUrlFormatValid = !introUrlParseResult || !("error" in introUrlParseResult);
+  const introHasPendingUrl =
+    spotifyConnected &&
+    trimmedIntroUrl !== "" &&
+    introUrlFormatValid &&
+    !introState[introSlot.type]?.error &&
+    !hasResolvedIntroSong(introSongs, introSlot.type, trimmedIntroUrl);
+  const introValid =
+    trimmedIntroUrl === "" ||
+    (!spotifyConnected && introUrlFormatValid) ||
+    hasResolvedIntroSong(introSongs, introSlot.type, trimmedIntroUrl);
 
   const canNext =
     parsed.songs.length >= 25 &&
     !tooMany &&
     parsed.combinedPool.length >= 25 &&
     selectedChallengeCount >= 1 &&
-    introResolved;
+    introValid;
 
   const resolveIntroUrl = useCallback(
     async (type: IntroSong["type"], rawUrl: string) => {
@@ -165,6 +139,15 @@ export function StepGameConfig({
           ...prev,
           [type]: { error: parseResult.error },
         }));
+        return;
+      }
+
+      if (!spotifyConnected) {
+        setIntroState((prev) => {
+          const next = { ...prev };
+          delete next[type];
+          return next;
+        });
         return;
       }
 
@@ -216,10 +199,25 @@ export function StepGameConfig({
         }));
       }
     },
-    [introSongs, onIntroSongsChange]
+    [introSongs, onIntroSongsChange, spotifyConnected]
   );
 
   const resolvedIntroSong = introSongs.find((s) => s.type === introSlot.type);
+
+  function handleIntroUrlChange(value: string) {
+    onIntroUrlChange(value);
+    const existing = introSongs.find((s) => s.type === introSlot.type);
+    if (existing && existing.spotifyUrl.trim() !== value.trim()) {
+      onIntroSongsChange(introSongs.filter((s) => s.type !== introSlot.type));
+    }
+    if (introState[introSlot.type]?.error) {
+      setIntroState((prev) => {
+        const next = { ...prev };
+        delete next[introSlot.type];
+        return next;
+      });
+    }
+  }
 
   return (
     <div className="wizpanel">
@@ -259,27 +257,27 @@ export function StepGameConfig({
           <label>{introSlot.label}</label>
           <input
             type="text"
-            value={introUrls[introSlot.type] ?? ""}
-            onChange={(e) =>
-              setIntroUrls((prev) => ({ ...prev, [introSlot.type]: e.target.value }))
-            }
-            onBlur={() => resolveIntroUrl(introSlot.type, introUrls[introSlot.type] ?? "")}
+            value={introUrl}
+            onChange={(e) => handleIntroUrlChange(e.target.value)}
+            onBlur={() => resolveIntroUrl(introSlot.type, introUrl)}
             onPaste={(e) => {
               const pasted = e.clipboardData.getData("text");
-              setIntroUrls((prev) => ({ ...prev, [introSlot.type]: pasted }));
+              handleIntroUrlChange(pasted);
               setTimeout(() => resolveIntroUrl(introSlot.type, pasted), 0);
             }}
             placeholder="Paste Spotify track URL…"
-            disabled={!spotifyConnected}
           />
           {!spotifyConnected && (
-            <span className="help" style={{ color: "#e6b35c" }}>Connect Spotify on the Generate step to add an intro song</span>
+            <span className="help" style={{ color: "#e6b35c" }}>Paste a track URL now; it will be matched after Spotify connects.</span>
           )}
           {introState[introSlot.type]?.loading && (
             <span className="help">Loading track info…</span>
           )}
           {introState[introSlot.type]?.error && (
             <span className="help" style={{ color: "#e88" }}>{introState[introSlot.type]!.error}</span>
+          )}
+          {introHasPendingUrl && (
+            <span className="help" style={{ color: "#e6b35c" }}>Resolve this track or clear the field to continue.</span>
           )}
           {resolvedIntroSong && !introState[introSlot.type]?.loading && !introState[introSlot.type]?.error && (
             <span className="help" style={{ color: "#8fe0ab" }}>

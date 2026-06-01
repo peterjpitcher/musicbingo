@@ -11,7 +11,6 @@ import { DEFAULT_GAME_THEME, MAX_SONGS_PER_GAME, makeSongSelectionValue } from "
 import { exportLiveSessionJson, getLiveSession, upsertLiveSession } from "@/lib/live/sessionApi";
 import {
   formatSecondsInput,
-  getDefaultRevealConfigForSongInput,
   parseRevealConfigInputs,
 } from "@/lib/live/timing";
 import {
@@ -24,6 +23,7 @@ import {
   type LiveSessionV1,
 } from "@/lib/live/types";
 import { parseSongListText } from "@/lib/parser";
+import { parseSpotifyTrackUrl } from "@/lib/spotifyTrackUrl";
 import type { Song } from "@/lib/types";
 import { sanitizeFilenamePart } from "@/lib/utils";
 import { StepEventSetup } from "./StepEventSetup";
@@ -150,6 +150,7 @@ function PrepPageInner() {
   const [game1ChallengeSongs, setGame1ChallengeSongs] = useState<ChallengeEntry[]>(
     Array(5).fill(null).map(() => ({ value: "", type: "sing-along" as const }))
   );
+  const [game1IntroUrl, setGame1IntroUrl] = useState<string>("");
   const [game1IntroSongs, setGame1IntroSongs] = useState<IntroSong[]>([]);
 
   // Step 2 fields
@@ -158,6 +159,7 @@ function PrepPageInner() {
   const [game2ChallengeSongs, setGame2ChallengeSongs] = useState<ChallengeEntry[]>(
     Array(5).fill(null).map(() => ({ value: "", type: "sing-along" as const }))
   );
+  const [game2IntroUrl, setGame2IntroUrl] = useState<string>("");
   const [game2IntroSongs, setGame2IntroSongs] = useState<IntroSong[]>([]);
 
   // Legacy single challenge song (backward compat — derived from first element)
@@ -191,15 +193,19 @@ function PrepPageInner() {
         game2Theme: game2Theme.trim(),
         game1SongsText,
         game2SongsText,
+        game1IntroUrl: game1IntroUrl.trim(),
+        game2IntroUrl: game2IntroUrl.trim(),
         game1IntroSongs: normaliseIntroSongsForSignature(game1IntroSongs),
         game2IntroSongs: normaliseIntroSongsForSignature(game2IntroSongs),
       }),
     [
       eventDate,
       game1IntroSongs,
+      game1IntroUrl,
       game1SongsText,
       game1Theme,
       game2IntroSongs,
+      game2IntroUrl,
       game2SongsText,
       game2Theme,
     ]
@@ -218,10 +224,12 @@ function PrepPageInner() {
         game1Theme,
         game1SongsText,
         game1ChallengeSongs,
+        game1IntroUrl,
         game1IntroSongs: normaliseIntroSongsForSignature(game1IntroSongs),
         game2Theme,
         game2SongsText,
         game2ChallengeSongs,
+        game2IntroUrl,
         game2IntroSongs: normaliseIntroSongsForSignature(game2IntroSongs),
       }),
     [
@@ -232,10 +240,12 @@ function PrepPageInner() {
       eventDate,
       game1ChallengeSongs,
       game1IntroSongs,
+      game1IntroUrl,
       game1SongsText,
       game1Theme,
       game2ChallengeSongs,
       game2IntroSongs,
+      game2IntroUrl,
       game2SongsText,
       game2Theme,
       selectedBrandId,
@@ -247,7 +257,7 @@ function PrepPageInner() {
   const formSignatureRef = useRef<string>(formInputSignature);
 
   function resetRevealTimingDefaults() {
-    const revealConfig = getDefaultRevealConfigForSongInput(songPlaySecondsInput);
+    const revealConfig = DEFAULT_REVEAL_CONFIG;
     setSongPlaySecondsInput(formatSecondsInput(revealConfig.nextMs));
     setAlbumRevealSecondsInput(formatSecondsInput(revealConfig.albumMs));
     setTitleRevealSecondsInput(formatSecondsInput(revealConfig.titleMs));
@@ -313,7 +323,10 @@ function PrepPageInner() {
           const entries = challengeEntriesFromGame(game1);
           if (entries.some((c) => c.value)) setGame1ChallengeSongs(entries);
           const intros = getIntroSongs(game1);
-          if (intros.length > 0) setGame1IntroSongs(intros);
+          if (intros.length > 0) {
+            setGame1IntroSongs(intros);
+            setGame1IntroUrl(intros.find((s) => s.type === "dance-along")?.spotifyUrl ?? intros[0]?.spotifyUrl ?? "");
+          }
         }
 
         // Hydrate step-2 fields
@@ -324,7 +337,10 @@ function PrepPageInner() {
           const entries = challengeEntriesFromGame(game2);
           if (entries.some((c) => c.value)) setGame2ChallengeSongs(entries);
           const intros = getIntroSongs(game2);
-          if (intros.length > 0) setGame2IntroSongs(intros);
+          if (intros.length > 0) {
+            setGame2IntroSongs(intros);
+            setGame2IntroUrl(intros.find((s) => s.type === "sing-along")?.spotifyUrl ?? intros[0]?.spotifyUrl ?? "");
+          }
         }
 
         // Preserve the session id so save overwrites the same record
@@ -469,7 +485,12 @@ function PrepPageInner() {
     parsedGame2.songs.length,
   ]);
 
-  function buildBaseFormData(): FormData {
+  function buildBaseFormData(overrides?: {
+    game1IntroSongs?: IntroSong[];
+    game2IntroSongs?: IntroSong[];
+  }): FormData {
+    const effectiveGame1IntroSongs = overrides?.game1IntroSongs ?? game1IntroSongs;
+    const effectiveGame2IntroSongs = overrides?.game2IntroSongs ?? game2IntroSongs;
     const form = new FormData();
     form.set("event_date", eventDate);
     form.set("song_play_seconds", songPlaySecondsInput);
@@ -487,15 +508,17 @@ function PrepPageInner() {
     const g2ChallengeTypes = game2ChallengeSongs.filter((c) => c.value).map((c) => c.type);
     form.set("game1_challenge_song_types", g1ChallengeTypes.join(","));
     form.set("game2_challenge_song_types", g2ChallengeTypes.join(","));
-    if (game1IntroSongs.length) form.set("game1_intro_songs", JSON.stringify(game1IntroSongs));
-    if (game2IntroSongs.length) form.set("game2_intro_songs", JSON.stringify(game2IntroSongs));
-    if (game1IntroSongs[0]?.artist && game1IntroSongs[0]?.title) {
-      form.set("game1_intro_artist", game1IntroSongs[0].artist);
-      form.set("game1_intro_title", game1IntroSongs[0].title);
+    if (game1IntroUrl.trim()) form.set("game1_intro_url", game1IntroUrl.trim());
+    if (game2IntroUrl.trim()) form.set("game2_intro_url", game2IntroUrl.trim());
+    if (effectiveGame1IntroSongs.length) form.set("game1_intro_songs", JSON.stringify(effectiveGame1IntroSongs));
+    if (effectiveGame2IntroSongs.length) form.set("game2_intro_songs", JSON.stringify(effectiveGame2IntroSongs));
+    if (effectiveGame1IntroSongs[0]?.artist && effectiveGame1IntroSongs[0]?.title) {
+      form.set("game1_intro_artist", effectiveGame1IntroSongs[0].artist);
+      form.set("game1_intro_title", effectiveGame1IntroSongs[0].title);
     }
-    if (game2IntroSongs[0]?.artist && game2IntroSongs[0]?.title) {
-      form.set("game2_intro_artist", game2IntroSongs[0].artist);
-      form.set("game2_intro_title", game2IntroSongs[0].title);
+    if (effectiveGame2IntroSongs[0]?.artist && effectiveGame2IntroSongs[0]?.title) {
+      form.set("game2_intro_artist", effectiveGame2IntroSongs[0].artist);
+      form.set("game2_intro_title", effectiveGame2IntroSongs[0].title);
     }
     if (livePlaylistByGame?.game1.playlistId) {
       form.set("game1_playlist_id", livePlaylistByGame.game1.playlistId);
@@ -756,6 +779,81 @@ function PrepPageInner() {
     }
   }
 
+  function introSongMatchesUrl(songs: IntroSong[], type: IntroSong["type"], rawUrl: string): boolean {
+    const url = rawUrl.trim();
+    return songs.some((song) => song.type === type && song.trackId && song.spotifyUrl.trim() === url);
+  }
+
+  async function resolveIntroSongUrl(
+    type: IntroSong["type"],
+    rawUrl: string,
+    label: string
+  ): Promise<IntroSong | null> {
+    const url = rawUrl.trim();
+    if (!url) return null;
+
+    const parseResult = parseSpotifyTrackUrl(url);
+    if ("error" in parseResult) {
+      throw new Error(`${label}: ${parseResult.error}`);
+    }
+
+    const res = await fetch(`/api/spotify/track/${encodeURIComponent(parseResult.trackId)}`);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({ error: "Request failed" }));
+      const message = typeof body?.error === "string" ? body.error : "Request failed";
+      throw new Error(`${label}: ${message}`);
+    }
+
+    const data = (await res.json()) as {
+      trackId: string;
+      title: string;
+      artist: string;
+    };
+
+    return {
+      type,
+      spotifyUrl: url,
+      trackId: data.trackId,
+      artist: data.artist,
+      title: data.title,
+    };
+  }
+
+  async function resolvePendingIntroSongs(): Promise<{
+    game1IntroSongs: IntroSong[];
+    game2IntroSongs: IntroSong[];
+  }> {
+    let nextGame1IntroSongs = game1IntroSongs;
+    let nextGame2IntroSongs = game2IntroSongs;
+
+    if (game1IntroUrl.trim() && !introSongMatchesUrl(nextGame1IntroSongs, "dance-along", game1IntroUrl)) {
+      const resolved = await resolveIntroSongUrl("dance-along", game1IntroUrl, "Game 1 dance along song");
+      if (resolved) {
+        nextGame1IntroSongs = [
+          ...nextGame1IntroSongs.filter((song) => song.type !== "dance-along"),
+          resolved,
+        ];
+        setGame1IntroSongs(nextGame1IntroSongs);
+      }
+    }
+
+    if (game2IntroUrl.trim() && !introSongMatchesUrl(nextGame2IntroSongs, "sing-along", game2IntroUrl)) {
+      const resolved = await resolveIntroSongUrl("sing-along", game2IntroUrl, "Game 2 sing along song");
+      if (resolved) {
+        nextGame2IntroSongs = [
+          ...nextGame2IntroSongs.filter((song) => song.type !== "sing-along"),
+          resolved,
+        ];
+        setGame2IntroSongs(nextGame2IntroSongs);
+      }
+    }
+
+    return {
+      game1IntroSongs: nextGame1IntroSongs,
+      game2IntroSongs: nextGame2IntroSongs,
+    };
+  }
+
   async function createSpotifyPlaylists(opts: { form?: FormData; clearError?: boolean } = {}) {
     const clearError = opts.clearError ?? true;
     if (clearError) { setError(""); setSpotifyResult(null); }
@@ -813,7 +911,8 @@ function PrepPageInner() {
         const ok = await connectSpotify({ clearError: false });
         if (!ok) return;
       }
-      const form = buildBaseFormData();
+      const resolvedIntroSongs = await resolvePendingIntroSongs();
+      const form = buildBaseFormData(resolvedIntroSongs);
       await createSpotifyPlaylists({ form, clearError: false });
 
       const latestResult = await new Promise<SpotifyPlaylistResult[] | null>((resolve) => {
@@ -1069,6 +1168,8 @@ function PrepPageInner() {
             onSongsText={setGame1SongsText}
             challengeSongs={game1ChallengeSongs}
             onChallengeSongs={setGame1ChallengeSongs}
+            introUrl={game1IntroUrl}
+            onIntroUrlChange={setGame1IntroUrl}
             introSongs={game1IntroSongs}
             onIntroSongsChange={setGame1IntroSongs}
             spotifyConnected={spotifyConnected}
@@ -1090,6 +1191,8 @@ function PrepPageInner() {
             onSongsText={setGame2SongsText}
             challengeSongs={game2ChallengeSongs}
             onChallengeSongs={setGame2ChallengeSongs}
+            introUrl={game2IntroUrl}
+            onIntroUrlChange={setGame2IntroUrl}
             introSongs={game2IntroSongs}
             onIntroSongsChange={setGame2IntroSongs}
             spotifyConnected={spotifyConnected}

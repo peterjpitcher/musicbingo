@@ -25,9 +25,9 @@ export const MAX_SONG_PLAY_MS = 300_000;
 export const MAX_SONG_EXTENSION_MS = 300_000;
 
 const DEFAULT_REVEAL_RATIOS: RevealRatios = {
-  album: 15_000 / 60_000,
-  title: 30_000 / 60_000,
-  artist: 40_000 / 60_000,
+  album: 10_000 / 45_000,
+  title: 15_000 / 45_000,
+  artist: 20_000 / 45_000,
 };
 
 const CHALLENGE_REVEAL_RATIOS: RevealRatios = {
