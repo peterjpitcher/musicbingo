@@ -48,10 +48,10 @@ export function WelcomeSongPanel({
 
   return (
     <div className="panel">
-      <h2>Welcome Song</h2>
+      <h2>Welcome Intro Song</h2>
       <div className="ed">
         <div className="ed-grp">
-          <span className="k">Paste Spotify track link</span>
+          <span className="k">Paste Spotify track link to change it</span>
           <div className="btn-row">
             <input
               value={link}
@@ -71,13 +71,13 @@ export function WelcomeSongPanel({
               onClick={handleSet}
               disabled={busy || !link.trim()}
             >
-              Set song
+              Set intro
             </button>
           </div>
         </div>
 
         <p className="hint-small" style={{ marginTop: 0 }}>
-          Now: {nowLabel}
+          Current intro: {nowLabel}
         </p>
 
         <div className="btn-row">
@@ -88,7 +88,7 @@ export function WelcomeSongPanel({
             disabled={busy || playDisabled}
             aria-label="Play welcome song"
           >
-            ▶ Play
+            ▶ Play Intro
           </button>
           <button
             type="button"

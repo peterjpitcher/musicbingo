@@ -6,6 +6,7 @@ import {
   validateLiveSession,
 } from "@/lib/live/storage";
 import {
+  DEFAULT_WELCOME_SONG,
   DEFAULT_REVEAL_CONFIG,
   LIVE_SESSION_VERSION,
   makeEmptyRuntimeState,
@@ -78,6 +79,11 @@ test("storage helpers are safe when localStorage is unavailable", () => {
 test("empty runtime starts at timestamp zero so fetched host state can win first load", () => {
   const runtime = makeEmptyRuntimeState("session-123");
   expect(runtime.updatedAtMs).toBe(0);
+});
+
+test("empty runtime includes the default welcome intro song", () => {
+  const runtime = makeEmptyRuntimeState("session-123");
+  expect(runtime.welcomeSong).toEqual(DEFAULT_WELCOME_SONG);
 });
 
 test("isControlLockStale uses timeout window", () => {

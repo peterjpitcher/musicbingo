@@ -231,9 +231,27 @@ export type LiveRuntimeState = {
    * choice survives a refresh. The on-screen song text is driven separately by the
    * `introTitle`/`introArtist` content keys — this field exists purely to back manual playback.
    */
-  welcomeSong?: { trackId: string; uri: string; title: string; artist: string };
+  welcomeSong?: WelcomeSong;
   updatedAtMs: number;
 };
+
+export type WelcomeSong = {
+  trackId: string;
+  uri: string;
+  title: string;
+  artist: string;
+};
+
+export const DEFAULT_WELCOME_SONG: WelcomeSong = {
+  trackId: "2LScqpywMqGcnum6nNaxXX",
+  uri: "spotify:track:2LScqpywMqGcnum6nNaxXX",
+  title: "Yes Sir, I Can Boogie",
+  artist: "Baccara",
+};
+
+export function withDefaultWelcomeSong(runtime: LiveRuntimeState): LiveRuntimeState {
+  return runtime.welcomeSong ? runtime : { ...runtime, welcomeSong: DEFAULT_WELCOME_SONG };
+}
 
 export type LiveControlLock = {
   tabId: string;
@@ -286,6 +304,7 @@ export function makeEmptyRuntimeState(sessionId: string): LiveRuntimeState {
     freePlay: false,
     isIntroSong: false,
     introPlayed: false,
+    welcomeSong: DEFAULT_WELCOME_SONG,
     updatedAtMs: 0,
   };
 }

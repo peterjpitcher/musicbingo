@@ -6,6 +6,7 @@ export interface GameFlowPanelProps {
   mode: string;
   /** Which game is active (1 or 2), or null between games */
   activeGame: number | null;
+  onWelcomeIntro: () => void;
   onIntro: (n: 1 | 2) => void;
   onStart: (n: 1 | 2) => void;
   onBreak: () => void;
@@ -20,6 +21,7 @@ export interface GameFlowPanelProps {
   claimCount: number;
   /** True when the TV is currently showing the claim screen (toggles the affordance). */
   claimActive: boolean;
+  welcomeIntroDisabled?: boolean;
 }
 
 /**
@@ -34,6 +36,7 @@ export interface GameFlowPanelProps {
 export function GameFlowPanel({
   mode,
   activeGame,
+  onWelcomeIntro,
   onIntro,
   onStart,
   onBreak,
@@ -44,6 +47,7 @@ export function GameFlowPanel({
   onBackToGame,
   claimCount,
   claimActive,
+  welcomeIntroDisabled = false,
 }: GameFlowPanelProps) {
   // The claim controls only make sense while a game is live (or already showing
   // the claim screen so the host can switch back).
@@ -71,6 +75,18 @@ export function GameFlowPanel({
         </div>
       ) : (
         <>
+          {mode === 'idle' && (
+            <div className="btn-row" style={{ marginBottom: 10 }}>
+              <button
+                className="hbtn hbtn--go hbtn--lg grow"
+                onClick={onWelcomeIntro}
+                disabled={welcomeIntroDisabled}
+              >
+                ▶ Play Welcome Intro
+              </button>
+            </div>
+          )}
+
           {/* 2×2 grid: intro / start for each game */}
           <div className="btn-grid" style={{ marginBottom: 10 }}>
             <button className="hbtn" onClick={() => onIntro(1)}>

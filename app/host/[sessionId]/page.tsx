@@ -44,6 +44,7 @@ import {
 import { matchChallengeSong } from "@/lib/live/challenge";
 import {
   CHALLENGE_REVEAL_CONFIG,
+  DEFAULT_WELCOME_SONG,
   DEFAULT_REVEAL_CONFIG,
   MAX_SONG_EXTENSION_MS,
   MAX_SONG_PLAY_MS,
@@ -53,6 +54,7 @@ import {
   getChallengeSongs,
   getIntroSongs,
   makeEmptyRuntimeState,
+  withDefaultWelcomeSong,
   type LiveRuntimeState,
   type LiveSessionV1,
   type LiveTrackSnapshot,
@@ -515,11 +517,20 @@ export default function HostSessionControllerPage() {
         }
         setSession(loaded);
         setError("");
+        let serverRuntime: LiveRuntimeState | null = null;
+        try {
+          const runtimeRes = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/runtime`, {
+            cache: "no-store",
+          });
+          if (runtimeRes.ok) {
+            serverRuntime = (await runtimeRes.json()) as LiveRuntimeState;
+          }
+        } catch {}
         const persistedRuntime = readRuntimeState(sessionId);
-        const initial = {
-          ...(persistedRuntime ?? makeEmptyRuntimeState(sessionId)),
+        const initial = withDefaultWelcomeSong({
+          ...(serverRuntime ?? persistedRuntime ?? makeEmptyRuntimeState(sessionId)),
           revealConfig: loaded.revealConfig,
-        };
+        });
         setRuntime(initial);
         runtimeRef.current = initial;
         acquireLock(false);
@@ -756,6 +767,8 @@ export default function HostSessionControllerPage() {
         playedTracks: [],
         isIntroSong: false,
         introPlayed: false,
+        freePlay: false,
+        extensionMs: 0,
       }));
       setNoticeVariant("success");
       setNotice(`Started Game ${gameNumber}: ${game.theme}`);
@@ -767,6 +780,8 @@ export default function HostSessionControllerPage() {
         spotifyControlAvailable: false,
         // Fresh game → start a new played-songs list for the Bingo Claim screen.
         playedTracks: [],
+        freePlay: false,
+        extensionMs: 0,
         warningMessage: prev.warningMessage || "Manual host control mode active.",
       }));
       setNoticeVariant("warning");
@@ -1070,9 +1085,23 @@ export default function HostSessionControllerPage() {
   };
 
   const playWelcomeSong = async (): Promise<void> => {
-    const song = runtimeRef.current.welcomeSong;
-    if (!song) return;
-    await sendCommand("play_track", { trackId: song.trackId });
+    const song = runtimeRef.current.welcomeSong ?? DEFAULT_WELCOME_SONG;
+    const ok = await sendCommand("play_track", { trackId: song.trackId }, { modeOnSuccess: "idle" });
+    if (!ok) return;
+    commitRuntime((prev) => ({
+      ...prev,
+      mode: "idle",
+      activeGameNumber: null,
+      screenId: "welcome" as ScreenId,
+      welcomeSong: song,
+      isIntroSong: false,
+      introPlayed: false,
+      isChallengeSong: false,
+      challengeType: null,
+      advanceTriggeredForTrackId: null,
+      extensionMs: 0,
+      freePlay: false,
+    }));
   };
 
   const pauseWelcomeSong = async (): Promise<void> => {
@@ -1082,11 +1111,12 @@ export default function HostSessionControllerPage() {
   // Disable Play when no welcome song is set, or Spotify control is unavailable
   // (mirrors how the transport buttons gate on spotifyControlAvailable/disconnected).
   const welcomeSongPlayDisabled =
-    !runtime.welcomeSong || spotifyDisconnected || !runtime.spotifyControlAvailable;
+    spotifyDisconnected || !runtime.spotifyControlAvailable;
 
   // Prefer the resolved track's labels; fall back to the live content keys.
-  const welcomeSongTitle = runtime.welcomeSong?.title ?? editValue.get("introTitle", "");
-  const welcomeSongArtist = runtime.welcomeSong?.artist ?? editValue.get("introArtist", "");
+  const welcomeSong = runtime.welcomeSong ?? DEFAULT_WELCOME_SONG;
+  const welcomeSongTitle = welcomeSong.title || editValue.get("introTitle", "");
+  const welcomeSongArtist = welcomeSong.artist || editValue.get("introArtist", "");
 
   // Playlist current index (0-based)
   const currentTrackIdx = (() => {
@@ -1414,6 +1444,8 @@ export default function HostSessionControllerPage() {
               <GameFlowPanel
                 mode={runtime.mode}
                 activeGame={runtime.activeGameNumber}
+                onWelcomeIntro={() => void playWelcomeSong()}
+                welcomeIntroDisabled={welcomeSongPlayDisabled}
                 onIntro={(n) => void playIntroSong(n)}
                 onStart={(n) => void startGame(n)}
                 onBreak={openBreakScreen}

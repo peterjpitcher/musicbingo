@@ -1,4 +1,5 @@
 import {
+  DEFAULT_WELCOME_SONG,
   LIVE_RUNTIME_VERSION,
   type LiveControlLock,
   type LiveRuntimeState,
@@ -215,6 +216,7 @@ export function validateRuntimeState(input: unknown): LiveRuntimeState | null {
       welcomeSong = { trackId, uri, title, artist };
     }
   }
+  welcomeSong ??= DEFAULT_WELCOME_SONG;
 
   return {
     version: LIVE_RUNTIME_VERSION,
@@ -251,7 +253,7 @@ export function validateRuntimeState(input: unknown): LiveRuntimeState | null {
     ...(Object.keys(content).length ? { content } : {}),
     ...(welcomeVariant ? { welcomeVariant } : {}),
     ...(titleVariant ? { titleVariant } : {}),
-    ...(welcomeSong ? { welcomeSong } : {}),
+    welcomeSong,
     updatedAtMs,
   };
 }
