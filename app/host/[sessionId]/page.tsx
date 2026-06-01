@@ -1138,6 +1138,18 @@ export default function HostSessionControllerPage() {
   const welcomeSong = runtime.welcomeSong ?? DEFAULT_WELCOME_SONG;
   const welcomeSongTitle = welcomeSong.title || editValue.get("introTitle", "");
   const welcomeSongArtist = welcomeSong.artist || editValue.get("introArtist", "");
+  const isWelcomeScreen = currentScreenId === "welcome";
+  const isWelcomeSongCurrent = runtime.currentTrack?.trackId === welcomeSong.trackId;
+  const isWelcomeSongPlaying = Boolean(isWelcomeSongCurrent && runtime.currentTrack?.isPlaying);
+  const panelTrack = isWelcomeScreen && !isWelcomeSongCurrent
+    ? { title: welcomeSongTitle || DEFAULT_WELCOME_SONG.title, artist: welcomeSongArtist || DEFAULT_WELCOME_SONG.artist }
+    : {
+      title: runtime.currentTrack?.title ?? "—",
+      artist: runtime.currentTrack?.artist ?? "",
+    };
+  const panelPlaying = isWelcomeScreen
+    ? isWelcomeSongPlaying
+    : (runtime.currentTrack?.isPlaying ?? false);
 
   // Playlist current index (0-based)
   const currentTrackIdx = (() => {
@@ -1415,11 +1427,8 @@ export default function HostSessionControllerPage() {
 
               {/* Now Playing panel */}
               <NowPlayingPanel
-                track={{
-                  title: runtime.currentTrack?.title ?? "—",
-                  artist: runtime.currentTrack?.artist ?? "",
-                }}
-                playing={runtime.currentTrack?.isPlaying ?? false}
+                track={panelTrack}
+                playing={panelPlaying}
                 progressMs={runtime.currentTrack?.progressMs ?? 0}
                 timing={timingForPanel}
                 isIntro={runtime.isIntroSong}
@@ -1437,7 +1446,7 @@ export default function HostSessionControllerPage() {
                     void sendCommand("previous");
                   }
                 }}
-                welcomeIntroActive={currentScreenId === "welcome"}
+                welcomeIntroActive={isWelcomeScreen}
                 welcomeIntroDisabled={welcomeSongPlayDisabled}
                 onWelcomeIntro={() => void playWelcomeSong()}
                 onFree={() => commitRuntime((prev) => ({ ...prev, freePlay: !prev.freePlay }))}
