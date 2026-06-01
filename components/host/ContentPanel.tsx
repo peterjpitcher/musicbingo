@@ -90,6 +90,11 @@ export function ContentPanel({ get, set, collapsed, onToggle }: ContentPanelProp
         <Row field="nextDate" label="Next event date" ph="Fri 27 June · 8PM" get={get} set={set} />
         <Row field="hostName" label="Host name" ph="Nikki Manfadge" get={get} set={set} />
 
+        <div className="ed-two">
+          <Row field="reviewQrUrl" label="Review QR URL" ph="https://g.page/r/..." get={get} set={set} />
+          <Row field="bookQrUrl" label="Book again QR URL" ph="https://orangejelly.co.uk/events/..." get={get} set={set} />
+        </div>
+
         {/* Game themes side-by-side */}
         <div className="ed-two">
           <Row field="g1theme" label="Game 1 theme" ph="Pop Anthems" get={get} set={set} />

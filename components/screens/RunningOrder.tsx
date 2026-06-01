@@ -8,10 +8,10 @@ import { Editable } from "@/components/motifs/Editable";
 /** Static default running-order entries (placeholders). */
 const RUN_ORDER = [
   { n: "01", t: "Quiz · Round One",  s: "Grab your phones — KaraFun mobile quiz", k: "ro1" },
-  { n: "02", t: "Bingo · Game 1",    s: "Warm up, then 50 songs to dab",          k: "ro2" },
+  { n: "02", t: "Music Bingo · Game 1", s: "Warm up, then 50 songs to dab",       k: "ro2" },
   { n: "03", t: "The Interval",       s: "Refill at the bar — back in 10",         k: "ro3" },
   { n: "04", t: "Quiz · Round Two",  s: "Round two of the mobile quiz",            k: "ro4" },
-  { n: "05", t: "Bingo · Game 2",    s: "Sing-along warm up, then Game 2",         k: "ro5" },
+  { n: "05", t: "Music Bingo · Game 2", s: "Sing-along warm up, then Game 2",      k: "ro5" },
   { n: "06", t: "Prizes & Winners",  s: "Top table & wooden-spoon prizes",         k: "ro6" },
 ] as const;
 

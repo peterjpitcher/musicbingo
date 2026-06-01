@@ -107,8 +107,18 @@ export function GameLive({
   const themePH = game === 1 ? "Pop Anthems" : "Throwback Bangers";
   const t = game === 1 ? "g1" : "g2";
 
-  const track = runtime?.currentTrack ?? null;
-  const reveal = runtime?.revealState ?? null;
+  const expectedScreen = game === 1 ? "game1" : "game2";
+  const showLiveTrack = Boolean(
+    runtime?.currentTrack &&
+      runtime.activeGameNumber === game &&
+      !runtime.isIntroSong &&
+      (runtime.mode === "running" || runtime.mode === "paused") &&
+      (!runtime.screenId || runtime.screenId === expectedScreen)
+  );
+  const liveRuntime = showLiveTrack ? runtime : null;
+  const track = liveRuntime?.currentTrack ?? null;
+  const reveal = liveRuntime?.revealState ?? null;
+  const showDesignPlaceholders = !runtime;
 
   /*
    * Default every reveal to hidden until the runtime/reveal state has loaded.
@@ -131,13 +141,13 @@ export function GameLive({
    * (interpolated) progress. Falls back to the static design value when there
    * is no live track yet.
    */
-  const liveProgressMs = useLiveProgressMs(runtime);
-  const playsInFull = Boolean(runtime?.isIntroSong || runtime?.freePlay);
-  const isChallenge = Boolean(runtime?.isChallengeSong);
+  const liveProgressMs = useLiveProgressMs(liveRuntime);
+  const playsInFull = Boolean(track && liveRuntime?.freePlay);
+  const isChallenge = Boolean(track && liveRuntime?.isChallengeSong);
   const baseRevealConfig = isChallenge
     ? CHALLENGE_REVEAL_CONFIG
-    : runtime?.revealConfig ?? DEFAULT_REVEAL_CONFIG;
-  const revealConfig = getRevealConfigWithExtension(baseRevealConfig, runtime?.extensionMs ?? 0);
+    : liveRuntime?.revealConfig ?? DEFAULT_REVEAL_CONFIG;
+  const revealConfig = getRevealConfigWithExtension(baseRevealConfig, liveRuntime?.extensionMs ?? 0);
   const nextMs = revealConfig.nextMs;
   const hasLiveCountdown = !playsInFull && liveProgressMs !== null && nextMs > 0;
   const remainingMs = hasLiveCountdown ? Math.max(0, nextMs - liveProgressMs) : 0;
@@ -202,7 +212,7 @@ export function GameLive({
           <AlbumArt
             size={600}
             imageUrl={track && showAlbum ? track.albumImageUrl : null}
-            revealed={showAlbum || !track}
+            revealed={showAlbum || showDesignPlaceholders}
           />
         </div>
       </div>
@@ -253,12 +263,14 @@ export function GameLive({
           ) : track && !showTitle ? (
             /* Title not yet revealed — show nothing but hold layout space */
             <span style={{ display: "block", opacity: 0, whiteSpace: "normal" }}>&#8203;</span>
-          ) : (
+          ) : showDesignPlaceholders ? (
             <Editable
               field={`${t}title`}
               placeholder="Mr. Brightside"
               style={{ display: "block", overflowWrap: "anywhere", whiteSpace: "normal" }}
             />
+          ) : (
+            <span style={{ display: "block", opacity: 0, whiteSpace: "normal" }}>&#8203;</span>
           )}
         </h1>
 
@@ -283,97 +295,101 @@ export function GameLive({
           ) : track && !showArtist ? (
             /* Artist not yet revealed */
             <span style={{ display: "block", opacity: 0, whiteSpace: "normal" }}>&#8203;</span>
-          ) : (
+          ) : showDesignPlaceholders ? (
             <Editable
               field={`${t}artist`}
               placeholder="The Killers"
               style={{ display: "block", overflowWrap: "anywhere", whiteSpace: "normal" }}
             />
+          ) : (
+            <span style={{ display: "block", opacity: 0, whiteSpace: "normal" }}>&#8203;</span>
           )}
         </p>
 
         {/* Reveal timeline badges */}
-        <div
-          className="an-rise d4"
-          style={{ display: "flex", gap: 14, marginTop: 14, flexWrap: "wrap" }}
-        >
-          {isChallenge && (
-            <span
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 10,
-                padding: "12px 22px",
-                borderRadius: 999,
-                background: "rgb(var(--brand-accent-rgb) / .9)",
-                border: "2px solid var(--brand-accent-light)",
-                fontSize: 22,
-                fontWeight: 800,
-                textTransform: "uppercase",
-                letterSpacing: ".1em",
-                color: "var(--ink)",
-              }}
-            >
-              <Eq bars={4} style={{ height: 22 }} /> {challengeLabel(runtime?.challengeType ?? null)} ·{" "}
-              {Math.round(CHALLENGE_REVEAL_CONFIG.nextMs / 1000)}s
-            </span>
-          )}
-          {badges.map(([label, lit]) => (
-            <span key={label} style={lit ? badgeLit : badgeDim}>
-              ✓ {label}
-            </span>
-          ))}
-          {/*
-           * "Next song" countdown — live and interpolated. The label counts
-           * down each second; the inner fill animates smoothly (CSS width
-           * transition) so it glides between the 1s ticks and ~2s polls rather
-           * than jumping.
-           */}
-          <span
-            style={{
-              position: "relative",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 12,
-              padding: "12px 24px",
-              borderRadius: 999,
-              background: "rgba(0,0,0,.3)",
-              border: "2px solid rgba(246,239,221,.3)",
-              fontSize: 22,
-              fontWeight: 700,
-              textTransform: "uppercase",
-              letterSpacing: ".1em",
-              overflow: "hidden",
-            }}
+        {(track || showDesignPlaceholders) && (
+          <div
+            className="an-rise d4"
+            style={{ display: "flex", gap: 14, marginTop: 14, flexWrap: "wrap" }}
           >
-            {/* Progress fill — only shown when a live countdown is available. */}
-            {hasLiveCountdown && (
+            {isChallenge && (
               <span
-                aria-hidden
                 style={{
-                  position: "absolute",
-                  inset: 0,
-                  width: `${nextFillPct}%`,
-                  background: "rgb(var(--brand-accent-rgb) / .18)",
-                  transition: "width 1s linear",
-                  pointerEvents: "none",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "12px 22px",
+                  borderRadius: 999,
+                  background: "rgb(var(--brand-accent-rgb) / .9)",
+                  border: "2px solid var(--brand-accent-light)",
+                  fontSize: 22,
+                  fontWeight: 800,
+                  textTransform: "uppercase",
+                  letterSpacing: ".1em",
+                  color: "var(--ink)",
                 }}
-              />
+              >
+                <Eq bars={4} style={{ height: 22 }} /> {challengeLabel(liveRuntime?.challengeType ?? null)} ·{" "}
+                {Math.round(CHALLENGE_REVEAL_CONFIG.nextMs / 1000)}s
+              </span>
             )}
+            {badges.map(([label, lit]) => (
+              <span key={label} style={lit ? badgeLit : badgeDim}>
+                ✓ {label}
+              </span>
+            ))}
+            {/*
+             * "Next song" countdown — live and interpolated. The label counts
+             * down each second; the inner fill animates smoothly (CSS width
+             * transition) so it glides between the 1s ticks and ~2s polls rather
+             * than jumping.
+             */}
             <span
               style={{
                 position: "relative",
-                zIndex: 1,
                 display: "inline-flex",
                 alignItems: "center",
                 gap: 12,
+                padding: "12px 24px",
+                borderRadius: 999,
+                background: "rgba(0,0,0,.3)",
+                border: "2px solid rgba(246,239,221,.3)",
+                fontSize: 22,
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: ".1em",
+                overflow: "hidden",
               }}
             >
-              <Eq bars={4} style={{ height: 22 }} />{" "}
-              {playsInFull ? "Plays in full" : `Next song · ${nextLabel}`}
+              {/* Progress fill — only shown when a live countdown is available. */}
+              {hasLiveCountdown && (
+                <span
+                  aria-hidden
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    width: `${nextFillPct}%`,
+                    background: "rgb(var(--brand-accent-rgb) / .18)",
+                    transition: "width 1s linear",
+                    pointerEvents: "none",
+                  }}
+                />
+              )}
+              <span
+                style={{
+                  position: "relative",
+                  zIndex: 1,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 12,
+                }}
+              >
+                <Eq bars={4} style={{ height: 22 }} />{" "}
+                {playsInFull ? "Plays in full" : `Next song · ${nextLabel}`}
+              </span>
             </span>
-          </span>
-        </div>
+          </div>
+        )}
       </div>
 
       <Chrome

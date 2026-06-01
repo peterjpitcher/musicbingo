@@ -20,8 +20,6 @@ export interface RunOfShowStep {
   intro?: boolean;
   /** True for the live bingo screens (album reveal timeline). */
   play?: boolean;
-  /** True when the screen offers A/B/C layout variants. */
-  hasVariants?: boolean;
   /**
    * True for on-demand screens that are NOT part of the navigable show: they are
    * triggered by a dedicated host action (e.g. the Bingo Claim button) rather
@@ -33,10 +31,10 @@ export interface RunOfShowStep {
 }
 
 export const RUN_OF_SHOW: RunOfShowStep[] = [
-  { id: "welcome", short: "Welcome", sub: "Doors / intro song", hasVariants: true },
+  { id: "welcome", short: "Welcome", sub: "Doors / intro song" },
   { id: "order", short: "Running Order", sub: "Tonight's plan" },
   { id: "quiz1", short: "Switch · Quiz R1", sub: "KaraFun round 1" },
-  { id: "title", short: "Bingo Title", sub: "Logo reveal", hasVariants: true },
+  { id: "title", short: "Bingo Title", sub: "Logo reveal" },
   { id: "rules", short: "House Rules", sub: "How it works" },
   { id: "dance", short: "Dance Warm-Up", sub: "Intro · plays in full", game: 1, intro: true },
   { id: "game1", short: "Game 1", sub: "Music Bingo", game: 1, play: true },

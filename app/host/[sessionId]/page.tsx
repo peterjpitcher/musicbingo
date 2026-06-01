@@ -448,8 +448,13 @@ export default function HostSessionControllerPage() {
         // artist} record to keep every runtime broadcast/write small. Reset
         // happens in startGame().
         const prevPlayed = prev.playedTracks ?? [];
+        const isRecordingGameScreen =
+          prev.mode === "running" &&
+          (prev.screenId === "game1" || prev.screenId === "game2" || prev.screenId == null);
+        const shouldRecordPlayedTrack =
+          isRecordingGameScreen && !isIntroSong && !prev.isIntroSong && !prev.freePlay;
         const playedTracks =
-          trackChanged && track?.trackId && !prevPlayed.some((t) => t.trackId === track.trackId)
+          shouldRecordPlayedTrack && trackChanged && track?.trackId && !prevPlayed.some((t) => t.trackId === track.trackId)
             ? [...prevPlayed, { trackId: track.trackId, title: track.title, artist: track.artist }]
             : prevPlayed;
 
@@ -757,19 +762,28 @@ export default function HostSessionControllerPage() {
       { modeOnSuccess: "running" }
     );
     if (ok) {
-      commitRuntime((prev) => ({
-        ...prev,
-        mode: "running",
-        activeGameNumber: gameNumber,
-        screenId: (gameNumber === 1 ? "game1" : "game2") as ScreenId,
-        advanceTriggeredForTrackId: null,
-        // Fresh game → start a new played-songs list for the Bingo Claim screen.
-        playedTracks: [],
-        isIntroSong: false,
-        introPlayed: false,
-        freePlay: false,
-        extensionMs: 0,
-      }));
+      commitRuntime((prev) => {
+        const startedTrack =
+          prev.currentTrack && prev.activeGameNumber === gameNumber && !prev.isIntroSong
+            ? prev.currentTrack
+            : null;
+        return {
+          ...prev,
+          mode: "running",
+          activeGameNumber: gameNumber,
+          screenId: (gameNumber === 1 ? "game1" : "game2") as ScreenId,
+          currentTrack: startedTrack,
+          advanceTriggeredForTrackId: null,
+          // Fresh game → start a new played-songs list for the Bingo Claim screen.
+          playedTracks: startedTrack?.trackId
+            ? [{ trackId: startedTrack.trackId, title: startedTrack.title, artist: startedTrack.artist }]
+            : [],
+          isIntroSong: false,
+          introPlayed: false,
+          freePlay: false,
+          extensionMs: 0,
+        };
+      });
       setNoticeVariant("success");
       setNotice(`Started Game ${gameNumber}: ${game.theme}`);
     } else {
@@ -778,6 +792,7 @@ export default function HostSessionControllerPage() {
         mode: "running",
         activeGameNumber: gameNumber,
         spotifyControlAvailable: false,
+        currentTrack: null,
         // Fresh game → start a new played-songs list for the Bingo Claim screen.
         playedTracks: [],
         freePlay: false,
@@ -803,14 +818,27 @@ export default function HostSessionControllerPage() {
     setNotice("");
     const ok = await sendCommand("play_track", { trackId: intros[0].trackId });
     if (ok) {
-      commitRuntime((prev) => ({
-        ...prev,
-        mode: "running",
-        activeGameNumber: gameNumber,
-        screenId: (gameNumber === 1 ? "dance" : "sing") as ScreenId,
-        isIntroSong: true,
-        introPlayed: false,
-      }));
+      commitRuntime((prev) => {
+        const introTrack = prev.currentTrack?.trackId === intros[0].trackId ? prev.currentTrack : null;
+        return {
+          ...prev,
+          mode: "running",
+          activeGameNumber: gameNumber,
+          screenId: (gameNumber === 1 ? "dance" : "sing") as ScreenId,
+          currentTrack: introTrack,
+          playedTracks:
+            prev.screenId === "game1" || prev.screenId === "game2" || prev.screenId === "claim"
+              ? (prev.playedTracks ?? [])
+              : [],
+          isIntroSong: true,
+          introPlayed: false,
+          isChallengeSong: false,
+          challengeType: null,
+          advanceTriggeredForTrackId: null,
+          extensionMs: 0,
+          freePlay: false,
+        };
+      });
       const label = intros[0].type === "dance-along" ? "Dance Along" : "Sing Along";
       setNoticeVariant("success");
       setNotice(`Playing ${label}: ${intros[0].artist} — ${intros[0].title}`);
@@ -840,6 +868,37 @@ export default function HostSessionControllerPage() {
         // keep advancing silently while the guest display shows the break screen.
         void sendCommand("pause");
       }
+    }
+  }
+
+  function playBreakPlaylistAsBackground(modeOnSuccess: LiveRuntimeState["mode"]): void {
+    if (!runtimeRef.current.spotifyControlAvailable) return;
+    if (session?.breakPlaylistId) {
+      void sendCommand("play_break", { playlistId: session.breakPlaylistId }, { modeOnSuccess });
+    } else {
+      void sendCommand("pause", undefined, { modeOnSuccess });
+    }
+  }
+
+  function showClosingScreen(screenId: Extract<ScreenId, "winners" | "thanks">): void {
+    const alreadyPlayingClosingMusic =
+      runtimeRef.current.mode === "ended" &&
+      (runtimeRef.current.screenId === "winners" || runtimeRef.current.screenId === "thanks");
+
+    commitRuntime((prev) => ({
+      ...prev,
+      mode: "ended",
+      screenId,
+      isIntroSong: false,
+      isChallengeSong: false,
+      challengeType: null,
+      advanceTriggeredForTrackId: null,
+      extensionMs: 0,
+      freePlay: false,
+    }));
+
+    if (!alreadyPlayingClosingMusic) {
+      playBreakPlaylistAsBackground("ended");
     }
   }
 
@@ -879,6 +938,22 @@ export default function HostSessionControllerPage() {
 
     if (runtimeRef.current.spotifyControlAvailable) {
       void sendCommand("pause", undefined, { modeOnSuccess: "paused" });
+    }
+  }
+
+  function returnFromClaimScreen() {
+    const gameNumber = runtimeRef.current.activeGameNumber;
+    if (!gameNumber) return;
+    const screenId = (gameNumber === 2 ? "game2" : "game1") as ScreenId;
+
+    commitRuntime((prev) => ({
+      ...prev,
+      mode: "running",
+      screenId,
+    }));
+
+    if (runtimeRef.current.spotifyControlAvailable) {
+      void sendCommand("resume", undefined, { modeOnSuccess: "running" });
     }
   }
 
@@ -980,13 +1055,28 @@ export default function HostSessionControllerPage() {
   // (e.g. Bingo Claim), so Prev/Next and the run-of-show list skip over them.
   const SHOW_SCREENS = SHOW_STEPS;
 
+  function requireWinnerNamesBeforeThanks(): boolean {
+    if (winnerNamesReady) return true;
+    setNoticeVariant("warning");
+    setNotice("Add both winner team names before moving to the thank you screen.");
+    return false;
+  }
+
   function gotoScreen(id: ScreenId): void {
+    const currentId = normalizeScreenId(runtimeRef.current.screenId, deriveScreenId(runtimeRef.current));
+    if (currentId === "winners" && id === "thanks" && !requireWinnerNamesBeforeThanks()) {
+      return;
+    }
     // Every path to the break screen — Prev/Next, the run-of-show list, or the
     // dedicated button — must also enter break mode and start the break playlist
     // (when one is configured and Spotify is controllable). openBreakScreen owns
     // that; route break here so no path leaves the game silently advancing.
     if (id === "break") {
       openBreakScreen();
+      return;
+    }
+    if (id === "winners" || id === "thanks") {
+      showClosingScreen(id);
       return;
     }
     if (runtimeRef.current.mode === "break") {
@@ -1002,14 +1092,6 @@ export default function HostSessionControllerPage() {
     const baseIdx = currentIdx >= 0 ? currentIdx : 0;
     const nextIdx = Math.max(0, Math.min(SHOW_SCREENS.length - 1, baseIdx + delta));
     gotoScreen(SHOW_SCREENS[nextIdx].id);
-  }
-
-  function setWelcomeVariant(v: "A" | "B" | "C"): void {
-    commitRuntime((prev) => ({ ...prev, welcomeVariant: v }));
-  }
-
-  function setTitleVariant(v: "A" | "B" | "C"): void {
-    commitRuntime((prev) => ({ ...prev, titleVariant: v }));
   }
 
   if (error && !session) {
@@ -1172,6 +1254,16 @@ export default function HostSessionControllerPage() {
   // Current step is a play screen
   const currentStep = SHOW_SCREENS.find((s) => s.id === currentScreenId);
   const isOnPlayScreen = currentStep?.play === true;
+  const winnerNamesReady =
+    editValue.get("winTeam", "").trim() !== "" &&
+    editValue.get("spoonTeam", "").trim() !== "";
+  const isAtLastScreen = SHOW_SCREENS.findIndex((s) => s.id === currentScreenId) === SHOW_SCREENS.length - 1;
+  const nextScreenBlocked = currentScreenId === "winners" && !winnerNamesReady;
+  const claimAvailable =
+    runtime.mode === "running" &&
+    runtime.activeGameNumber != null &&
+    isOnPlayScreen &&
+    !runtime.isIntroSong;
 
   // Game 1 / Game 2 theme for PlaylistPanel
   const gameThemeKey = (runtime.activeGameNumber === 2 ? "g2theme" : "g1theme") as ContentKey;
@@ -1324,40 +1416,6 @@ export default function HostSessionControllerPage() {
                   </div>
                 </div>
 
-                {/* Variant pickers for welcome / title screens */}
-                {currentScreenId === "welcome" && (
-                  <div className="btn-row" style={{ marginTop: 10 }}>
-                    <span style={{ fontSize: 12, opacity: 0.6, marginRight: 6 }}>Variant:</span>
-                    {(["A", "B", "C"] as const).map((v) => (
-                      <button
-                        key={v}
-                        type="button"
-                        className={`hbtn${runtime.welcomeVariant === v ? " hbtn--primary" : ""}`}
-                        style={{ minHeight: 34, padding: "0 12px", fontSize: 13 }}
-                        onClick={() => setWelcomeVariant(v)}
-                      >
-                        {v}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {currentScreenId === "title" && (
-                  <div className="btn-row" style={{ marginTop: 10 }}>
-                    <span style={{ fontSize: 12, opacity: 0.6, marginRight: 6 }}>Variant:</span>
-                    {(["A", "B", "C"] as const).map((v) => (
-                      <button
-                        key={v}
-                        type="button"
-                        className={`hbtn${runtime.titleVariant === v ? " hbtn--primary" : ""}`}
-                        style={{ minHeight: 34, padding: "0 12px", fontSize: 13 }}
-                        onClick={() => setTitleVariant(v)}
-                      >
-                        {v}
-                      </button>
-                    ))}
-                  </div>
-                )}
-
                 {/* Prev / Next + Edit toggle */}
                 <div className="bignav">
                   <button
@@ -1381,9 +1439,10 @@ export default function HostSessionControllerPage() {
                     type="button"
                     className="hbtn grow hbtn--lg hbtn--primary"
                     onClick={() => stepScreen(1)}
-                    disabled={SHOW_SCREENS.findIndex((s) => s.id === currentScreenId) === SHOW_SCREENS.length - 1}
+                    disabled={isAtLastScreen || nextScreenBlocked}
+                    title={nextScreenBlocked ? "Add both winner team names before continuing." : undefined}
                   >
-                    Next Screen ›
+                    {nextScreenBlocked ? "Add Winners To Continue" : "Next Screen ›"}
                   </button>
                 </div>
               </div>
@@ -1484,16 +1543,11 @@ export default function HostSessionControllerPage() {
                 onBreak={openBreakScreen}
                 onResume={resumeFromBreak}
                 onClaim={openClaimScreen}
-                onBackToGame={() => gotoScreen((runtime.activeGameNumber === 2 ? "game2" : "game1") as ScreenId)}
+                onBackToGame={returnFromClaimScreen}
+                claimAvailable={claimAvailable}
                 claimCount={runtime.playedTracks?.length ?? 0}
                 claimActive={runtime.screenId === "claim"}
-                onEnd={() =>
-                  commitRuntime((prev) => ({
-                    ...prev,
-                    mode: "ended",
-                    screenId: "winners" as ScreenId,
-                  }))
-                }
+                onEnd={() => showClosingScreen("winners")}
                 onReset={() =>
                   commitRuntime((prev) => ({
                     ...prev,

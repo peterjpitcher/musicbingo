@@ -26,10 +26,6 @@ describe("RUN_OF_SHOW", () => {
     expect(ids).toContain("sys-load");
     expect(ids).toContain("sys-none");
   });
-  it("marks welcome and title as having variants", () => {
-    expect(RUN_OF_SHOW.find((s) => s.id === "welcome")?.hasVariants).toBe(true);
-    expect(RUN_OF_SHOW.find((s) => s.id === "title")?.hasVariants).toBe(true);
-  });
   it("tags play/intro screens with their game number", () => {
     const game1 = RUN_OF_SHOW.find((s) => s.id === "game1");
     expect(game1?.game).toBe(1);

@@ -7,6 +7,7 @@ import { Sunburst } from "@/components/motifs/Sunburst";
 import { VenueLogo } from "@/components/motifs/VenueLogo";
 import { Qr } from "@/components/motifs/Qr";
 import { Editable } from "@/components/motifs/Editable";
+import { useEdit } from "@/components/motifs/EditContext";
 import { Chrome } from "@/components/motifs/Chrome";
 
 /**
@@ -38,15 +39,16 @@ function resolveQrUrl(
  * Falls back to the first / second qr_items entries, then `brand.website_url`.
  */
 export function ThankYou({ brand }: ScreenProps): React.ReactElement {
+  const { get } = useEdit();
   const items = brand.qr_items ?? [];
 
   // Prefer keyword-matched items; fall back by position, then website_url.
-  const reviewUrl = resolveQrUrl(brand, ["review"], items[0]?.url);
-  const bookUrl = resolveQrUrl(brand, ["book", "booking", "reserve", "event"], items[1]?.url ?? items[0]?.url);
+  const reviewUrl = get("reviewQrUrl", "").trim() || resolveQrUrl(brand, ["review"], items[0]?.url);
+  const bookUrl = get("bookQrUrl", "").trim() || resolveQrUrl(brand, ["book", "booking", "reserve", "event"], items[1]?.url ?? items[0]?.url);
 
   const qrCards: Array<{ label: string; key: string; url: string; sub: string; delay: number }> = [
     { label: "Review Us",   key: "review", url: reviewUrl, sub: "Scan & rate us ★★★★★",  delay: 4 },
-    { label: "Book Again",  key: "book",   url: bookUrl,   sub: "Reserve your table",      delay: 5 },
+    { label: "Book Again",  key: "book",   url: bookUrl,   sub: "Book your seats before you leave!", delay: 5 },
   ];
 
   return (

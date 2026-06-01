@@ -4,9 +4,7 @@ import React from "react";
 import type { ScreenProps } from "@/components/screens/types";
 import { Sunburst } from "@/components/motifs/Sunburst";
 import { Editable } from "@/components/motifs/Editable";
-import { useEdit } from "@/components/motifs/EditContext";
 import { Chrome } from "@/components/motifs/Chrome";
-import { ThankYou } from "@/components/screens/ThankYou";
 
 /** Individual winner/wooden-spoon card within the Winners screen. */
 type CardProps = {
@@ -22,7 +20,7 @@ type CardProps = {
 function Card({ rank, place, teamField, teamPH, prizeField, prizePH, hero }: CardProps): React.ReactElement {
   return (
     <div
-      className={`an-pop ${hero ? "d2" : "d3"}`}
+      className={`an-pop ${hero ? "d2" : "d6"}`}
       style={{
         flex: 1,
         padding: "50px 46px",
@@ -84,20 +82,6 @@ function Card({ rank, place, teamField, teamPH, prizeField, prizePH, hero }: Car
  */
 export function Winners(props: ScreenProps): React.ReactElement {
   const { brand } = props;
-  const { get } = useEdit();
-
-  /*
-   * Only show the winners screen when the host has actually entered winner
-   * content. `get` returns the raw resolved value (empty string when unset),
-   * so when both team names are blank we fall back to the thank-you / QR screen
-   * rather than putting empty "1st place: ____" slots on the TV. QR and
-   * thank-you content stay intact via the ThankYou screen.
-   */
-  const hasWinner = get("winTeam").trim() !== "";
-  const hasSpoon = get("spoonTeam").trim() !== "";
-  if (!hasWinner && !hasSpoon) {
-    return <ThankYou {...props} />;
-  }
 
   return (
     <div
@@ -138,7 +122,7 @@ export function Winners(props: ScreenProps): React.ReactElement {
           rank="🏆"
           place="Champions · 1st Place"
           teamField="winTeam"
-          teamPH="The Spice Curls"
+          teamPH=""
           prizeField="winPrize"
           prizePH="£25 bar voucher"
           hero
@@ -147,7 +131,7 @@ export function Winners(props: ScreenProps): React.ReactElement {
           rank="🥄"
           place="Wooden Spoon · 2nd from Last"
           teamField="spoonTeam"
-          teamPH="Quiztopher Biggins"
+          teamPH=""
           prizeField="spoonPrize"
           prizePH="Bottle of house wine"
           hero={false}

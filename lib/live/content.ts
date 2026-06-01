@@ -24,7 +24,7 @@ export const CONTENT_KEYS = [
   // break / winners / thanks / system
   "breakL1", "breakL2", "breakLede", "breakMins",
   "winTeam", "winPrize", "spoonTeam", "spoonPrize",
-  "nextDate", "tyL1", "tyL2", "tyLede", "nfL1", "nfL2",
+  "nextDate", "tyL1", "tyL2", "tyLede", "reviewQrUrl", "bookQrUrl", "nfL1", "nfL2",
 ] as const;
 
 export type ContentKey = (typeof CONTENT_KEYS)[number];
@@ -41,10 +41,10 @@ export const CONTENT_PLACEHOLDERS: Record<ContentKey, string> = {
   welcomeDate: "Friday · 8:00 PM", introTitle: "Yes Sir, I Can Boogie", introArtist: "Baccara",
   titleTagline: "Five Lines · One Full House · Two Games",
   ro1t: "Quiz · Round One", ro1s: "Grab your phones — KaraFun mobile quiz",
-  ro2t: "Bingo · Game 1", ro2s: "Warm up, then 50 songs to dab",
+  ro2t: "Music Bingo · Game 1", ro2s: "Warm up, then 50 songs to dab",
   ro3t: "The Interval", ro3s: "Refill at the bar — back in 10",
   ro4t: "Quiz · Round Two", ro4s: "Round two of the mobile quiz",
-  ro5t: "Bingo · Game 2", ro5s: "Sing-along warm up, then Game 2",
+  ro5t: "Music Bingo · Game 2", ro5s: "Sing-along warm up, then Game 2",
   ro6t: "Prizes & Winners", ro6s: "Top table & wooden-spoon prizes",
   q1_l1: "Music Quiz", q1_lede: "Open the KaraFun app on your phone and get ready — we'll switch the big screen over to the quiz now.",
   q2_l1: "Music Quiz", q2_lede: "Round two — phones out again. We'll switch the big screen over to the quiz.",
@@ -57,9 +57,10 @@ export const CONTENT_PLACEHOLDERS: Record<ContentKey, string> = {
   g1theme: "Pop Anthems", g1title: "Mr. Brightside", g1artist: "The Killers",
   g2theme: "Throwback Bangers", g2title: "Take On Me", g2artist: "a-ha",
   breakL1: "We're On", breakL2: "A Break", breakLede: "Grab a refill, stretch your legs and keep your cards safe.", breakMins: "10",
-  winTeam: "The Spice Curls", winPrize: "£25 bar voucher", spoonTeam: "Quiztopher Biggins", spoonPrize: "Bottle of house wine",
+  winTeam: "", winPrize: "£25 bar voucher", spoonTeam: "", spoonPrize: "Bottle of house wine",
   nextDate: "Fri 27 June · 8PM", tyL1: "Thank You", tyL2: "& Goodnight",
   tyLede: "We hope you had a brilliant night. If you did, a Google review means the world to us.",
+  reviewQrUrl: "", bookQrUrl: "",
   nfL1: "Nothing", nfL2: "On Yet",
 };
 
@@ -92,6 +93,14 @@ function derivedDefault(
   switch (key) {
     case "g1theme": return session?.games?.[0]?.theme || undefined;
     case "g2theme": return session?.games?.[1]?.theme || undefined;
+    case "ro2t": return "Music Bingo · Game 1";
+    case "ro2s": return session?.games?.[0]?.theme
+      ? `${session.games[0].theme} — warm up, then 50 songs to dab`
+      : undefined;
+    case "ro5t": return "Music Bingo · Game 2";
+    case "ro5s": return session?.games?.[1]?.theme
+      ? `${session.games[1].theme} — sing-along warm up, then Game 2`
+      : undefined;
     case "venueName": return brand?.name || undefined;
     case "venuePresents": return brand?.name ? `${brand.name} Presents` : undefined;
     case "venueWeb": return brand?.website_url || undefined;

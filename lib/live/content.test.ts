@@ -39,9 +39,21 @@ describe("getContent precedence", () => {
     expect(getContent("g1theme", { session, brand })).toBe("Pop Anthems");
     expect(getContent("g2theme", { session, brand })).toBe("Throwbacks");
   });
+  it("derives running-order Music Bingo rows from the session game themes", () => {
+    expect(getContent("ro2t", { session, brand })).toBe("Music Bingo · Game 1");
+    expect(getContent("ro2s", { session, brand })).toBe("Pop Anthems — warm up, then 50 songs to dab");
+    expect(getContent("ro5t", { session, brand })).toBe("Music Bingo · Game 2");
+    expect(getContent("ro5s", { session, brand })).toBe("Throwbacks — sing-along warm up, then Game 2");
+  });
   it("derives venue copy from the brand", () => {
     expect(getContent("venueName", { brand })).toBe("The Anchor");
     expect(getContent("venueWeb", { brand })).toBe("theanchor.pub");
+  });
+  it("does not invent winner team names before the host enters them", () => {
+    expect(getContent("winTeam", {})).toBe("");
+    expect(getContent("spoonTeam", {})).toBe("");
+    expect(getContent("winPrize", {})).toBe("£25 bar voucher");
+    expect(getContent("spoonPrize", {})).toBe("Bottle of house wine");
   });
   it("falls back to the design placeholder when nothing else is set", () => {
     expect(getContent("welcomeTitle", {})).toBe("Music");

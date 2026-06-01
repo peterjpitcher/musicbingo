@@ -16,6 +16,8 @@ export interface GameFlowPanelProps {
   onClaim: () => void;
   /** Return the TV from the claim screen back to the active game screen. */
   onBackToGame: () => void;
+  /** True when claim validation is valid for the current TV screen. */
+  claimAvailable: boolean;
   /** Number of songs played this game, shown on the Bingo Claim button. */
   claimCount: number;
   /** True when the TV is currently showing the claim screen (toggles the affordance). */
@@ -42,13 +44,13 @@ export function GameFlowPanel({
   onReset,
   onClaim,
   onBackToGame,
+  claimAvailable,
   claimCount,
   claimActive,
 }: GameFlowPanelProps) {
-  // The claim controls only make sense while a game is live (or already showing
-  // the claim screen so the host can switch back).
-  const gameRunning = mode === 'running' && activeGame != null;
-  const showClaimRow = gameRunning || claimActive;
+  // The claim controls only make sense on an actual Music Bingo game screen
+  // (or already showing the claim screen so the host can switch back).
+  const showClaimRow = claimAvailable || claimActive;
   return (
     <div className="panel">
       <h2>

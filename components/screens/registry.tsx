@@ -18,16 +18,14 @@ import { SysNotFound } from "./SysNotFound";
 /**
  * Maps each run-of-show screen id to a renderer. Screens that vary by
  * game/round/type are closed over here so every entry takes the same
- * `ScreenProps`. The Welcome/Title layout variant is resolved from the synced
- * runtime (`welcomeVariant`/`titleVariant`) unless an explicit `variant` prop
- * is passed (host preview). Consumed by the guest TV (Phase 2) and the host
- * preview (Phase 3): `SCREEN_REGISTRY[screenId]({ brand, runtime })`.
+ * `ScreenProps`. Consumed by the guest TV and the host preview:
+ * `SCREEN_REGISTRY[screenId]({ brand, runtime })`.
  */
 export const SCREEN_REGISTRY: Record<ScreenId, (props: ScreenProps) => ReactNode> = {
-  welcome: (p) => <Welcome {...p} variant={p.variant ?? p.runtime?.welcomeVariant} />,
+  welcome: (p) => <Welcome {...p} />,
   order: (p) => <RunningOrder {...p} />,
   quiz1: (p) => <QuizSwitch {...p} round="One" />,
-  title: (p) => <Title {...p} variant={p.variant ?? p.runtime?.titleVariant} />,
+  title: (p) => <Title {...p} />,
   rules: (p) => <HouseRules {...p} />,
   dance: (p) => <Warmup {...p} type="dance" />,
   game1: (p) => <GameLive {...p} game={1} />,

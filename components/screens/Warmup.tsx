@@ -11,8 +11,9 @@ import { AlbumArt } from "@/components/screens/AlbumArt";
  * Warm-up screen shown before Game 1 (dance) and Game 2 (sing).
  * Ported faithfully from docs/design/after-hours/screens-b.jsx — Warmup.
  *
- * Live wiring: if `runtime.currentTrack` is present the "Now Playing" pill
- * shows the live title/artist instead of the Editable placeholders.
+ * Live wiring: only show the live title/artist after the host starts the
+ * matching warm-up from Game Flow. Selecting this TV screen alone must not leak
+ * whatever Spotify is currently playing.
  */
 export function Warmup({
   brand,
@@ -20,7 +21,16 @@ export function Warmup({
   type = "dance",
 }: ScreenProps & { type?: "dance" | "sing" }): JSX.Element {
   const dance = type === "dance";
-  const track = runtime?.currentTrack ?? null;
+  const expectedGame = dance ? 1 : 2;
+  const expectedScreen = dance ? "dance" : "sing";
+  const showLiveTrack = Boolean(
+    runtime?.currentTrack &&
+      runtime.activeGameNumber === expectedGame &&
+      runtime.isIntroSong &&
+      (!runtime.screenId || runtime.screenId === expectedScreen)
+  );
+  const track = showLiveTrack ? runtime?.currentTrack ?? null : null;
+  const showNowPlaying = !runtime || showLiveTrack;
 
   return (
     <div
@@ -91,87 +101,89 @@ export function Warmup({
         </p>
 
         {/* "Now Playing" pill */}
-        <div className="an-rise d4">
-          <div
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 22,
-              padding: "18px 30px",
-              borderRadius: 999,
-              background: dance ? "rgba(4,19,12,.16)" : "rgba(0,0,0,.3)",
-              border: `2px solid ${dance ? "rgba(4,19,12,.3)" : "rgb(var(--brand-accent-light-rgb) / .55)"}`,
-              maxWidth: "100%",
-            }}
-          >
-            <Eq bars={6} style={{ flexShrink: 0, height: 40 }} />
+        {showNowPlaying && (
+          <div className="an-rise d4">
             <div
               style={{
-                minWidth: 0,
-                textAlign: "left",
-                color: dance ? "var(--ink)" : "var(--cream)",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 22,
+                padding: "18px 30px",
+                borderRadius: 999,
+                background: dance ? "rgba(4,19,12,.16)" : "rgba(0,0,0,.3)",
+                border: `2px solid ${dance ? "rgba(4,19,12,.3)" : "rgb(var(--brand-accent-light-rgb) / .55)"}`,
+                maxWidth: "100%",
               }}
             >
+              <Eq bars={6} style={{ flexShrink: 0, height: 40 }} />
               <div
                 style={{
-                  fontSize: 14,
-                  letterSpacing: ".24em",
-                  textTransform: "uppercase",
-                  fontWeight: 700,
-                  opacity: 0.8,
+                  minWidth: 0,
+                  textAlign: "left",
+                  color: dance ? "var(--ink)" : "var(--cream)",
                 }}
               >
-                Now Playing · Full Track
-              </div>
-              <div
-                style={{
-                  fontSize: 30,
-                  fontWeight: 700,
-                  lineHeight: 1.12,
-                  maxWidth: 820,
-                  overflowWrap: "anywhere",
-                  whiteSpace: "normal",
-                }}
-              >
-                {/* Live track title — falls back to Editable placeholder when no runtime */}
-                {track ? (
-                  <span style={{ overflowWrap: "anywhere", whiteSpace: "normal" }}>
-                    {track.title}
-                  </span>
-                ) : (
-                  <Editable
-                    field={dance ? "danceTitle" : "singTitle"}
-                    placeholder={dance ? "Dancing Queen" : "Don't Look Back in Anger"}
-                    style={{ overflowWrap: "anywhere", whiteSpace: "normal" }}
-                  />
-                )}
-                <span style={{ opacity: 0.5, margin: "0 10px" }}>·</span>
-                {/* Live track artist — falls back to Editable placeholder when no runtime */}
-                {track ? (
-                  <span
-                    style={{
-                      fontWeight: 500,
-                      overflowWrap: "anywhere",
-                      whiteSpace: "normal",
-                    }}
-                  >
-                    {track.artist}
-                  </span>
-                ) : (
-                  <Editable
-                    field={dance ? "danceArtist" : "singArtist"}
-                    placeholder={dance ? "ABBA" : "Oasis"}
-                    style={{
-                      fontWeight: 500,
-                      overflowWrap: "anywhere",
-                      whiteSpace: "normal",
-                    }}
-                  />
-                )}
+                <div
+                  style={{
+                    fontSize: 14,
+                    letterSpacing: ".24em",
+                    textTransform: "uppercase",
+                    fontWeight: 700,
+                    opacity: 0.8,
+                  }}
+                >
+                  Now Playing · Full Track
+                </div>
+                <div
+                  style={{
+                    fontSize: 30,
+                    fontWeight: 700,
+                    lineHeight: 1.12,
+                    maxWidth: 820,
+                    overflowWrap: "anywhere",
+                    whiteSpace: "normal",
+                  }}
+                >
+                  {/* Live track title — falls back to Editable placeholder when no runtime */}
+                  {track ? (
+                    <span style={{ overflowWrap: "anywhere", whiteSpace: "normal" }}>
+                      {track.title}
+                    </span>
+                  ) : (
+                    <Editable
+                      field={dance ? "danceTitle" : "singTitle"}
+                      placeholder={dance ? "Dancing Queen" : "Don't Look Back in Anger"}
+                      style={{ overflowWrap: "anywhere", whiteSpace: "normal" }}
+                    />
+                  )}
+                  <span style={{ opacity: 0.5, margin: "0 10px" }}>·</span>
+                  {/* Live track artist — falls back to Editable placeholder when no runtime */}
+                  {track ? (
+                    <span
+                      style={{
+                        fontWeight: 500,
+                        overflowWrap: "anywhere",
+                        whiteSpace: "normal",
+                      }}
+                    >
+                      {track.artist}
+                    </span>
+                  ) : (
+                    <Editable
+                      field={dance ? "danceArtist" : "singArtist"}
+                      placeholder={dance ? "ABBA" : "Oasis"}
+                      style={{
+                        fontWeight: 500,
+                        overflowWrap: "anywhere",
+                        whiteSpace: "normal",
+                      }}
+                    />
+                  )}
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Album art column */}
