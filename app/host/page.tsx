@@ -14,6 +14,7 @@ import {
 } from "@/lib/live/sessionApi";
 import { migrateLocalSessionsToSupabase } from "@/lib/live/migrateToSupabase";
 import type { LiveSessionV1 } from "@/lib/live/types";
+import { parseSongListText } from "@/lib/parser";
 
 
 function downloadBlob(blob: Blob, filename: string): void {
@@ -25,6 +26,41 @@ function downloadBlob(blob: Blob, filename: string): void {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+function formatSongsForClipboard(text: string): string {
+  const parsed = parseSongListText(text);
+  if (parsed.songs.length > 0) {
+    return parsed.songs.map((song) => `${song.artist} - ${song.title}`).join("\n");
+  }
+  return text.trim();
+}
+
+async function writeTextToClipboard(text: string): Promise<void> {
+  let clipboardError: unknown = null;
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch (err: unknown) {
+      clipboardError = err;
+    }
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.top = "-9999px";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  const copied = document.execCommand("copy");
+  textarea.remove();
+  if (!copied) {
+    const suffix = clipboardError instanceof Error ? ` ${clipboardError.message}` : "";
+    throw new Error(`Could not copy songs to the clipboard.${suffix}`);
+  }
 }
 
 /** A session is "Ready" when both games have a playlist and at least 1 song each. */
@@ -49,6 +85,7 @@ export default function HostDashboardPage() {
   const [notice, setNotice] = useState<string>("");
   const [error, setError] = useState<string>("");
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [copyingSongs, setCopyingSongs] = useState<string | null>(null);
   const [spotifyConnected, setSpotifyConnected] = useState<boolean>(false);
   const [updatingBrand, setUpdatingBrand] = useState<string | null>(null);
 
@@ -195,6 +232,43 @@ export default function HostDashboardPage() {
     const tracks = data?.tracks as Array<{ artist: string; title: string }> | undefined;
     if (!tracks?.length) throw new Error("Playlist returned no tracks.");
     return tracks.map((t) => `${t.artist} - ${t.title}`).join("\n");
+  }
+
+  async function onCopyRoundSongs(session: LiveSessionV1, gameNumber: 1 | 2) {
+    const key = `${session.id}:${gameNumber}`;
+    setCopyingSongs(key);
+    setError("");
+
+    try {
+      const game = session.games.find((g) => g.gameNumber === gameNumber);
+      const prepSongsText = gameNumber === 1
+        ? session.prepData?.game1SongsText
+        : session.prepData?.game2SongsText;
+
+      let songsText = prepSongsText?.trim() ?? "";
+      if (!songsText) {
+        if (!game?.playlistId) {
+          throw new Error(`Game ${gameNumber} has no saved song list or playlist ID.`);
+        }
+        if (!spotifyConnected) {
+          const ok = await connectSpotify();
+          if (!ok) throw new Error("Spotify connection required to fetch songs for this older session.");
+        }
+        songsText = await fetchPlaylistSongsText(game.playlistId);
+      }
+
+      const clipboardText = formatSongsForClipboard(songsText);
+      if (!clipboardText) throw new Error(`Game ${gameNumber} has no songs to copy.`);
+
+      await writeTextToClipboard(clipboardText);
+      const copiedCount = clipboardText.split(/\r?\n/).filter((line) => line.trim()).length;
+      setNotice(`Copied Game ${gameNumber} songs for: ${session.name} (${copiedCount} songs).`);
+    } catch (err: unknown) {
+      setNotice("");
+      setError(err instanceof Error ? err.message : "Failed to copy songs.");
+    } finally {
+      setCopyingSongs(null);
+    }
   }
 
   async function onRedownload(session: LiveSessionV1) {
@@ -354,6 +428,8 @@ export default function HostDashboardPage() {
                   const game2 = session.games.find((g) => g.gameNumber === 2);
                   const status = deriveStatus(session);
                   const isDownloading = downloading === session.id;
+                  const isCopyingGame1 = copyingSongs === `${session.id}:1`;
+                  const isCopyingGame2 = copyingSongs === `${session.id}:2`;
                   const isBrandUpdating = updatingBrand === session.id;
 
                   return (
@@ -407,6 +483,17 @@ export default function HostDashboardPage() {
                         <b>{game1?.theme || "Game 1"}</b>
                         <br />
                         <span>{game1 ? (game1.totalSongs ?? game1.addedCount ?? 0) : 0} songs</span>
+                        <div className="gt-game-actions">
+                          <button
+                            className="hbtn gt-copy"
+                            title="Copy Game 1 songs as plain text"
+                            aria-label={`Copy Game 1 songs for ${session.name}`}
+                            disabled={isCopyingGame1}
+                            onClick={() => void onCopyRoundSongs(session, 1)}
+                          >
+                            {isCopyingGame1 ? "Copying..." : "Copy Songs"}
+                          </button>
+                        </div>
                       </td>
 
                       {/* Game 2 */}
@@ -414,6 +501,17 @@ export default function HostDashboardPage() {
                         <b>{game2?.theme || "Game 2"}</b>
                         <br />
                         <span>{game2 ? (game2.totalSongs ?? game2.addedCount ?? 0) : 0} songs</span>
+                        <div className="gt-game-actions">
+                          <button
+                            className="hbtn gt-copy"
+                            title="Copy Game 2 songs as plain text"
+                            aria-label={`Copy Game 2 songs for ${session.name}`}
+                            disabled={isCopyingGame2}
+                            onClick={() => void onCopyRoundSongs(session, 2)}
+                          >
+                            {isCopyingGame2 ? "Copying..." : "Copy Songs"}
+                          </button>
+                        </div>
                       </td>
 
                       {/* Actions */}

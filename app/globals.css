@@ -443,6 +443,8 @@
 .gt-game { line-height: 1.3; }
 .gt-game b { font-weight: 700; }
 .gt-game span { color: rgb(var(--cream-rgb)/.5); font-size: 13px; }
+.gt-game-actions { display: flex; margin-top: 8px; }
+.gt-copy { min-height: 30px; padding: 0 9px; border-radius: 9px; font-size: 12px; }
 .gt-actions { display: flex; gap: 7px; justify-content: flex-end; }
 .gt-actions .hbtn { min-height: 40px; font-size: 13px; padding: 0 12px; }
 .gtable th.right, .gtable td.right { text-align: right; }
