@@ -1171,26 +1171,30 @@ export default function HostSessionControllerPage() {
   // (e.g. Bingo Claim), so Prev/Next and the run-of-show list skip over them.
   const SHOW_SCREENS = SHOW_STEPS;
 
-  function requireWinnerNamesBeforeThanks(): boolean {
-    if (winnerNamesReady) return true;
+  function hasAwardedTeams(): boolean {
+    return runtimeRef.current.teamScores.some((team) => team.name.trim());
+  }
+
+  function requireScoredTeamsBeforeThanks(): boolean {
+    if (hasAwardedTeams()) return true;
     setNoticeVariant("warning");
-    setNotice("Add both winner team names before moving to the thank you screen.");
+    setNotice("Add teams and scores in Award Points before moving to the thank you screen.");
     return false;
   }
 
-  function requireWinnerNamesBeforeWinners(): boolean {
-    if (winnerNamesReady) return true;
+  function requireScoredTeamsBeforeWinners(): boolean {
+    if (hasAwardedTeams()) return true;
     setNoticeVariant("warning");
-    setNotice("Add both winner team names before revealing the winners screen.");
+    setNotice("Add teams and scores in Award Points before revealing the winners screen.");
     return false;
   }
 
   function gotoScreen(id: ScreenId): void {
     const currentId = normalizeScreenId(runtimeRef.current.screenId, deriveScreenId(runtimeRef.current));
-    if (currentId !== "winners" && id === "winners" && !requireWinnerNamesBeforeWinners()) {
+    if (currentId !== "winners" && id === "winners" && !requireScoredTeamsBeforeWinners()) {
       return;
     }
-    if (currentId === "winners" && id === "thanks" && !requireWinnerNamesBeforeThanks()) {
+    if (currentId === "winners" && id === "thanks" && !requireScoredTeamsBeforeThanks()) {
       return;
     }
     // Every path to the break screen — Prev/Next, the run-of-show list, or the
@@ -1400,18 +1404,12 @@ export default function HostSessionControllerPage() {
   const currentStep = SHOW_SCREENS.find((s) => s.id === currentScreenId);
   const isOnPlayScreen = currentStep?.play === true;
   const hasScoreTeams = runtime.teamScores.some((team) => team.name.trim());
-  const winnerNamesReady =
-    hasScoreTeams ||
-    (
-      editValue.get("winTeam", "").trim() !== "" &&
-      editValue.get("spoonTeam", "").trim() !== ""
-    );
   const isAtLastScreen = SHOW_SCREENS.findIndex((s) => s.id === currentScreenId) === SHOW_SCREENS.length - 1;
   const nextScreenBlocked =
-    (currentScreenId === "winner-entry" || currentScreenId === "winners") && !winnerNamesReady;
+    (currentScreenId === "winner-entry" || currentScreenId === "winners") && !hasScoreTeams;
   const nextScreenBlockedTitle = currentScreenId === "winner-entry"
-    ? "Add both winner team names before revealing the winners screen."
-    : "Add both winner team names before continuing.";
+    ? "Add at least one team in Award Points before revealing the winners screen."
+    : "Add at least one team in Award Points before continuing.";
   const winnersRevealTotal = currentScreenId === "winners" ? getWinnersRevealTotal(runtime) : 0;
   const winnersVisibleCount = currentScreenId === "winners" ? getWinnersRevealCount(runtime) : 0;
   const nextWinnerRank = winnersRevealTotal > winnersVisibleCount

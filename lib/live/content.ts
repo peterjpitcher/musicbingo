@@ -23,7 +23,7 @@ export const CONTENT_KEYS = [
   "g1theme", "g1title", "g1artist", "g2theme", "g2title", "g2artist",
   // break / winners / thanks / system
   "breakL1", "breakL2", "breakLede", "breakMins",
-  "winTeam", "winPrize", "spoonTeam", "spoonPrize",
+  "winPrize", "spoonPrize",
   "nextDate", "tyL1", "tyL2", "tyLede", "reviewQrUrl", "bookQrUrl", "nfL1", "nfL2",
 ] as const;
 
@@ -57,7 +57,7 @@ export const CONTENT_PLACEHOLDERS: Record<ContentKey, string> = {
   g1theme: "Pop Anthems", g1title: "Mr. Brightside", g1artist: "The Killers",
   g2theme: "Throwback Bangers", g2title: "Take On Me", g2artist: "a-ha",
   breakL1: "We're On", breakL2: "A Break", breakLede: "Grab a refill, stretch your legs and keep your cards safe.", breakMins: "10",
-  winTeam: "", winPrize: "£25 bar voucher", spoonTeam: "", spoonPrize: "Bottle of house wine",
+  winPrize: "£25 bar voucher", spoonPrize: "Bottle of house wine",
   nextDate: "Fri 27 June · 8PM", tyL1: "Thank You", tyL2: "& Goodnight",
   tyLede: "We hope you had a brilliant night. If you did, a Google review means the world to us.",
   reviewQrUrl: "", bookQrUrl: "",

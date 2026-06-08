@@ -60,9 +60,9 @@ describe("validateRuntimeState — screen/content/variant fields", () => {
     expect(out!.screenId).toBeUndefined();
   });
   it("omits an unknown screenId and sanitises content", () => {
-    const out = validateRuntimeState(validRuntime({ screenId: "bogus", content: { winTeam: "Curls", junk: 1 }, welcomeVariant: "C" }));
+    const out = validateRuntimeState(validRuntime({ screenId: "bogus", content: { winPrize: "Voucher", junk: 1 }, welcomeVariant: "C" }));
     expect(out!.screenId).toBeUndefined();
-    expect(out!.content).toEqual({ winTeam: "Curls" });
+    expect(out!.content).toEqual({ winPrize: "Voucher" });
     expect(out!.welcomeVariant).toBe("C");
   });
   it("preserves a valid screenId", () => {

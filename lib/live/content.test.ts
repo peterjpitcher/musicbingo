@@ -11,6 +11,10 @@ describe("sanitizeContent", () => {
     const out = sanitizeContent({ hostName: "  Nikki  ", bogusKey: "x", winTeam: "" });
     expect(out).toEqual({ hostName: "Nikki" });
   });
+  it("drops legacy winner team-name fields", () => {
+    const out = sanitizeContent({ winTeam: "Curls", spoonTeam: "Lagers", winPrize: "Voucher" });
+    expect(out).toEqual({ winPrize: "Voucher" });
+  });
   it("caps overly long values", () => {
     const out = sanitizeContent({ welcomeLede: "x".repeat(1000) });
     expect((out.welcomeLede ?? "").length).toBeLessThanOrEqual(500);
@@ -49,9 +53,7 @@ describe("getContent precedence", () => {
     expect(getContent("venueName", { brand })).toBe("The Anchor");
     expect(getContent("venueWeb", { brand })).toBe("theanchor.pub");
   });
-  it("does not invent winner team names before the host enters them", () => {
-    expect(getContent("winTeam", {})).toBe("");
-    expect(getContent("spoonTeam", {})).toBe("");
+  it("keeps winner prize placeholders editable", () => {
     expect(getContent("winPrize", {})).toBe("£25 bar voucher");
     expect(getContent("spoonPrize", {})).toBe("Bottle of house wine");
   });

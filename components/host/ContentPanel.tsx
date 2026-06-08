@@ -53,38 +53,9 @@ export function ContentPanel({ get, set, collapsed, onToggle }: ContentPanelProp
         Live Content · Pushes to TV
       </h2>
       <div className="ed">
-        {/* Winners — 1st Place */}
-        <div className="ed-grp">
-          <span className="k">Winners — 1st Place</span>
-          <div className="ed-two">
-            <input
-              value={get('winTeam', '')}
-              placeholder="Team name"
-              onChange={(e) => set('winTeam', e.target.value)}
-            />
-            <input
-              value={get('winPrize', '')}
-              placeholder="Prize"
-              onChange={(e) => set('winPrize', e.target.value)}
-            />
-          </div>
-        </div>
-
-        {/* Winners — Wooden Spoon */}
-        <div className="ed-grp">
-          <span className="k">Winners — Wooden Spoon (2nd from last)</span>
-          <div className="ed-two">
-            <input
-              value={get('spoonTeam', '')}
-              placeholder="Team name"
-              onChange={(e) => set('spoonTeam', e.target.value)}
-            />
-            <input
-              value={get('spoonPrize', '')}
-              placeholder="Prize"
-              onChange={(e) => set('spoonPrize', e.target.value)}
-            />
-          </div>
+        <div className="ed-two">
+          <Row field="winPrize" label="1st place prize" ph="£25 bar voucher" get={get} set={set} />
+          <Row field="spoonPrize" label="Wooden spoon prize" ph="Bottle of house wine" get={get} set={set} />
         </div>
 
         <Row field="nextDate" label="Next event date" ph="Fri 27 June · 8PM" get={get} set={set} />

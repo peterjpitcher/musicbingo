@@ -7,79 +7,10 @@ import { Editable } from "@/components/motifs/Editable";
 import { useEdit } from "@/components/motifs/EditContext";
 import { Chrome } from "@/components/motifs/Chrome";
 
-/** Individual winner/wooden-spoon card within the Winners screen. */
-type CardProps = {
-  rank: string;
-  place: string;
-  teamField: string;
-  teamPH: string;
-  prizeField: string;
-  prizePH: string;
-  hero: boolean;
-};
-
-function Card({ rank, place, teamField, teamPH, prizeField, prizePH, hero }: CardProps): React.ReactElement {
-  return (
-    <div
-      className={`an-pop ${hero ? "d2" : "d6"}`}
-      style={{
-        flex: 1,
-        padding: "50px 46px",
-        borderRadius: 26,
-        textAlign: "center",
-        position: "relative",
-        background: hero
-          ? "linear-gradient(180deg, rgb(var(--brand-accent-rgb) / .9), rgba(0,0,0,.4))"
-          : "rgba(0,0,0,.3)",
-        border: hero
-          ? "3px solid var(--brand-accent-light)"
-          : "2px solid rgb(var(--brand-accent-rgb) / .4)",
-        boxShadow: hero ? "0 30px 90px rgba(0,0,0,.5)" : "none",
-        transform: hero ? "scale(1.04)" : "none",
-      }}
-    >
-      <div style={{ fontSize: 90, lineHeight: 1 }}>{rank}</div>
-      <div
-        style={{
-          fontSize: 22,
-          letterSpacing: ".24em",
-          textTransform: "uppercase",
-          color: "var(--brand-accent-light)",
-          fontWeight: 700,
-          marginTop: 12,
-        }}
-      >
-        {place}
-      </div>
-      <div
-        className="display display--gold"
-        style={{ fontSize: hero ? 96 : 76, margin: "14px 0 18px", lineHeight: 0.9 }}
-      >
-        <Editable field={teamField} placeholder={teamPH} />
-      </div>
-      <hr className="rule" style={{ maxWidth: 220, margin: "0 auto 18px" }} />
-      <div
-        style={{
-          fontSize: 18,
-          letterSpacing: ".22em",
-          textTransform: "uppercase",
-          color: "var(--cream-dim)",
-          fontWeight: 700,
-        }}
-      >
-        Wins
-      </div>
-      <div style={{ fontSize: 38, fontWeight: 700, marginTop: 8 }}>
-        <Editable field={prizeField} placeholder={prizePH} />
-      </div>
-    </div>
-  );
-}
-
 /**
  * Screen 12 — Winners.
- * Displays a hero card for the 1st-place champions and a secondary card for the
- * wooden-spoon team (2nd from last). All team names and prizes are editable.
+ * Reveals scored teams from last to first. Team names come from the Award
+ * Points mechanic; only the winner/wooden-spoon prize copy is editable.
  */
 export function Winners(props: ScreenProps): React.ReactElement {
   const { brand, runtime } = props;
@@ -94,8 +25,6 @@ export function Winners(props: ScreenProps): React.ReactElement {
   const spoonPrize = get("spoonPrize", "Bottle of house wine");
   const revealCount = Math.max(0, runtime?.winnersRevealCount ?? 0);
   const visibleScoredTeams = scoredTeams.slice(0, Math.min(revealCount, scoredTeams.length));
-  const showManualSpoon = revealCount >= 1;
-  const showManualWinner = revealCount >= 2;
 
   return (
     <div
@@ -215,7 +144,6 @@ export function Winners(props: ScreenProps): React.ReactElement {
           className="fill"
           style={{
             display: "flex",
-            gap: 56,
             alignItems: "center",
             justifyContent: "center",
             position: "relative",
@@ -223,28 +151,19 @@ export function Winners(props: ScreenProps): React.ReactElement {
             marginTop: 20,
           }}
         >
-          {showManualSpoon && (
-            <Card
-              rank="🥄"
-              place="Wooden Spoon · 2nd from Last"
-              teamField="spoonTeam"
-              teamPH=""
-              prizeField="spoonPrize"
-              prizePH="Bottle of house wine"
-              hero={false}
-            />
-          )}
-          {showManualWinner && (
-            <Card
-              rank="🏆"
-              place="Champions · 1st Place"
-              teamField="winTeam"
-              teamPH=""
-              prizeField="winPrize"
-              prizePH="£25 bar voucher"
-              hero
-            />
-          )}
+          <div
+            className="an-rise"
+            style={{
+              maxWidth: 900,
+              textAlign: "center",
+              fontSize: 38,
+              lineHeight: 1.15,
+              fontWeight: 800,
+              color: "var(--cream)",
+            }}
+          >
+            Add teams and scores in Award Points to reveal the winners.
+          </div>
         </div>
       )}
       <Chrome
