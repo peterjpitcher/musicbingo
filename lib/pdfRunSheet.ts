@@ -54,7 +54,7 @@ const WHITE = rgb(1, 1, 1);
 
 type FontPair = { regular: PDFFont; bold: PDFFont };
 
-type ScheduleRow = { title: string; note: string; time: string };
+type ScheduleRow = { title: string; note: string };
 
 function songLabel(song: Song): string {
   return `${song.artist} - ${song.title}`;
@@ -154,19 +154,20 @@ function buildSchedule(params: RenderRunSheetPdfParams, game1Theme: string, game
   const g2Challenge = params.game2.challengeTypes?.[0] ?? "sing-along";
 
   return [
-    { title: "Welcome & intro song", note: introDetail, time: "8:00 pm" },
-    { title: "Tonight's running order", note: "Show the night's plan on screen", time: "8:05 pm" },
-    { title: "Quiz - Round 1", note: "KaraFun mobile quiz - phones out", time: "8:08 pm" },
-    { title: "Music Bingo title", note: "Logo reveal - hype it up", time: "8:25 pm" },
-    { title: "House rules", note: "Explain how to play & how to win", time: "8:27 pm" },
-    { title: `${challengeTypeLabel(g1Challenge)} warm up`, note: "Full song - get the room moving", time: "8:30 pm" },
-    { title: "Music Bingo - Game 1", note: `${game1Theme} - lines & full house`, time: "8:34 pm" },
-    { title: "Interval", note: "Break - bar refills (~10 min)", time: "9:10 pm" },
-    { title: "Quiz - Round 2", note: "KaraFun mobile quiz round two", time: "9:20 pm" },
-    { title: `${challengeTypeLabel(g2Challenge)} warm up`, note: "Full song - big sing-along", time: "9:35 pm" },
-    { title: "Music Bingo - Game 2", note: `${game2Theme} - different song list`, time: "9:39 pm" },
-    { title: "Winners", note: "1st place + wooden spoon (2nd from last)", time: "10:15 pm" },
-    { title: "Thank you & reviews", note: "Google review QR + next event", time: "10:20 pm" },
+    { title: "Welcome & intro song", note: introDetail },
+    { title: "Tonight's running order", note: "Show the night's plan on screen" },
+    { title: "Quiz - Round 1", note: "KaraFun mobile quiz - phones out" },
+    { title: "Music Bingo title", note: "Logo reveal - hype it up" },
+    { title: "House rules", note: "Explain how to play & how to win" },
+    { title: `${challengeTypeLabel(g1Challenge)} warm up`, note: "Full song - get the room moving" },
+    { title: "Music Bingo - Game 1", note: `${game1Theme} - lines & full house` },
+    { title: "Interval", note: "Break - bar refills (~10 min)" },
+    { title: "Quiz - Round 2", note: "KaraFun mobile quiz round two" },
+    { title: `${challengeTypeLabel(g2Challenge)} warm up`, note: "Full song - big sing-along" },
+    { title: "Music Bingo - Game 2", note: `${game2Theme} - different song list` },
+    { title: "Winner entry", note: "Add the final team names and scores" },
+    { title: "Winners reveal", note: "Reveal the league table from last place to first" },
+    { title: "Thank you & reviews", note: "Google review QR + plug the next event" },
   ];
 }
 
@@ -241,7 +242,7 @@ function drawHeader(doc: Doc, params: RenderRunSheetPdfParams, logo: PDFImage | 
 
   const titleY = PAGE_H - 34 * MM;
   doc.y = titleY;
-  doc.text("EVENT CLIPBOARD", { size: 36, bold: true });
+  doc.text("HOST RUN SHEET", { size: 36, bold: true });
   doc.y -= 16;
   doc.text(`${eventName} - ${hostName}`.toUpperCase(), { size: 8.5, bold: true, color: MUTE });
 
@@ -316,7 +317,7 @@ function drawBadgeRow(doc: Doc, params: RenderRunSheetPdfParams, normalReveal: R
 }
 
 function drawRunningOrder(doc: Doc, rows: ScheduleRow[]): void {
-  doc.ensure(235);
+  doc.ensure(285);
   const headingY = doc.y;
   doc.text("RUNNING", { size: 17, bold: true });
   doc.y -= 16;
@@ -337,24 +338,26 @@ function drawRunningOrder(doc: Doc, rows: ScheduleRow[]): void {
     color: MUTE,
   });
   doc.rule({ y: headingY - 23, thickness: 1 });
-  doc.y = headingY - 38;
+  doc.y = headingY - 30;
 
   const numW = 9 * MM;
-  const timeW = 18 * MM;
   const textX = MARGIN_X + numW;
-  const textW = CONTENT_W - numW - timeW - 4 * MM;
+  const textW = CONTENT_W - numW;
   const rowSize = 8.2;
   const lineH = 10;
 
   rows.forEach((row, index) => {
     const combined = `${row.title} - ${row.note}`;
     const lines = wrapLines(combined, doc.fontFor(false), rowSize, textW);
-    const rowH = Math.max(17, Math.min(2, lines.length) * lineH + 7);
+    const visibleLineCount = Math.min(2, Math.max(1, lines.length));
+    const rowH = Math.max(18, visibleLineCount * lineH + 9);
     doc.ensure(rowH + 4);
+    const rowTop = doc.y;
+    const baselineY = rowTop - 12;
 
     doc.page.drawText(String(index + 1).padStart(2, "0"), {
       x: MARGIN_X,
-      y: doc.y,
+      y: baselineY,
       size: rowSize,
       font: doc.fontFor(true),
       color: BLACK,
@@ -363,7 +366,7 @@ function drawRunningOrder(doc: Doc, rows: ScheduleRow[]): void {
     const titleW = doc.fontFor(true).widthOfTextAtSize(title, rowSize);
     doc.page.drawText(ellipsize(title, doc.fontFor(true), rowSize, textW), {
       x: textX,
-      y: doc.y,
+      y: baselineY,
       size: rowSize,
       font: doc.fontFor(true),
       color: BLACK,
@@ -372,7 +375,7 @@ function drawRunningOrder(doc: Doc, rows: ScheduleRow[]): void {
     if (noteFirstLine) {
       doc.page.drawText(noteFirstLine, {
         x: textX + titleW + 3,
-        y: doc.y,
+        y: baselineY,
         size: rowSize,
         font: doc.fontFor(false),
         color: BODY,
@@ -381,28 +384,18 @@ function drawRunningOrder(doc: Doc, rows: ScheduleRow[]): void {
     for (let li = 1; li < Math.min(lines.length, 2); li++) {
       doc.page.drawText(lines[li]!, {
         x: textX,
-        y: doc.y - li * lineH,
+        y: baselineY - li * lineH,
         size: rowSize,
         font: doc.fontFor(false),
         color: BODY,
       });
     }
 
-    const timeWActual = doc.fontFor(false).widthOfTextAtSize(row.time, 7.5);
-    doc.page.drawText(row.time, {
-      x: PAGE_W - MARGIN_X - timeWActual,
-      y: doc.y,
-      size: 7.5,
-      font: doc.fontFor(false),
-      color: MUTE,
-    });
-
-    doc.y -= rowH - 4;
+    doc.y = rowTop - rowH;
     doc.rule({ y: doc.y, thickness: 0.45, color: LIGHT_RULE });
-    doc.y -= 4;
   });
 
-  doc.moveDown(8);
+  doc.moveDown(14);
 }
 
 function numberedHeading(doc: Doc, number: number, title: string, cue?: string): void {
@@ -609,6 +602,109 @@ function scoreCards(doc: Doc): void {
   doc.y -= h + 22;
 }
 
+function drawEventCard(doc: Doc, event: NormalisedEvent): void {
+  const x = MARGIN_X;
+  const w = CONTENT_W;
+  const pad = 10;
+  const nameSize = 11.2;
+  const metaSize = 8;
+  const bodySize = 8.4;
+  const textW = w - pad * 2;
+  const nameLines = wrapLines(event.name, doc.fontFor(true), nameSize, textW).slice(0, 2);
+  const meta = [event.dateFormatted, event.time, event.price].filter((part) => part.trim()).join(" - ");
+  const metaLines = wrapLines(meta, doc.fontFor(true), metaSize, textW).slice(0, 1);
+  const description = event.description.trim() || event.highlights.slice(0, 2).join(" - ");
+  const descriptionLines = wrapLines(description, doc.fontFor(false), bodySize, textW).slice(0, 3);
+  const urlLines = event.eventUrl
+    ? wrapLines(`Book: ${event.eventUrl}`, doc.fontFor(false), 7.2, textW).slice(0, 1)
+    : [];
+  const h =
+    16
+    + nameLines.length * 12
+    + metaLines.length * 10
+    + descriptionLines.length * 9.5
+    + urlLines.length * 8.5
+    + 8;
+
+  doc.ensure(h + 7);
+  const top = doc.y;
+  doc.page.drawRectangle({
+    x,
+    y: top - h,
+    width: w,
+    height: h,
+    borderColor: BLACK,
+    borderWidth: 1.1,
+  });
+
+  let textY = top - pad - nameSize;
+  for (const line of nameLines) {
+    doc.page.drawText(line, {
+      x: x + pad,
+      y: textY,
+      size: nameSize,
+      font: doc.fontFor(true),
+      color: BLACK,
+    });
+    textY -= 12;
+  }
+  for (const line of metaLines) {
+    doc.page.drawText(line.toUpperCase(), {
+      x: x + pad,
+      y: textY,
+      size: metaSize,
+      font: doc.fontFor(true),
+      color: MUTE,
+    });
+    textY -= 10;
+  }
+  for (const line of descriptionLines) {
+    doc.page.drawText(line, {
+      x: x + pad,
+      y: textY,
+      size: bodySize,
+      font: doc.fontFor(false),
+      color: BODY,
+    });
+    textY -= 9.5;
+  }
+  for (const line of urlLines) {
+    doc.page.drawText(line, {
+      x: x + pad,
+      y: textY - 1,
+      size: 7.2,
+      font: doc.fontFor(false),
+      color: MUTE,
+    });
+  }
+  doc.y = top - h - 7;
+}
+
+function drawUpcomingEvents(doc: Doc, params: RenderRunSheetPdfParams): void {
+  numberedHeading(doc, 5, "Upcoming events", "Mention at the end");
+  const events = params.upcomingEvents?.slice(0, 4) ?? [];
+  if (events.length === 0) {
+    const websiteUrl = params.brandConfig?.website_url?.trim();
+    paragraph(
+      doc,
+      websiteUrl
+        ? `No upcoming events were returned by the feed. Point guests to ${websiteUrl} or add the next events before printing.`
+        : "No upcoming events were returned by the feed. Add the next events before printing.",
+      { size: 8.8 },
+    );
+    return;
+  }
+
+  paragraph(
+    doc,
+    "Use these as the final plug while the Thank You screen is up. Keep it short and point people to the QR code or website.",
+    { size: 8.8 },
+  );
+  for (const event of events) {
+    drawEventCard(doc, event);
+  }
+}
+
 export async function renderRunSheetPdf(params: RenderRunSheetPdfParams): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
@@ -676,6 +772,9 @@ export async function renderRunSheetPdf(params: RenderRunSheetPdfParams): Promis
   bullet(doc, "PARTY MODE for planned energy spikes: card down, eyes up, everyone joins in.");
   bullet(doc, "Don't make people dance and mark sheets at once - give them permission to pause the card.");
   bullet(doc, "Use short stand-up or hands-up prompts. The room doesn't need a full dancefloor moment every time.");
+
+  doc.newPage();
+  drawUpcomingEvents(doc, params);
 
   const bytes = await pdf.save();
   return new Uint8Array(bytes);
