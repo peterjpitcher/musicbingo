@@ -80,6 +80,37 @@ describe("validateRuntimeState — screen/content/variant fields", () => {
     delete (raw as Record<string, unknown>).challengeBonusPoints;
     expect(validateRuntimeState(raw)!.challengeBonusPoints).toBe(DEFAULT_CHALLENGE_BONUS_POINTS);
   });
+  it("carries team scores and the latest score toast", () => {
+    const out = validateRuntimeState(validRuntime({
+      teamScores: [
+        { id: "team-1", name: "  Disco Ducks  ", score: 12.4 },
+        { id: "team-2", name: "Big Singers", score: 500000 },
+        { id: "", name: "Dropped", score: 5 },
+      ],
+      scoreToast: {
+        id: "toast-1",
+        teamId: "team-1",
+        teamName: "Disco Ducks",
+        points: 15,
+        label: "1 Line",
+        total: 27,
+        createdAtMs: 12345,
+      },
+    }));
+    expect(out!.teamScores).toEqual([
+      { id: "team-1", name: "Disco Ducks", score: 12 },
+      { id: "team-2", name: "Big Singers", score: 99999 },
+    ]);
+    expect(out!.scoreToast).toEqual({
+      id: "toast-1",
+      teamId: "team-1",
+      teamName: "Disco Ducks",
+      points: 15,
+      label: "1 Line",
+      total: 27,
+      createdAtMs: 12345,
+    });
+  });
   it("carries lightweight playedTracks and drops malformed / id-less entries", () => {
     const out = validateRuntimeState(validRuntime({
       playedTracks: [

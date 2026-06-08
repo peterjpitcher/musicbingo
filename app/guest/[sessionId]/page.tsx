@@ -26,6 +26,7 @@ import { useWakeLock } from "@/hooks/useWakeLock";
 import { BrandProvider } from "@/components/brand/BrandProvider";
 import { EditContext } from "@/components/motifs/EditContext";
 import { SCREEN_REGISTRY } from "@/components/screens/registry";
+import { ScoreToastOverlay } from "@/components/screens/ScoreToastOverlay";
 import { DEFAULT_BRAND_CONFIG } from "@/lib/brands/defaultBrand";
 import type { BrandConfig } from "@/lib/brands/types";
 
@@ -253,6 +254,7 @@ export default function GuestDisplayPage() {
             <div className="stage">
               <div className="screen-wrap in" key={screenId}>
                 {renderScreen({ brand: effectiveBrand, runtime: screenRuntime })}
+                <ScoreToastOverlay toast={screenRuntime.scoreToast} />
               </div>
             </div>
           </div>

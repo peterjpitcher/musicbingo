@@ -2,10 +2,13 @@ import {
   DEFAULT_CHALLENGE_BONUS_POINTS,
   DEFAULT_WELCOME_SONG,
   LIVE_RUNTIME_VERSION,
+  MAX_TEAM_SCORE,
   sanitizeChallengeBonusPoints,
   type LiveControlLock,
   type LiveRuntimeState,
   type LiveSessionV1,
+  type LiveScoreToast,
+  type LiveTeamScore,
   type LiveTrackSnapshot,
   type PlayedTrack,
 } from "@/lib/live/types";
@@ -157,6 +160,42 @@ function sanitizePlayedTrack(input: unknown): PlayedTrack | null {
   };
 }
 
+function sanitizeTeamScore(input: unknown): LiveTeamScore | null {
+  if (!isObject(input)) return null;
+  const id = asString(input.id);
+  const name = asString(input.name);
+  if (!id || !name) return null;
+  const rawScore = asNumber(input.score) ?? 0;
+  return {
+    id,
+    name: name.slice(0, 80),
+    score: Math.min(MAX_TEAM_SCORE, Math.max(0, Math.round(rawScore))),
+  };
+}
+
+function sanitizeScoreToast(input: unknown): LiveScoreToast | null {
+  if (!isObject(input)) return null;
+  const id = asString(input.id);
+  const teamId = asString(input.teamId);
+  const teamName = asString(input.teamName);
+  const label = asString(input.label) ?? "Points";
+  const points = asNumber(input.points);
+  const total = asNumber(input.total);
+  const createdAtMs = asNumber(input.createdAtMs);
+  if (!id || !teamId || !teamName || points === null || total === null || createdAtMs === null) {
+    return null;
+  }
+  return {
+    id,
+    teamId,
+    teamName: teamName.slice(0, 80),
+    points: Math.min(MAX_TEAM_SCORE, Math.max(0, Math.round(points))),
+    label: label.slice(0, 40),
+    total: Math.min(MAX_TEAM_SCORE, Math.max(0, Math.round(total))),
+    createdAtMs,
+  };
+}
+
 export function validateRuntimeState(input: unknown): LiveRuntimeState | null {
   if (!isObject(input)) return null;
   const version = asString(input.version);
@@ -199,6 +238,13 @@ export function validateRuntimeState(input: unknown): LiveRuntimeState | null {
     if (cleaned.length) playedTracks = cleaned;
   }
 
+  const teamScores = Array.isArray(input.teamScores)
+    ? input.teamScores
+      .map((entry) => sanitizeTeamScore(entry))
+      .filter((entry): entry is LiveTeamScore => entry !== null)
+    : [];
+  const scoreToast = sanitizeScoreToast(input.scoreToast);
+
   // Only carry an explicit screenId. Absence is meaningful: it signals the
   // render layer to derive a screen from the runtime (deriveScreenId).
   const screenId = isScreenId(input.screenId) ? input.screenId : undefined;
@@ -240,6 +286,8 @@ export function validateRuntimeState(input: unknown): LiveRuntimeState | null {
       ? input.challengeType
       : null,
     challengeBonusPoints: sanitizeChallengeBonusPoints(asNumber(input.challengeBonusPoints) ?? DEFAULT_CHALLENGE_BONUS_POINTS),
+    teamScores,
+    scoreToast,
     preBreakTrackId:
       typeof input.preBreakTrackId === "string" && input.preBreakTrackId.trim()
         ? input.preBreakTrackId.trim()

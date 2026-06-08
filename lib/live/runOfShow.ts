@@ -5,7 +5,7 @@
  */
 export type ScreenId =
   | "welcome" | "order" | "quiz1" | "title" | "rules" | "dance"
-  | "game1" | "claim" | "break" | "quiz2" | "sing" | "game2" | "winners" | "thanks"
+  | "game1" | "claim" | "break" | "quiz2" | "sing" | "game2" | "winner-entry" | "winners" | "thanks"
   | "sys-load" | "sys-none";
 
 export interface RunOfShowStep {
@@ -42,6 +42,7 @@ export const RUN_OF_SHOW: RunOfShowStep[] = [
   { id: "quiz2", short: "Switch · Quiz R2", sub: "KaraFun round 2" },
   { id: "sing", short: "Sing Warm-Up", sub: "Intro · plays in full", game: 2, intro: true },
   { id: "game2", short: "Game 2", sub: "Music Bingo", game: 2, play: true },
+  { id: "winner-entry", short: "Winner Entry", sub: "Enter final results" },
   { id: "winners", short: "Winners", sub: "1st & wooden spoon" },
   { id: "thanks", short: "Thank You", sub: "Reviews / next event" },
   // On-demand overlay — triggered by the host's Bingo Claim button on a shout,

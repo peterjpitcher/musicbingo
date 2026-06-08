@@ -17,7 +17,9 @@ import { TimingPanel } from "@/components/host/TimingPanel";
 import { ContentPanel } from "@/components/host/ContentPanel";
 import { WelcomeSongPanel } from "@/components/host/WelcomeSongPanel";
 import { PlaylistPanel } from "@/components/host/PlaylistPanel";
+import { AwardPointsModal, type AwardPreset } from "@/components/host/AwardPointsModal";
 import { SCREEN_REGISTRY } from "@/components/screens/registry";
+import { ScoreToastOverlay } from "@/components/screens/ScoreToastOverlay";
 import { EditContext, type EditContextValue } from "@/components/motifs/EditContext";
 import { BrandProvider } from "@/components/brand/BrandProvider";
 import { SHOW_STEPS, normalizeScreenId, type ScreenId } from "@/lib/live/runOfShow";
@@ -49,6 +51,7 @@ import {
   DEFAULT_REVEAL_CONFIG,
   MAX_SONG_EXTENSION_MS,
   MAX_SONG_PLAY_MS,
+  MAX_TEAM_SCORE,
   MIN_SONG_PLAY_MS,
   LIVE_RUNTIME_VERSION,
   getRevealConfigWithExtension,
@@ -59,9 +62,19 @@ import {
   withDefaultWelcomeSong,
   type LiveRuntimeState,
   type LiveSessionV1,
+  type LiveTeamScore,
   type LiveTrackSnapshot,
   type RevealConfig,
 } from "@/lib/live/types";
+
+const AWARD_PRESETS: AwardPreset[] = [
+  { label: "1 Line", points: 15 },
+  { label: "2 Lines", points: 25 },
+  { label: "Full House", points: 50 },
+  { label: "KaraFun 1st", points: 30 },
+  { label: "KaraFun 2nd", points: 20 },
+  { label: "KaraFun 3rd", points: 10 },
+];
 
 function getChallengeBonusPoints(game: LiveSessionV1["games"][number] | null): number {
   return sanitizeChallengeBonusPoints(game?.challengeBonusPoints ?? DEFAULT_CHALLENGE_BONUS_POINTS);
@@ -112,6 +125,13 @@ function makeTabId(): string {
     return crypto.randomUUID();
   }
   return `host-tab-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+}
+
+function makeScoreId(prefix: string): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `${prefix}-${crypto.randomUUID()}`;
+  }
+  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
 }
 
 function normalizeWarnings(input: unknown): string[] {
@@ -188,6 +208,7 @@ export default function HostSessionControllerPage() {
   const [albumRevealSecondsInput, setAlbumRevealSecondsInput] = useState<string>("");
   const [titleRevealSecondsInput, setTitleRevealSecondsInput] = useState<string>("");
   const [artistRevealSecondsInput, setArtistRevealSecondsInput] = useState<string>("");
+  const [awardModalOpen, setAwardModalOpen] = useState<boolean>(false);
   const [_timingSaving, setTimingSaving] = useState<boolean>(false);
   // Resolved Spotify track IDs for all challenge songs of the active game.
   const challengeTrackIdsRef = useRef<Set<string>>(new Set());
@@ -367,6 +388,57 @@ export default function HostSessionControllerPage() {
     },
     [persistAndBroadcastRuntime, sessionId]
   );
+
+  function addTeamScore(name: string): void {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    commitRuntime((prev) => {
+      const duplicate = prev.teamScores.some(
+        (team) => team.name.trim().toLowerCase() === trimmed.toLowerCase()
+      );
+      if (duplicate) return prev;
+      return {
+        ...prev,
+        teamScores: [
+          ...prev.teamScores,
+          { id: makeScoreId("team"), name: trimmed.slice(0, 80), score: 0 },
+        ],
+      };
+    });
+  }
+
+  function removeTeamScore(teamId: string): void {
+    commitRuntime((prev) => ({
+      ...prev,
+      teamScores: prev.teamScores.filter((team) => team.id !== teamId),
+      scoreToast: prev.scoreToast?.teamId === teamId ? null : prev.scoreToast,
+    }));
+  }
+
+  function awardTeamPoints(team: LiveTeamScore, points: number, label: string): void {
+    const safePoints = Math.min(MAX_TEAM_SCORE, Math.max(0, Math.round(points)));
+    if (!safePoints) return;
+    commitRuntime((prev) => {
+      const current = prev.teamScores.find((item) => item.id === team.id);
+      if (!current) return prev;
+      const nextTotal = Math.min(MAX_TEAM_SCORE, current.score + safePoints);
+      return {
+        ...prev,
+        teamScores: prev.teamScores.map((item) =>
+          item.id === team.id ? { ...item, score: nextTotal } : item
+        ),
+        scoreToast: {
+          id: makeScoreId("score"),
+          teamId: team.id,
+          teamName: current.name,
+          points: safePoints,
+          label,
+          total: nextTotal,
+          createdAtMs: Date.now(),
+        },
+      };
+    });
+  }
 
   const applyStatusSnapshot = useCallback(
     (
@@ -656,7 +728,18 @@ export default function HostSessionControllerPage() {
           trackId != null &&
           tracks[tracks.length - 1].trackId === trackId;
         if (isLastTrack) {
-          commitRuntime((prev) => ({ ...prev, mode: "ended", screenId: "winners" as ScreenId }));
+          commitRuntime((prev) => ({
+            ...prev,
+            mode: "ended",
+            screenId: "winner-entry" as ScreenId,
+            isIntroSong: false,
+            isChallengeSong: false,
+            challengeType: null,
+            challengeBonusPoints: DEFAULT_CHALLENGE_BONUS_POINTS,
+            advanceTriggeredForTrackId: null,
+            extensionMs: 0,
+            freePlay: false,
+          }));
           await fetch("/api/spotify/live/command", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -897,10 +980,14 @@ export default function HostSessionControllerPage() {
     }
   }
 
-  function showClosingScreen(screenId: Extract<ScreenId, "winners" | "thanks">): void {
+  function showClosingScreen(screenId: Extract<ScreenId, "winner-entry" | "winners" | "thanks">): void {
     const alreadyPlayingClosingMusic =
       runtimeRef.current.mode === "ended" &&
-      (runtimeRef.current.screenId === "winners" || runtimeRef.current.screenId === "thanks");
+      (
+        runtimeRef.current.screenId === "winner-entry" ||
+        runtimeRef.current.screenId === "winners" ||
+        runtimeRef.current.screenId === "thanks"
+      );
 
     commitRuntime((prev) => ({
       ...prev,
@@ -1081,8 +1168,18 @@ export default function HostSessionControllerPage() {
     return false;
   }
 
+  function requireWinnerNamesBeforeWinners(): boolean {
+    if (winnerNamesReady) return true;
+    setNoticeVariant("warning");
+    setNotice("Add both winner team names before revealing the winners screen.");
+    return false;
+  }
+
   function gotoScreen(id: ScreenId): void {
     const currentId = normalizeScreenId(runtimeRef.current.screenId, deriveScreenId(runtimeRef.current));
+    if (currentId !== "winners" && id === "winners" && !requireWinnerNamesBeforeWinners()) {
+      return;
+    }
     if (currentId === "winners" && id === "thanks" && !requireWinnerNamesBeforeThanks()) {
       return;
     }
@@ -1094,7 +1191,7 @@ export default function HostSessionControllerPage() {
       openBreakScreen();
       return;
     }
-    if (id === "winners" || id === "thanks") {
+    if (id === "winner-entry" || id === "winners" || id === "thanks") {
       showClosingScreen(id);
       return;
     }
@@ -1274,11 +1371,19 @@ export default function HostSessionControllerPage() {
   // Current step is a play screen
   const currentStep = SHOW_SCREENS.find((s) => s.id === currentScreenId);
   const isOnPlayScreen = currentStep?.play === true;
+  const hasScoreTeams = runtime.teamScores.some((team) => team.name.trim());
   const winnerNamesReady =
-    editValue.get("winTeam", "").trim() !== "" &&
-    editValue.get("spoonTeam", "").trim() !== "";
+    hasScoreTeams ||
+    (
+      editValue.get("winTeam", "").trim() !== "" &&
+      editValue.get("spoonTeam", "").trim() !== ""
+    );
   const isAtLastScreen = SHOW_SCREENS.findIndex((s) => s.id === currentScreenId) === SHOW_SCREENS.length - 1;
-  const nextScreenBlocked = currentScreenId === "winners" && !winnerNamesReady;
+  const nextScreenBlocked =
+    (currentScreenId === "winner-entry" || currentScreenId === "winners") && !winnerNamesReady;
+  const nextScreenBlockedTitle = currentScreenId === "winner-entry"
+    ? "Add both winner team names before revealing the winners screen."
+    : "Add both winner team names before continuing.";
   const claimAvailable =
     runtime.mode === "running" &&
     runtime.activeGameNumber != null &&
@@ -1316,6 +1421,16 @@ export default function HostSessionControllerPage() {
                   ? "Manual Mode"
                   : "Spotify Connected"}
               </span>
+              {/* Open guest screen */}
+              <button
+                type="button"
+                className="hbtn"
+                onClick={() => setAwardModalOpen(true)}
+                disabled={!isController}
+                title={!isController ? "Take control before awarding points." : undefined}
+              >
+                Award Points
+              </button>
               {/* Open guest screen */}
               <button
                 type="button"
@@ -1427,11 +1542,12 @@ export default function HostSessionControllerPage() {
                     style={{ transform: `scale(${previewScale})` }}
                   >
                     {/* Render the current screen from the registry */}
-                    <div className={editing ? "editing" : ""}>
+                    <div className={editing ? "editing" : ""} style={{ position: "absolute", inset: 0 }}>
                       {SCREEN_REGISTRY[currentScreenId]({
                         brand: effectiveBrand,
                         runtime,
                       })}
+                      <ScoreToastOverlay toast={runtime.scoreToast} />
                     </div>
                   </div>
                 </div>
@@ -1460,9 +1576,13 @@ export default function HostSessionControllerPage() {
                     className="hbtn grow hbtn--lg hbtn--primary"
                     onClick={() => stepScreen(1)}
                     disabled={isAtLastScreen || nextScreenBlocked}
-                    title={nextScreenBlocked ? "Add both winner team names before continuing." : undefined}
+                    title={nextScreenBlocked ? nextScreenBlockedTitle : undefined}
                   >
-                    {nextScreenBlocked ? "Add Winners To Continue" : "Next Screen ›"}
+                    {nextScreenBlocked
+                      ? currentScreenId === "winner-entry"
+                        ? "Add Winners To Reveal"
+                        : "Add Winners To Continue"
+                      : "Next Screen ›"}
                   </button>
                 </div>
               </div>
@@ -1567,7 +1687,7 @@ export default function HostSessionControllerPage() {
                 claimAvailable={claimAvailable}
                 claimCount={runtime.playedTracks?.length ?? 0}
                 claimActive={runtime.screenId === "claim"}
-                onEnd={() => showClosingScreen("winners")}
+                onEnd={() => showClosingScreen("winner-entry")}
                 onReset={() =>
                   commitRuntime((prev) => ({
                     ...prev,
@@ -1581,6 +1701,8 @@ export default function HostSessionControllerPage() {
                     isChallengeSong: false,
                     challengeType: null,
                     challengeBonusPoints: DEFAULT_CHALLENGE_BONUS_POINTS,
+                    teamScores: [],
+                    scoreToast: null,
                     isIntroSong: false,
                     introPlayed: false,
                     extensionMs: 0,
@@ -1638,6 +1760,15 @@ export default function HostSessionControllerPage() {
               )}
             </div>
           </div>
+          <AwardPointsModal
+            open={awardModalOpen}
+            teams={runtime.teamScores}
+            presets={AWARD_PRESETS}
+            onClose={() => setAwardModalOpen(false)}
+            onAddTeam={addTeamScore}
+            onRemoveTeam={removeTeamScore}
+            onAward={awardTeamPoints}
+          />
         </div>
       </EditContext.Provider>
     </BrandProvider>

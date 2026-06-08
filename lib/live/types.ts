@@ -26,6 +26,7 @@ export const MAX_SONG_EXTENSION_MS = 300_000;
 export const DEFAULT_CHALLENGE_BONUS_POINTS = 10;
 export const MIN_CHALLENGE_BONUS_POINTS = 0;
 export const MAX_CHALLENGE_BONUS_POINTS = 999;
+export const MAX_TEAM_SCORE = 99_999;
 
 const DEFAULT_REVEAL_RATIOS: RevealRatios = {
   album: 10_000 / 45_000,
@@ -194,6 +195,22 @@ export type PlayedTrack = {
   artist: string;
 };
 
+export type LiveTeamScore = {
+  id: string;
+  name: string;
+  score: number;
+};
+
+export type LiveScoreToast = {
+  id: string;
+  teamId: string;
+  teamName: string;
+  points: number;
+  label: string;
+  total: number;
+  createdAtMs: number;
+};
+
 export type LiveRevealState = {
   showAlbum: boolean;
   showTitle: boolean;
@@ -226,6 +243,10 @@ export type LiveRuntimeState = {
   challengeType: 'sing-along' | 'dance-along' | null;
   /** Bonus points displayed for the active challenge song. */
   challengeBonusPoints: number;
+  /** Live team leaderboard, edited from the host Award Points modal. */
+  teamScores: LiveTeamScore[];
+  /** Latest points-award flash shown on guest/TV screens. */
+  scoreToast: LiveScoreToast | null;
   /** Track ID stored before going to break, so resume can restart it from the beginning. */
   preBreakTrackId: string | null;
   /** Playlist ID stored before going to break, so resume can restart in the right context. */
@@ -319,6 +340,8 @@ export function makeEmptyRuntimeState(sessionId: string): LiveRuntimeState {
     isChallengeSong: false,
     challengeType: null,
     challengeBonusPoints: DEFAULT_CHALLENGE_BONUS_POINTS,
+    teamScores: [],
+    scoreToast: null,
     preBreakTrackId: null,
     preBreakPlaylistId: null,
     extensionMs: 0,

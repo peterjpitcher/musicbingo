@@ -10,6 +10,7 @@ import { Warmup } from "./Warmup";
 import { GameLive } from "./GameLive";
 import { ClaimScreen } from "./ClaimScreen";
 import { BreakScreen } from "./BreakScreen";
+import { WinnerEntry } from "./WinnerEntry";
 import { Winners } from "./Winners";
 import { ThankYou } from "./ThankYou";
 import { SysLoading } from "./SysLoading";
@@ -34,6 +35,7 @@ export const SCREEN_REGISTRY: Record<ScreenId, (props: ScreenProps) => ReactNode
   quiz2: (p) => <QuizSwitch {...p} round="Two" />,
   sing: (p) => <Warmup {...p} type="sing" />,
   game2: (p) => <GameLive {...p} game={2} />,
+  "winner-entry": (p) => <WinnerEntry {...p} />,
   winners: (p) => <Winners {...p} />,
   thanks: (p) => <ThankYou {...p} />,
   "sys-load": (p) => <SysLoading {...p} />,
