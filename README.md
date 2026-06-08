@@ -3,7 +3,7 @@
 Next.js app to generate a full Music Bingo event pack from two plain-text song lists:
 - Game 1 cards PDF
 - Game 2 cards PDF
-- Event Clipboard DOCX (with schedule, bonus challenge songs, and both 1-50 song lists)
+- Run sheet PDF
 - Two private Spotify playlists (one per game)
 
 ## Web app (Next.js)
@@ -28,7 +28,7 @@ Next.js app to generate a full Music Bingo event pack from two plain-text song l
 5) Run:
    - `npm run dev`
 6) Open the URL shown in your terminal (usually `http://127.0.0.1:3000`), paste songs for both games, set themes, choose challenge songs, enter the event date, and click **Generate Event Pack + Create 2 Spotify Playlists**.
-   - Download is a single zip with 2 PDFs + 1 DOCX.
+   - Download is a single zip with 2 card PDFs + 1 run sheet PDF.
    - Spotify playlist creation requires a one-time “Connect Spotify” step.
    - After playlists are created, use **Save Live Session** or **Export Live Session JSON** to prepare event-night host/guest runtime.
 

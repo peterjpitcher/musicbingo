@@ -10,11 +10,11 @@ type GenerateCardsParams = {
   maxAttemptsPerCard?: number;
 };
 
-const COLS = 5;
+const COLS = 6;
 const ROWS = 3;
-const CELLS = COLS * ROWS; // 15
-const FILLED_PER_ROW = COLS - 1; // 4
-const FILLED_PER_CARD = ROWS * FILLED_PER_ROW; // 12
+const CELLS = COLS * ROWS; // 18
+const FILLED_PER_ROW = COLS - 1; // 5
+const FILLED_PER_CARD = ROWS * FILLED_PER_ROW; // 15
 const MIN_POOL_SIZE = 25;
 
 function makeRng(seed?: string): () => number {
@@ -37,11 +37,10 @@ function hashSignature(items: readonly string[]): string {
   return crypto.createHash("sha256").update(sig, "utf8").digest("hex");
 }
 
-function blankIndicesDistinctColumns(rng: () => number): number[] {
-  const cols = sampleWithoutReplacement([0, 1, 2, 3, 4], ROWS, rng);
+function blankIndices(rng: () => number): number[] {
   const blanks: number[] = [];
   for (let row = 0; row < ROWS; row++) {
-    blanks.push(row * COLS + cols[row]);
+    blanks.push(row * COLS + Math.floor(rng() * COLS));
   }
   return blanks;
 }
@@ -82,8 +81,8 @@ export function generateCards(params: GenerateCardsParams): Card[] {
   for (let i = 0; i < count; i++) {
     let created: Card | null = null;
     for (let attempt = 0; attempt < maxAttemptsPerCard; attempt++) {
-      const blankIndices = blankIndicesDistinctColumns(rng);
-      const items = fillGrid({ pool: combinedPool, blankIndices, rng });
+      const blankIndicesForCard = blankIndices(rng);
+      const items = fillGrid({ pool: combinedPool, blankIndices: blankIndicesForCard, rng });
       const hash = hashSignature(items);
       if (seen.has(hash)) continue;
       seen.add(hash);

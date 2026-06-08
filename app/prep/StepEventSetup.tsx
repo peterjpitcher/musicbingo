@@ -86,10 +86,10 @@ export function StepEventSetup({
             value={eventDate}
             onChange={(e) => onEventDate(e.target.value)}
           />
-          <span className="help">Used in PDFs, DOCX clipboard, and playlist names</span>
+          <span className="help">Used in PDFs, run sheet, and playlist names</span>
         </div>
         <div className="fg">
-          <label>Pages <span style={{ opacity: 0.5 }}>(6 cards each)</span></label>
+          <label>Pages <span style={{ opacity: 0.5 }}>(3 cards each)</span></label>
           <input
             type="number"
             min={1}
@@ -97,7 +97,7 @@ export function StepEventSetup({
             value={countInput}
             onChange={(e) => onCountInput(e.target.value)}
           />
-          <span className="help">{(Number.parseInt(countInput, 10) || 0) * 6} cards total</span>
+          <span className="help">{(Number.parseInt(countInput, 10) || 0) * 3} cards total</span>
         </div>
         <div className="fg">
           <label>Venue / brand</label>

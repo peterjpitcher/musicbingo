@@ -60,6 +60,20 @@
     radial-gradient(130% 100% at 50% -10%, rgb(var(--brand-accent-light-rgb) / .6) 0%, transparent 55%),
     linear-gradient(180deg, var(--brand-accent) 0%, var(--ink) 100%);
 }
+.screen--chal-dance {
+  background:
+    radial-gradient(90% 90% at 18% 16%, rgba(255, 116, 80, .42) 0%, transparent 58%),
+    radial-gradient(72% 72% at 76% 12%, rgba(255, 217, 107, .25) 0%, transparent 52%),
+    radial-gradient(80% 80% at 82% 82%, rgba(0, 153, 107, .20) 0%, transparent 58%),
+    linear-gradient(180deg, #5a1626 0%, #34101c 48%, #04130C 100%);
+}
+.screen--chal-sing {
+  background:
+    radial-gradient(90% 90% at 18% 16%, rgba(117, 188, 255, .38) 0%, transparent 58%),
+    radial-gradient(72% 72% at 76% 12%, rgba(196, 149, 47, .28) 0%, transparent 52%),
+    radial-gradient(80% 80% at 82% 82%, rgba(0, 153, 107, .18) 0%, transparent 58%),
+    linear-gradient(180deg, #13315a 0%, #0d2140 48%, #04130C 100%);
+}
 .grain::after {
   content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 40; opacity: .05; mix-blend-mode: overlay;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
@@ -112,12 +126,17 @@
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes pop  { from { opacity: 0; transform: scale(.8); } to { opacity: 1; transform: none; } }
 @keyframes slideL { from { opacity:0; transform: translateX(-60px);} to {opacity:1; transform:none;} }
+@keyframes bonuspulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 26px 70px rgba(0,0,0,.45); }
+  50% { transform: scale(1.035); box-shadow: 0 30px 90px rgba(0,0,0,.5); }
+}
 .an-rise { animation: rise .8s cubic-bezier(.2,.8,.2,1) backwards; }
 .an-fade { animation: fade 1s ease backwards; }
 .an-pop  { animation: pop .7s cubic-bezier(.2,1.2,.3,1) backwards; }
 .an-slideL { animation: slideL .7s cubic-bezier(.2,.8,.2,1) backwards; }
 .d1{ animation-delay:.08s;} .d2{ animation-delay:.18s;} .d3{ animation-delay:.30s;}
 .d4{ animation-delay:.42s;} .d5{ animation-delay:.56s;} .d6{ animation-delay:.7s;}
+.bonus-glow { animation: pop .7s cubic-bezier(.2,1.2,.3,1) backwards, bonuspulse 2.4s ease-in-out 1s infinite; }
 
 /* ===== host-side click-to-edit (enabled only inside the host preview) ===== */
 [data-edit] { outline: none; border-radius: 6px; transition: box-shadow .15s, background .15s; }
@@ -153,7 +172,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .claim-scroll-track { animation: none; }
+  .claim-scroll-track,
+  .bonus-glow { animation: none; }
 }
 
 /* ===== logo lockup ===== */

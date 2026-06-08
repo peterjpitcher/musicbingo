@@ -14,10 +14,12 @@ import {
   parseRevealConfigInputs,
 } from "@/lib/live/timing";
 import {
+  DEFAULT_CHALLENGE_BONUS_POINTS,
   DEFAULT_REVEAL_CONFIG,
   getChallengeSongs,
   getIntroSongs,
   LIVE_SESSION_VERSION,
+  sanitizeChallengeBonusPoints,
   type IntroSong,
   type LiveGameConfig,
   type LiveSessionV1,
@@ -82,6 +84,13 @@ function parseChallengeSongSelection(selection: string): { artist: string; title
     return { artist: selection.slice(0, delim).trim(), title: selection.slice(delim + 3).trim() };
   }
   return { artist: "", title: "" };
+}
+
+function parseChallengeBonusInput(input: string): number {
+  const trimmed = input.trim();
+  return sanitizeChallengeBonusPoints(
+    trimmed ? Number(trimmed) : DEFAULT_CHALLENGE_BONUS_POINTS
+  );
 }
 
 /**
@@ -150,6 +159,9 @@ function PrepPageInner() {
   const [game1ChallengeSongs, setGame1ChallengeSongs] = useState<ChallengeEntry[]>(
     Array(5).fill(null).map(() => ({ value: "", type: "sing-along" as const }))
   );
+  const [game1ChallengeBonusPointsInput, setGame1ChallengeBonusPointsInput] = useState<string>(
+    String(DEFAULT_CHALLENGE_BONUS_POINTS)
+  );
   const [game1IntroUrl, setGame1IntroUrl] = useState<string>("");
   const [game1IntroSongs, setGame1IntroSongs] = useState<IntroSong[]>([]);
 
@@ -158,6 +170,9 @@ function PrepPageInner() {
   const [game2SongsText, setGame2SongsText] = useState<string>("");
   const [game2ChallengeSongs, setGame2ChallengeSongs] = useState<ChallengeEntry[]>(
     Array(5).fill(null).map(() => ({ value: "", type: "sing-along" as const }))
+  );
+  const [game2ChallengeBonusPointsInput, setGame2ChallengeBonusPointsInput] = useState<string>(
+    String(DEFAULT_CHALLENGE_BONUS_POINTS)
   );
   const [game2IntroUrl, setGame2IntroUrl] = useState<string>("");
   const [game2IntroSongs, setGame2IntroSongs] = useState<IntroSong[]>([]);
@@ -224,11 +239,13 @@ function PrepPageInner() {
         game1Theme,
         game1SongsText,
         game1ChallengeSongs,
+        game1ChallengeBonusPointsInput,
         game1IntroUrl,
         game1IntroSongs: normaliseIntroSongsForSignature(game1IntroSongs),
         game2Theme,
         game2SongsText,
         game2ChallengeSongs,
+        game2ChallengeBonusPointsInput,
         game2IntroUrl,
         game2IntroSongs: normaliseIntroSongsForSignature(game2IntroSongs),
       }),
@@ -238,11 +255,13 @@ function PrepPageInner() {
       breakPlaylistId,
       countInput,
       eventDate,
+      game1ChallengeBonusPointsInput,
       game1ChallengeSongs,
       game1IntroSongs,
       game1IntroUrl,
       game1SongsText,
       game1Theme,
+      game2ChallengeBonusPointsInput,
       game2ChallengeSongs,
       game2IntroSongs,
       game2IntroUrl,
@@ -322,6 +341,9 @@ function PrepPageInner() {
         if (game1) {
           const entries = challengeEntriesFromGame(game1);
           if (entries.some((c) => c.value)) setGame1ChallengeSongs(entries);
+          setGame1ChallengeBonusPointsInput(
+            String(sanitizeChallengeBonusPoints(game1.challengeBonusPoints ?? pd.game1ChallengeBonusPoints))
+          );
           const intros = getIntroSongs(game1);
           if (intros.length > 0) {
             setGame1IntroSongs(intros);
@@ -336,6 +358,9 @@ function PrepPageInner() {
         if (game2) {
           const entries = challengeEntriesFromGame(game2);
           if (entries.some((c) => c.value)) setGame2ChallengeSongs(entries);
+          setGame2ChallengeBonusPointsInput(
+            String(sanitizeChallengeBonusPoints(game2.challengeBonusPoints ?? pd.game2ChallengeBonusPoints))
+          );
           const intros = getIntroSongs(game2);
           if (intros.length > 0) {
             setGame2IntroSongs(intros);
@@ -500,6 +525,8 @@ function PrepPageInner() {
     form.set("game2_songs", game2SongsText);
     form.set("game1_challenge_song", game1ChallengeSong);
     form.set("game2_challenge_song", game2ChallengeSong);
+    form.set("game1_challenge_bonus_points", String(parseChallengeBonusInput(game1ChallengeBonusPointsInput)));
+    form.set("game2_challenge_bonus_points", String(parseChallengeBonusInput(game2ChallengeBonusPointsInput)));
     const g1ChallengeValues = game1ChallengeSongs.filter((c) => c.value).map((c) => c.value);
     const g2ChallengeValues = game2ChallengeSongs.filter((c) => c.value).map((c) => c.value);
     form.set("game1_challenge_songs", JSON.stringify(g1ChallengeValues));
@@ -576,6 +603,7 @@ function PrepPageInner() {
           addedCount: game1.addedCount,
           challengeSongArtist: parseChallengeSongSelection(game1ChallengeSong).artist,
           challengeSongTitle: parseChallengeSongSelection(game1ChallengeSong).title,
+          challengeBonusPoints: parseChallengeBonusInput(game1ChallengeBonusPointsInput),
           challengeSongs: game1ChallengeSongs
             .filter((c) => c.value)
             .map((c) => ({ ...parseChallengeSongSelection(c.value), type: c.type })),
@@ -593,6 +621,7 @@ function PrepPageInner() {
           addedCount: game2.addedCount,
           challengeSongArtist: parseChallengeSongSelection(game2ChallengeSong).artist,
           challengeSongTitle: parseChallengeSongSelection(game2ChallengeSong).title,
+          challengeBonusPoints: parseChallengeBonusInput(game2ChallengeBonusPointsInput),
           challengeSongs: game2ChallengeSongs
             .filter((c) => c.value)
             .map((c) => ({ ...parseChallengeSongSelection(c.value), type: c.type })),
@@ -611,6 +640,8 @@ function PrepPageInner() {
         cardCount: Number.isFinite(count) ? count : 40,
         game1ChallengeSongs: game1ChallengeSongs.filter((c) => c.value).map((c) => c.value),
         game2ChallengeSongs: game2ChallengeSongs.filter((c) => c.value).map((c) => c.value),
+        game1ChallengeBonusPoints: parseChallengeBonusInput(game1ChallengeBonusPointsInput),
+        game2ChallengeBonusPoints: parseChallengeBonusInput(game2ChallengeBonusPointsInput),
       },
       brandId: selectedBrandId ?? undefined,
     };
@@ -653,8 +684,8 @@ function PrepPageInner() {
     setBusy(true);
     try {
       const count = Number.parseInt(countInput, 10);
-      if (!Number.isFinite(count) || count < 1 || count > 1000) {
-        throw new Error("Cards per game must be a whole number between 1 and 1000.");
+      if (!Number.isFinite(count) || count < 1 || count > 200) {
+        throw new Error("Pages must be a whole number between 1 and 200.");
       }
 
       const pdfForm = buildBaseFormData();
@@ -955,8 +986,8 @@ function PrepPageInner() {
     setBusy(true);
     try {
       const count = Number.parseInt(countInput, 10);
-      if (!Number.isFinite(count) || count < 1 || count > 1000) {
-        throw new Error("Cards per game must be a whole number between 1 and 1000.");
+      if (!Number.isFinite(count) || count < 1 || count > 200) {
+        throw new Error("Pages must be a whole number between 1 and 200.");
       }
 
       const pdfForm = buildBaseFormData();
@@ -1168,6 +1199,8 @@ function PrepPageInner() {
             onSongsText={setGame1SongsText}
             challengeSongs={game1ChallengeSongs}
             onChallengeSongs={setGame1ChallengeSongs}
+            challengeBonusPointsInput={game1ChallengeBonusPointsInput}
+            onChallengeBonusPointsInput={setGame1ChallengeBonusPointsInput}
             introUrl={game1IntroUrl}
             onIntroUrlChange={setGame1IntroUrl}
             introSongs={game1IntroSongs}
@@ -1191,6 +1224,8 @@ function PrepPageInner() {
             onSongsText={setGame2SongsText}
             challengeSongs={game2ChallengeSongs}
             onChallengeSongs={setGame2ChallengeSongs}
+            challengeBonusPointsInput={game2ChallengeBonusPointsInput}
+            onChallengeBonusPointsInput={setGame2ChallengeBonusPointsInput}
             introUrl={game2IntroUrl}
             onIntroUrlChange={setGame2IntroUrl}
             introSongs={game2IntroSongs}

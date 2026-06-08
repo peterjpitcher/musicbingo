@@ -1,6 +1,8 @@
 import {
+  DEFAULT_CHALLENGE_BONUS_POINTS,
   DEFAULT_REVEAL_CONFIG,
   LIVE_SESSION_VERSION,
+  sanitizeChallengeBonusPoints,
   type LiveGameConfig,
   type LiveSessionV1,
   type PrepData,
@@ -70,6 +72,7 @@ function validateGameConfig(input: unknown): LiveGameConfig | null {
     addedCount,
     challengeSongArtist: asString(input.challengeSongArtist) ?? "",
     challengeSongTitle: asString(input.challengeSongTitle) ?? "",
+    challengeBonusPoints: sanitizeChallengeBonusPoints(asNumber(input.challengeBonusPoints) ?? DEFAULT_CHALLENGE_BONUS_POINTS),
     ...(Array.isArray(input.challengeSongs) ? {
       challengeSongs: (input.challengeSongs as unknown[])
         .filter((cs): cs is Record<string, unknown> => isObject(cs))
@@ -150,6 +153,8 @@ function validatePrepData(input: unknown): PrepData | null {
   const game1ChallengeSong = asString(input.game1ChallengeSong);
   const game2ChallengeSong = asString(input.game2ChallengeSong);
   const cardCount = asNumber(input.cardCount);
+  const game1ChallengeBonusPoints = asNumber(input.game1ChallengeBonusPoints);
+  const game2ChallengeBonusPoints = asNumber(input.game2ChallengeBonusPoints);
 
   if (!game1SongsText || !game2SongsText || !game1Theme || !game2Theme || !game1ChallengeSong || !game2ChallengeSong || cardCount === null || cardCount < 1) {
     return null;
@@ -162,6 +167,12 @@ function validatePrepData(input: unknown): PrepData | null {
     } : {}),
     ...(Array.isArray(input.game2ChallengeSongs) ? {
       game2ChallengeSongs: (input.game2ChallengeSongs as unknown[]).filter((s): s is string => typeof s === "string" && s.trim().length > 0).map(s => (s as string).trim()),
+    } : {}),
+    ...(game1ChallengeBonusPoints !== null ? {
+      game1ChallengeBonusPoints: sanitizeChallengeBonusPoints(game1ChallengeBonusPoints),
+    } : {}),
+    ...(game2ChallengeBonusPoints !== null ? {
+      game2ChallengeBonusPoints: sanitizeChallengeBonusPoints(game2ChallengeBonusPoints),
     } : {}),
     ...(asString(input.game1IntroSong) ? { game1IntroSong: asString(input.game1IntroSong)! } : {}),
     ...(asString(input.game2IntroSong) ? { game2IntroSong: asString(input.game2IntroSong)! } : {}),

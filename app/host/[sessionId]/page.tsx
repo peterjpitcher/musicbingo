@@ -44,6 +44,7 @@ import {
 import { matchChallengeSong } from "@/lib/live/challenge";
 import {
   CHALLENGE_REVEAL_CONFIG,
+  DEFAULT_CHALLENGE_BONUS_POINTS,
   DEFAULT_WELCOME_SONG,
   DEFAULT_REVEAL_CONFIG,
   MAX_SONG_EXTENSION_MS,
@@ -54,12 +55,17 @@ import {
   getChallengeSongs,
   getIntroSongs,
   makeEmptyRuntimeState,
+  sanitizeChallengeBonusPoints,
   withDefaultWelcomeSong,
   type LiveRuntimeState,
   type LiveSessionV1,
   type LiveTrackSnapshot,
   type RevealConfig,
 } from "@/lib/live/types";
+
+function getChallengeBonusPoints(game: LiveSessionV1["games"][number] | null): number {
+  return sanitizeChallengeBonusPoints(game?.challengeBonusPoints ?? DEFAULT_CHALLENGE_BONUS_POINTS);
+}
 
 function getRevealConfig(
   session: LiveSessionV1,
@@ -402,6 +408,9 @@ export default function HostSessionControllerPage() {
             : (prev.challengeType ?? detectChallengeType(track));
         const isChallengeSong = detectedType !== null;
         const challengeType = detectedType;
+        const challengeBonusPoints = isChallengeSong
+          ? getChallengeBonusPoints(game)
+          : DEFAULT_CHALLENGE_BONUS_POINTS;
         if (trackChanged && track) {
           const songs = game ? getChallengeSongs(game) : [];
           console.log("[music-bingo] challenge detection", {
@@ -468,6 +477,7 @@ export default function HostSessionControllerPage() {
           revealConfig: prev.revealConfig ?? session.revealConfig,
           isChallengeSong,
           challengeType,
+          challengeBonusPoints,
           isIntroSong,
           introPlayed,
           extensionMs,
@@ -778,6 +788,9 @@ export default function HostSessionControllerPage() {
           playedTracks: startedTrack?.trackId
             ? [{ trackId: startedTrack.trackId, title: startedTrack.title, artist: startedTrack.artist }]
             : [],
+          isChallengeSong: false,
+          challengeType: null,
+          challengeBonusPoints: DEFAULT_CHALLENGE_BONUS_POINTS,
           isIntroSong: false,
           introPlayed: false,
           freePlay: false,
@@ -795,6 +808,9 @@ export default function HostSessionControllerPage() {
         currentTrack: null,
         // Fresh game → start a new played-songs list for the Bingo Claim screen.
         playedTracks: [],
+        isChallengeSong: false,
+        challengeType: null,
+        challengeBonusPoints: DEFAULT_CHALLENGE_BONUS_POINTS,
         freePlay: false,
         extensionMs: 0,
         warningMessage: prev.warningMessage || "Manual host control mode active.",
@@ -834,6 +850,7 @@ export default function HostSessionControllerPage() {
           introPlayed: false,
           isChallengeSong: false,
           challengeType: null,
+          challengeBonusPoints: DEFAULT_CHALLENGE_BONUS_POINTS,
           advanceTriggeredForTrackId: null,
           extensionMs: 0,
           freePlay: false,
@@ -892,6 +909,7 @@ export default function HostSessionControllerPage() {
       isIntroSong: false,
       isChallengeSong: false,
       challengeType: null,
+      challengeBonusPoints: DEFAULT_CHALLENGE_BONUS_POINTS,
       advanceTriggeredForTrackId: null,
       extensionMs: 0,
       freePlay: false,
@@ -912,6 +930,7 @@ export default function HostSessionControllerPage() {
       isIntroSong: false,
       isChallengeSong: false,
       challengeType: null,
+      challengeBonusPoints: DEFAULT_CHALLENGE_BONUS_POINTS,
       advanceTriggeredForTrackId: null,
       extensionMs: 0,
     }));
@@ -1201,6 +1220,7 @@ export default function HostSessionControllerPage() {
       introPlayed: false,
       isChallengeSong: false,
       challengeType: null,
+      challengeBonusPoints: DEFAULT_CHALLENGE_BONUS_POINTS,
       advanceTriggeredForTrackId: null,
       extensionMs: 0,
       freePlay: false,
@@ -1560,6 +1580,7 @@ export default function HostSessionControllerPage() {
                     advanceTriggeredForTrackId: null,
                     isChallengeSong: false,
                     challengeType: null,
+                    challengeBonusPoints: DEFAULT_CHALLENGE_BONUS_POINTS,
                     isIntroSong: false,
                     introPlayed: false,
                     extensionMs: 0,

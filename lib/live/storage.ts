@@ -1,6 +1,8 @@
 import {
+  DEFAULT_CHALLENGE_BONUS_POINTS,
   DEFAULT_WELCOME_SONG,
   LIVE_RUNTIME_VERSION,
+  sanitizeChallengeBonusPoints,
   type LiveControlLock,
   type LiveRuntimeState,
   type LiveSessionV1,
@@ -237,6 +239,7 @@ export function validateRuntimeState(input: unknown): LiveRuntimeState | null {
     challengeType: input.challengeType === 'sing-along' || input.challengeType === 'dance-along'
       ? input.challengeType
       : null,
+    challengeBonusPoints: sanitizeChallengeBonusPoints(asNumber(input.challengeBonusPoints) ?? DEFAULT_CHALLENGE_BONUS_POINTS),
     preBreakTrackId:
       typeof input.preBreakTrackId === "string" && input.preBreakTrackId.trim()
         ? input.preBreakTrackId.trim()

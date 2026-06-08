@@ -6,6 +6,7 @@ import type { ScreenProps } from "@/components/screens/types";
 import type { LiveRuntimeState } from "@/lib/live/types";
 import {
   CHALLENGE_REVEAL_CONFIG,
+  DEFAULT_CHALLENGE_BONUS_POINTS,
   DEFAULT_REVEAL_CONFIG,
   getRevealConfigWithExtension,
 } from "@/lib/live/types";
@@ -79,10 +80,26 @@ function fitArtistSize(value: string): number {
   return 56;
 }
 
-function challengeLabel(type: LiveRuntimeState["challengeType"]): string {
-  if (type === "dance-along") return "Dance challenge";
-  if (type === "sing-along") return "Sing challenge";
-  return "Challenge";
+function challengePresentation(type: LiveRuntimeState["challengeType"]): {
+  className: string;
+  icon: string;
+  label: string;
+  instruction: string;
+} {
+  const dance = type === "dance-along";
+  return dance
+    ? {
+      className: "screen--chal-dance",
+      icon: "🕺",
+      label: "Dance Challenge",
+      instruction: "Cards down — everyone up on your feet and dance along!",
+    }
+    : {
+      className: "screen--chal-sing",
+      icon: "🎤",
+      label: "Sing Challenge",
+      instruction: "Cards down — everyone sing along at the top of your lungs!",
+    };
 }
 
 /**
@@ -193,6 +210,207 @@ export function GameLive({
     ["Title", showTitle],
     ["Artist", showArtist],
   ];
+
+  if (isChallenge) {
+    const challenge = challengePresentation(liveRuntime?.challengeType ?? null);
+    const bonusPoints = liveRuntime?.challengeBonusPoints ?? DEFAULT_CHALLENGE_BONUS_POINTS;
+    const challengeTitleFontSize = titleText ? Math.min(124, fitTitleSize(titleText)) : 124;
+    const challengeArtistFontSize = artistText ? Math.min(54, fitArtistSize(artistText)) : 54;
+    const challengeBadgeLit: React.CSSProperties = {
+      display: "inline-flex",
+      alignItems: "center",
+      gap: 10,
+      padding: "12px 22px",
+      borderRadius: 999,
+      background: "rgb(255 255 255 / .14)",
+      border: "2px solid rgb(var(--brand-accent-light-rgb) / .86)",
+      fontSize: 22,
+      fontWeight: 800,
+      textTransform: "uppercase",
+      letterSpacing: ".1em",
+      color: "#fff6dd",
+    };
+    const challengeBadgeDim: React.CSSProperties = {
+      display: "inline-flex",
+      alignItems: "center",
+      gap: 10,
+      padding: "12px 22px",
+      borderRadius: 999,
+      background: "rgb(0 0 0 / .22)",
+      border: "2px solid rgb(255 255 255 / .18)",
+      fontSize: 22,
+      fontWeight: 700,
+      textTransform: "uppercase",
+      letterSpacing: ".1em",
+      color: "rgb(255 255 255 / .44)",
+    };
+
+    return (
+      <div
+        className={`screen grain vignette ${challenge.className}`}
+        style={{ padding: "56px 110px 96px", flexDirection: "row", alignItems: "center", gap: 90 }}
+      >
+        <div style={{ flex: "0 0 600px", display: "grid", placeItems: "center" }}>
+          <div className="an-pop d2">
+            <AlbumArt
+              size={600}
+              imageUrl={track && showAlbum ? track.albumImageUrl : null}
+              revealed={showAlbum}
+            />
+          </div>
+        </div>
+
+        <div className="col" style={{ flex: 1, gap: 20, minWidth: 0, color: "#fff" }}>
+          <div
+            className="an-rise d1"
+            style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}
+          >
+            <span aria-hidden style={{ fontSize: 60, lineHeight: 1 }}>{challenge.icon}</span>
+            <span
+              style={{
+                fontFamily: "var(--brand-display), Impact, sans-serif",
+                fontSize: 70,
+                lineHeight: .92,
+                textTransform: "uppercase",
+                color: "#fff",
+              }}
+            >
+              {challenge.label}
+            </span>
+            <span
+              className="bonus-glow"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                padding: "16px 28px",
+                borderRadius: 999,
+                background: "linear-gradient(180deg, #fff6dd 0%, var(--brand-accent-light) 45%, var(--brand-accent) 100%)",
+                color: "var(--ink)",
+                fontSize: 26,
+                fontWeight: 900,
+                textTransform: "uppercase",
+                letterSpacing: ".08em",
+              }}
+            >
+              +{bonusPoints} Bonus Points
+            </span>
+          </div>
+
+          <p
+            className="an-rise d2"
+            style={{ margin: 0, color: "#fff", fontSize: 36, fontWeight: 800, lineHeight: 1.15 }}
+          >
+            {challenge.instruction}
+          </p>
+
+          <h1
+            className="display display--gold an-rise d3"
+            style={{
+              fontSize: challengeTitleFontSize,
+              lineHeight: challengeTitleFontSize < 100 ? 0.98 : 0.92,
+              maxWidth: "100%",
+              overflowWrap: "anywhere",
+              whiteSpace: "normal",
+            }}
+          >
+            {track && showTitle ? (
+              <span style={{ display: "block", overflowWrap: "anywhere", whiteSpace: "normal" }}>
+                {track.title}
+              </span>
+            ) : (
+              <span style={{ display: "block", opacity: 0, whiteSpace: "normal" }}>&#8203;</span>
+            )}
+          </h1>
+
+          <p
+            className="an-rise d4"
+            style={{
+              fontSize: challengeArtistFontSize,
+              fontWeight: 800,
+              lineHeight: 1.08,
+              margin: 0,
+              maxWidth: "100%",
+              color: "#fff",
+              overflowWrap: "anywhere",
+              whiteSpace: "normal",
+            }}
+          >
+            {track && showArtist ? (
+              <span style={{ display: "block", overflowWrap: "anywhere", whiteSpace: "normal" }}>
+                {track.artist}
+              </span>
+            ) : (
+              <span style={{ display: "block", opacity: 0, whiteSpace: "normal" }}>&#8203;</span>
+            )}
+          </p>
+
+          <div
+            className="an-rise d5"
+            style={{ display: "flex", gap: 14, marginTop: 8, flexWrap: "wrap" }}
+          >
+            {badges.map(([label, lit]) => (
+              <span key={label} style={lit ? challengeBadgeLit : challengeBadgeDim}>
+                ✓ {label}
+              </span>
+            ))}
+            <span
+              style={{
+                position: "relative",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 12,
+                padding: "12px 24px",
+                borderRadius: 999,
+                background: "rgba(0,0,0,.3)",
+                border: "2px solid rgba(255,255,255,.34)",
+                fontSize: 22,
+                fontWeight: 800,
+                textTransform: "uppercase",
+                letterSpacing: ".1em",
+                overflow: "hidden",
+                color: "#fff",
+              }}
+            >
+              {hasLiveCountdown && (
+                <span
+                  aria-hidden
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    width: `${nextFillPct}%`,
+                    background: "rgb(var(--brand-accent-rgb) / .22)",
+                    transition: "width 1s linear",
+                    pointerEvents: "none",
+                  }}
+                />
+              )}
+              <span
+                style={{
+                  position: "relative",
+                  zIndex: 1,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 12,
+                }}
+              >
+                <Eq bars={4} style={{ height: 22 }} />{" "}
+                {playsInFull ? "Plays in full" : `Next song · ${nextLabel}`}
+              </span>
+            </span>
+          </div>
+        </div>
+
+        <Chrome
+          left={
+            <>
+              <Editable field="venueName" placeholder={brand.name} /> · {challenge.label}
+            </>
+          }
+          right="Join In For Points"
+        />
+      </div>
+    );
+  }
 
   return (
     <div
@@ -312,27 +530,6 @@ export function GameLive({
             className="an-rise d4"
             style={{ display: "flex", gap: 14, marginTop: 14, flexWrap: "wrap" }}
           >
-            {isChallenge && (
-              <span
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 10,
-                  padding: "12px 22px",
-                  borderRadius: 999,
-                  background: "rgb(var(--brand-accent-rgb) / .9)",
-                  border: "2px solid var(--brand-accent-light)",
-                  fontSize: 22,
-                  fontWeight: 800,
-                  textTransform: "uppercase",
-                  letterSpacing: ".1em",
-                  color: "var(--ink)",
-                }}
-              >
-                <Eq bars={4} style={{ height: 22 }} /> {challengeLabel(liveRuntime?.challengeType ?? null)} ·{" "}
-                {Math.round(CHALLENGE_REVEAL_CONFIG.nextMs / 1000)}s
-              </span>
-            )}
             {badges.map(([label, lit]) => (
               <span key={label} style={lit ? badgeLit : badgeDim}>
                 ✓ {label}

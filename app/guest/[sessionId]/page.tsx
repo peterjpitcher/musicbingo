@@ -9,9 +9,11 @@ import { getLiveSession } from "@/lib/live/sessionApi";
 import { readRuntimeState, validateRuntimeState } from "@/lib/live/storage";
 import {
   CHALLENGE_REVEAL_CONFIG,
+  DEFAULT_CHALLENGE_BONUS_POINTS,
   DEFAULT_REVEAL_CONFIG,
   getRevealConfigWithExtension,
   makeEmptyRuntimeState,
+  sanitizeChallengeBonusPoints,
   type LiveRuntimeState,
   type LiveSessionV1,
   type RevealConfig,
@@ -182,6 +184,9 @@ export default function GuestDisplayPage() {
   const localChallengeType = matchChallengeSong(runtime.currentTrack, activeGame);
   const isChallenge = runtime.isChallengeSong || localChallengeType !== null;
   const challengeType = runtime.challengeType ?? localChallengeType;
+  const challengeBonusPoints = isChallenge
+    ? sanitizeChallengeBonusPoints(activeGame?.challengeBonusPoints ?? runtime.challengeBonusPoints ?? DEFAULT_CHALLENGE_BONUS_POINTS)
+    : DEFAULT_CHALLENGE_BONUS_POINTS;
 
   const effectiveCfg: RevealConfig = isChallenge
     ? CHALLENGE_REVEAL_CONFIG
@@ -209,6 +214,7 @@ export default function GuestDisplayPage() {
     revealState: localRevealState,
     isChallengeSong: isChallenge,
     challengeType,
+    challengeBonusPoints,
   };
 
   const effectiveBrand = brand ?? DEFAULT_BRAND_CONFIG;

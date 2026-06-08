@@ -318,7 +318,7 @@ export function StepGenerateConnect({
         <div className="ic">🗜️</div>
         <div className="gx">
           <b>Event Pack ZIP</b>
-          <p>Game 1 &amp; 2 PDFs, Event Clipboard DOCX, QR codes</p>
+          <p>Game 1 &amp; 2 PDFs, What&apos;s On backs, run sheet</p>
         </div>
         <Button
           variant="primary"

@@ -23,6 +23,9 @@ export const DEFAULT_SONG_PLAY_MS = 45_000;
 export const MIN_SONG_PLAY_MS = 15_000;
 export const MAX_SONG_PLAY_MS = 300_000;
 export const MAX_SONG_EXTENSION_MS = 300_000;
+export const DEFAULT_CHALLENGE_BONUS_POINTS = 10;
+export const MIN_CHALLENGE_BONUS_POINTS = 0;
+export const MAX_CHALLENGE_BONUS_POINTS = 999;
 
 const DEFAULT_REVEAL_RATIOS: RevealRatios = {
   album: 10_000 / 45_000,
@@ -75,6 +78,16 @@ export function getRevealConfigWithExtension(cfg: RevealConfig, extensionMs: num
   return makeRevealConfigFromNextMs(cfg.nextMs + Math.round(extensionMs), ratiosFromRevealConfig(cfg));
 }
 
+export function sanitizeChallengeBonusPoints(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return DEFAULT_CHALLENGE_BONUS_POINTS;
+  }
+  return Math.min(
+    MAX_CHALLENGE_BONUS_POINTS,
+    Math.max(MIN_CHALLENGE_BONUS_POINTS, Math.round(value))
+  );
+}
+
 export const DEFAULT_REVEAL_CONFIG: RevealConfig = makeRevealConfigForSongPlayMs(DEFAULT_SONG_PLAY_MS);
 
 /** Challenge songs play longer than normal songs and use their own relative reveal points. */
@@ -108,6 +121,8 @@ export type LiveGameConfig = {
   challengeSongTitle: string;
   /** Up to 5 challenge songs per game. Authoritative when present; falls back to single legacy pair. */
   challengeSongs?: ChallengeSong[];
+  /** Bonus points displayed during this game's challenge songs. Defaults to 10 for legacy sessions. */
+  challengeBonusPoints?: number;
   /** @deprecated Use introSongs instead */
   introSongArtist?: string;
   /** @deprecated Use introSongs instead */
@@ -127,6 +142,9 @@ export type PrepData = {
   /** Multiple challenge songs per game (artist|||title format). */
   game1ChallengeSongs?: string[];
   game2ChallengeSongs?: string[];
+  /** Bonus points displayed during challenge songs. */
+  game1ChallengeBonusPoints?: number;
+  game2ChallengeBonusPoints?: number;
   /** Intro songs (artist|||title format). */
   game1IntroSong?: string;
   game2IntroSong?: string;
@@ -206,6 +224,8 @@ export type LiveRuntimeState = {
   isChallengeSong: boolean;
   /** The type of challenge when isChallengeSong is true. Null when not a challenge song. */
   challengeType: 'sing-along' | 'dance-along' | null;
+  /** Bonus points displayed for the active challenge song. */
+  challengeBonusPoints: number;
   /** Track ID stored before going to break, so resume can restart it from the beginning. */
   preBreakTrackId: string | null;
   /** Playlist ID stored before going to break, so resume can restart in the right context. */
@@ -298,6 +318,7 @@ export function makeEmptyRuntimeState(sessionId: string): LiveRuntimeState {
     warningMessage: null,
     isChallengeSong: false,
     challengeType: null,
+    challengeBonusPoints: DEFAULT_CHALLENGE_BONUS_POINTS,
     preBreakTrackId: null,
     preBreakPlaylistId: null,
     extensionMs: 0,

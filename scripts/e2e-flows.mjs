@@ -515,7 +515,7 @@ async function validateDownloadedBundle(zipPath) {
     .filter((entry) => !entry.dir)
     .map((entry) => entry.name);
 
-  assert.equal(files.length, 4, `Expected 4 files in bundle, got ${files.length}: ${files.join(", ")}`);
+  assert.equal(files.length, 3, `Expected 3 files in bundle, got ${files.length}: ${files.join(", ")}`);
 
   const game1Pdf = files.find((name) => /^music-bingo-game-1-.*\.pdf$/.test(name));
   const game2Pdf = files.find((name) => /^music-bingo-game-2-.*\.pdf$/.test(name));
@@ -524,17 +524,15 @@ async function validateDownloadedBundle(zipPath) {
 
   assert.ok(game1Pdf, `Missing game 1 PDF in bundle: ${files.join(", ")}`);
   assert.ok(game2Pdf, `Missing game 2 PDF in bundle: ${files.join(", ")}`);
-  assert.ok(clipboard, `Missing clipboard DOCX in bundle: ${files.join(", ")}`);
+  assert.ok(!clipboard, `Clipboard DOCX should not be included in bundle: ${files.join(", ")}`);
   assert.ok(runSheet, `Missing run-sheet PDF in bundle: ${files.join(", ")}`);
 
   const game1Bytes = await zip.file(game1Pdf).async("nodebuffer");
   const game2Bytes = await zip.file(game2Pdf).async("nodebuffer");
-  const docxBytes = await zip.file(clipboard).async("nodebuffer");
   const runSheetBytes = await zip.file(runSheet).async("nodebuffer");
 
   assert.equal(game1Bytes.subarray(0, 4).toString("utf8"), "%PDF", "Game 1 file is not a valid PDF");
   assert.equal(game2Bytes.subarray(0, 4).toString("utf8"), "%PDF", "Game 2 file is not a valid PDF");
-  assert.equal(docxBytes.subarray(0, 2).toString("utf8"), "PK", "Clipboard file is not a ZIP-based DOCX");
   assert.equal(runSheetBytes.subarray(0, 4).toString("utf8"), "%PDF", "Run-sheet file is not a valid PDF");
 
   // Lock the What's-On interleave: each card sheet is followed by a What's-On
@@ -546,9 +544,6 @@ async function validateDownloadedBundle(zipPath) {
     game1Pages >= 2 && game1Pages % 2 === 0,
     `Game 1 PDF should interleave a What's-On page after each card sheet (even page count >= 2), got ${game1Pages}`,
   );
-
-  const docxZip = await JSZip.loadAsync(docxBytes);
-  assert.ok(docxZip.file("word/document.xml"), "DOCX missing word/document.xml");
 }
 
 function makeLiveSessionFixture(sessionId = "flow-live-session") {

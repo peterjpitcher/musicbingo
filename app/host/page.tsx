@@ -299,6 +299,12 @@ export default function HostDashboardPage() {
         form.set("game2_songs", session.prepData.game2SongsText);
         form.set("game1_challenge_song", session.prepData.game1ChallengeSong);
         form.set("game2_challenge_song", session.prepData.game2ChallengeSong);
+        if (typeof session.prepData.game1ChallengeBonusPoints === "number") {
+          form.set("game1_challenge_bonus_points", String(session.prepData.game1ChallengeBonusPoints));
+        }
+        if (typeof session.prepData.game2ChallengeBonusPoints === "number") {
+          form.set("game2_challenge_bonus_points", String(session.prepData.game2ChallengeBonusPoints));
+        }
         if (session.prepData.game1ChallengeSongs?.length) {
           form.set("game1_challenge_songs", JSON.stringify(session.prepData.game1ChallengeSongs));
         }

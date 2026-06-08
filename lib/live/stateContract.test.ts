@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { validateLiveSession } from "@/lib/live/validate";
 import { validateRuntimeState } from "@/lib/live/storage";
-import { LIVE_SESSION_VERSION, makeEmptyRuntimeState } from "@/lib/live/types";
+import { DEFAULT_CHALLENGE_BONUS_POINTS, LIVE_SESSION_VERSION, makeEmptyRuntimeState } from "@/lib/live/types";
 
 function validGame(n: 1 | 2) {
   return { gameNumber: n, theme: `Theme ${n}`, playlistId: `pl${n}`, playlistName: `Playlist ${n}`, playlistUrl: null, totalSongs: 25, addedCount: 25 };
@@ -32,6 +32,20 @@ describe("validateLiveSession — content/variant fields", () => {
     expect(out).not.toBeNull();
     expect(out!.content).toBeUndefined();
   });
+  it("defaults and bounds per-game challenge bonus points", () => {
+    const out = validateLiveSession(validSession({
+      games: [
+        { ...validGame(1), challengeBonusPoints: 14.6 },
+        { ...validGame(2), challengeBonusPoints: 5000 },
+      ],
+    }));
+    expect(out).not.toBeNull();
+    expect(out!.games[0].challengeBonusPoints).toBe(15);
+    expect(out!.games[1].challengeBonusPoints).toBe(999);
+
+    const legacy = validateLiveSession(validSession());
+    expect(legacy!.games[0].challengeBonusPoints).toBe(DEFAULT_CHALLENGE_BONUS_POINTS);
+  });
 });
 
 describe("validateRuntimeState — screen/content/variant fields", () => {
@@ -58,6 +72,13 @@ describe("validateRuntimeState — screen/content/variant fields", () => {
   it("preserves the claim screenId (Bingo Claim screen)", () => {
     const out = validateRuntimeState(validRuntime({ screenId: "claim" }));
     expect(out!.screenId).toBe("claim");
+  });
+  it("defaults and bounds runtime challenge bonus points", () => {
+    expect(validateRuntimeState(validRuntime({ challengeBonusPoints: 7.4 }))!.challengeBonusPoints).toBe(7);
+    expect(validateRuntimeState(validRuntime({ challengeBonusPoints: -3 }))!.challengeBonusPoints).toBe(0);
+    const raw = validRuntime();
+    delete (raw as Record<string, unknown>).challengeBonusPoints;
+    expect(validateRuntimeState(raw)!.challengeBonusPoints).toBe(DEFAULT_CHALLENGE_BONUS_POINTS);
   });
   it("carries lightweight playedTracks and drops malformed / id-less entries", () => {
     const out = validateRuntimeState(validRuntime({

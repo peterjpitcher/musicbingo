@@ -1,6 +1,5 @@
 import JSZip from "jszip";
 
-import { renderClipboardDocx } from "@/lib/clipboardDocx";
 import { renderRunSheetPdf, makeRunSheetFilename } from "@/lib/pdfRunSheet";
 import { formatEventDateDisplay } from "@/lib/eventDate";
 import { generateCards } from "@/lib/generator";
@@ -13,7 +12,6 @@ import {
 import { fetchEventsForBrand } from "@/lib/eventFeed";
 import type { NormalisedEvent } from "@/lib/eventFeed";
 import {
-  loadDefaultEventLogoPngBytes,
   loadDefaultLogoPngBytes,
   renderCardsPdf,
   renderEventsPage,
@@ -213,10 +211,6 @@ function makeGamePdfFilename(eventDate: string, gameNumber: 1 | 2): string {
   return `music-bingo-game-${gameNumber}-${sanitizeFilenamePart(eventDate, "event")}.pdf`;
 }
 
-function makeClipboardFilename(eventDate: string): string {
-  return `event-clipboard-${sanitizeFilenamePart(eventDate, "event")}.docx`;
-}
-
 async function renderGamePdfWithEvents(params: {
   cards: Card[];
   eventDate: string;
@@ -272,7 +266,7 @@ export async function POST(request: Request) {
     }
     const eventDateDisplay = formatEventDateDisplay(eventDateInput);
 
-    const CARDS_PER_PAGE = 6;
+    const CARDS_PER_PAGE = 3;
     const pagesRaw = asString(form.get("count")).trim() || "40";
     const pages = Number.parseInt(pagesRaw, 10);
     if (!Number.isFinite(pages) || pages < 1 || pages > 200) {
@@ -397,15 +391,11 @@ export async function POST(request: Request) {
       logoRightPngBytes = darkLogo;
       logoLeftPngBytes = lightLogo;
     }
-    if (!logoRightPngBytes) {
-      logoRightPngBytes = await loadDefaultLogoPngBytes({ origin });
-    }
     if (!logoLeftPngBytes) {
-      logoLeftPngBytes = await loadDefaultEventLogoPngBytes({ origin });
+      logoLeftPngBytes = await loadDefaultLogoPngBytes({ origin });
     }
 
-    // Shared input shape for the host run-of-show artefacts (DOCX clipboard +
-    // PDF run sheet) so the two stay consistent.
+    // Shared input shape for the host run sheet.
     const runOfShowInput = {
       eventDateInput,
       game1: {
@@ -426,23 +416,11 @@ export async function POST(request: Request) {
       },
       upcomingEvents,
       normalSongSeconds,
+      brandConfig,
+      logoPngBytes: logoLeftPngBytes,
     };
 
-    // Render the run sheet concurrently with the rest of the bundle, but in an
-    // isolated promise: a run-sheet failure must NOT 500 the whole route. We log
-    // and ship the cards + DOCX regardless (preserves the graceful behaviour of
-    // this endpoint).
-    const runSheetPromise: Promise<Uint8Array | null> = renderRunSheetPdf(runOfShowInput).catch(
-      (err: unknown) => {
-        console.error(
-          "[music-bingo] /api/generate run-sheet render failed (skipping run sheet):",
-          err instanceof Error ? err.stack ?? err.message : err,
-        );
-        return null;
-      },
-    );
-
-    const [pdfGame1Bytes, pdfGame2Bytes, clipboardDocxBytes] = await Promise.all([
+    const [pdfGame1Bytes, pdfGame2Bytes, runSheetBytes] = await Promise.all([
       renderGamePdfWithEvents({
         cards: cardsGame1,
         eventDate: eventDateDisplay,
@@ -461,21 +439,13 @@ export async function POST(request: Request) {
         events: upcomingEvents,
         brandConfig,
       }),
-      renderClipboardDocx(runOfShowInput),
+      renderRunSheetPdf(runOfShowInput),
     ]);
-
-    // Await the isolated run-sheet render (already in flight above).
-    const runSheetBytes = await runSheetPromise;
 
     const zip = new JSZip();
     zip.file(makeGamePdfFilename(eventDateDisplay, 1), pdfGame1Bytes);
     zip.file(makeGamePdfFilename(eventDateDisplay, 2), pdfGame2Bytes);
-    zip.file(makeClipboardFilename(eventDateDisplay), clipboardDocxBytes);
-    // SUPPLEMENT (not replace) the DOCX: hosts may still rely on it. Only add the
-    // run sheet when it rendered successfully.
-    if (runSheetBytes) {
-      zip.file(makeRunSheetFilename(eventDateDisplay), runSheetBytes);
-    }
+    zip.file(makeRunSheetFilename(eventDateDisplay), runSheetBytes);
 
     const zipBytes = await zip.generateAsync({
       type: "uint8array",

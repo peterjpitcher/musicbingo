@@ -3,7 +3,13 @@
 import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/Button";
 import { MAX_SONGS_PER_GAME, makeSongSelectionValue } from "@/lib/gameInput";
-import { CHALLENGE_REVEAL_CONFIG, DEFAULT_REVEAL_CONFIG, type IntroSong } from "@/lib/live/types";
+import {
+  CHALLENGE_REVEAL_CONFIG,
+  DEFAULT_REVEAL_CONFIG,
+  MAX_CHALLENGE_BONUS_POINTS,
+  MIN_CHALLENGE_BONUS_POINTS,
+  type IntroSong,
+} from "@/lib/live/types";
 import { parseSpotifyTrackUrl } from "@/lib/spotifyTrackUrl";
 import type { Song } from "@/lib/types";
 
@@ -33,6 +39,8 @@ type StepGameConfigProps = {
   onSongsText: (v: string) => void;
   challengeSongs: ChallengeEntry[];
   onChallengeSongs: (v: ChallengeEntry[]) => void;
+  challengeBonusPointsInput: string;
+  onChallengeBonusPointsInput: (v: string) => void;
   introUrl: string;
   onIntroUrlChange: (v: string) => void;
   introSongs: IntroSong[];
@@ -78,6 +86,8 @@ export function StepGameConfig({
   onSongsText,
   challengeSongs,
   onChallengeSongs,
+  challengeBonusPointsInput,
+  onChallengeBonusPointsInput,
   introUrl,
   onIntroUrlChange,
   introSongs,
@@ -290,9 +300,22 @@ export function StepGameConfig({
 
       {/* Challenge songs */}
       <div className="fg" style={{ marginBottom: 10 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <label>Challenge songs <span style={{ opacity: 0.5 }}>(play for {Math.floor(CHALLENGE_REVEAL_CONFIG.nextMs / 1000)}s)</span></label>
-          <span className="chal-count">{selectedChallengeCount} / {CHALLENGE_SLOT_COUNT} selected</span>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 18, flexWrap: "wrap" }}>
+          <div>
+            <label>Challenge songs <span style={{ opacity: 0.5 }}>(play for {Math.floor(CHALLENGE_REVEAL_CONFIG.nextMs / 1000)}s)</span></label>
+            <span className="chal-count">{selectedChallengeCount} / {CHALLENGE_SLOT_COUNT} selected</span>
+          </div>
+          <div className="fg" style={{ width: 190, margin: 0 }}>
+            <label>Bonus points</label>
+            <input
+              type="number"
+              min={MIN_CHALLENGE_BONUS_POINTS}
+              max={MAX_CHALLENGE_BONUS_POINTS}
+              step={1}
+              value={challengeBonusPointsInput}
+              onChange={(e) => onChallengeBonusPointsInput(e.target.value)}
+            />
+          </div>
         </div>
       </div>
 
