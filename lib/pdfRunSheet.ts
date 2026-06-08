@@ -524,11 +524,17 @@ function scriptBlock(doc: Doc, cue: string, line: string): void {
 }
 
 function callAndResponse(doc: Doc): void {
-  const h = 36;
-  doc.ensure(h + 8);
+  const leftW = 47 * MM;
+  const rightX = MARGIN_X + leftW + 8;
+  const rightText =
+    'Call-and-response: when you say "Cards down", the room says "Eyes up". Use it to pull focus before every Party Mode moment.';
+  const rightLines = wrapLines(rightText, doc.fontFor(false), 8.3, PAGE_W - MARGIN_X - rightX - 10);
+  const h = Math.max(42, rightLines.length * 10 + 22);
+  doc.ensure(h + 12);
+  const topY = doc.y;
   doc.page.drawRectangle({
     x: MARGIN_X,
-    y: doc.y - h + 8,
+    y: topY - h,
     width: CONTENT_W,
     height: h,
     borderColor: BLACK,
@@ -536,24 +542,28 @@ function callAndResponse(doc: Doc): void {
   });
   doc.page.drawText("CARDS DOWN?", {
     x: MARGIN_X + 10,
-    y: doc.y - 8,
+    y: topY - 17,
     size: 15,
     font: doc.fontFor(true),
     color: BLACK,
   });
   doc.page.drawText("EYES UP!", {
     x: MARGIN_X + 10,
-    y: doc.y - 24,
+    y: topY - 34,
     size: 15,
     font: doc.fontFor(true),
     color: BLACK,
   });
-  paragraph(
-    doc,
-    'Call-and-response: when you say "Cards down", the room says "Eyes up". Use it to pull focus before every Party Mode moment.',
-    { indent: 52 * MM, size: 8.3 },
-  );
-  doc.y -= 3;
+  rightLines.forEach((line, index) => {
+    doc.page.drawText(line, {
+      x: rightX,
+      y: topY - 16 - index * 10,
+      size: 8.3,
+      font: doc.fontFor(false),
+      color: BODY,
+    });
+  });
+  doc.y = topY - h - 28;
 }
 
 function drawScoreCard(doc: Doc, x: number, y: number, w: number, title: string, rows: Array<[string, string]>): void {
@@ -635,6 +645,7 @@ export async function renderRunSheetPdf(params: RenderRunSheetPdfParams): Promis
   bullet(doc, "Run two clear modes: PLAY MODE for listening and marking cards, and PARTY MODE for card-down moments.");
   bullet(doc, "The aim is not quiet bingo - it is a high-energy, interactive music night where the room feels involved from start to finish.");
 
+  doc.newPage();
   numberedHeading(doc, 2, "Opening remarks", "Say at the start");
   scriptBlock(
     doc,

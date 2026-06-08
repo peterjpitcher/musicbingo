@@ -96,6 +96,7 @@ describe("validateRuntimeState — screen/content/variant fields", () => {
         total: 27,
         createdAtMs: 12345,
       },
+      winnersRevealCount: 2.6,
     }));
     expect(out!.teamScores).toEqual([
       { id: "team-1", name: "Disco Ducks", score: 12 },
@@ -110,6 +111,12 @@ describe("validateRuntimeState — screen/content/variant fields", () => {
       total: 27,
       createdAtMs: 12345,
     });
+    expect(out!.winnersRevealCount).toBe(3);
+  });
+  it("defaults and bounds winners reveal count", () => {
+    expect(validateRuntimeState(validRuntime())!.winnersRevealCount).toBe(0);
+    expect(validateRuntimeState(validRuntime({ winnersRevealCount: -4 }))!.winnersRevealCount).toBe(0);
+    expect(validateRuntimeState(validRuntime({ winnersRevealCount: 9999 }))!.winnersRevealCount).toBe(500);
   });
   it("carries lightweight playedTracks and drops malformed / id-less entries", () => {
     const out = validateRuntimeState(validRuntime({

@@ -247,6 +247,8 @@ export type LiveRuntimeState = {
   teamScores: LiveTeamScore[];
   /** Latest points-award flash shown on guest/TV screens. */
   scoreToast: LiveScoreToast | null;
+  /** Number of final leaderboard rows revealed on the Winners screen. */
+  winnersRevealCount: number;
   /** Track ID stored before going to break, so resume can restart it from the beginning. */
   preBreakTrackId: string | null;
   /** Playlist ID stored before going to break, so resume can restart in the right context. */
@@ -342,6 +344,7 @@ export function makeEmptyRuntimeState(sessionId: string): LiveRuntimeState {
     challengeBonusPoints: DEFAULT_CHALLENGE_BONUS_POINTS,
     teamScores: [],
     scoreToast: null,
+    winnersRevealCount: 0,
     preBreakTrackId: null,
     preBreakPlaylistId: null,
     extensionMs: 0,

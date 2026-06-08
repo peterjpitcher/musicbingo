@@ -92,6 +92,10 @@ export function Winners(props: ScreenProps): React.ReactElement {
   const spoonIndex = scoredTeams.length > 2 ? 1 : scoredTeams.length > 1 ? 0 : -1;
   const winPrize = get("winPrize", "£25 bar voucher");
   const spoonPrize = get("spoonPrize", "Bottle of house wine");
+  const revealCount = Math.max(0, runtime?.winnersRevealCount ?? 0);
+  const visibleScoredTeams = scoredTeams.slice(0, Math.min(revealCount, scoredTeams.length));
+  const showManualSpoon = revealCount >= 1;
+  const showManualWinner = revealCount >= 2;
 
   return (
     <div
@@ -133,7 +137,7 @@ export function Winners(props: ScreenProps): React.ReactElement {
             marginRight: "auto",
           }}
         >
-          {scoredTeams.map((team, index) => {
+          {visibleScoredTeams.map((team, index) => {
             const rank = scoredTeams.length - index;
             const isWinner = index === winnerIndex;
             const isSpoon = index === spoonIndex;
@@ -219,24 +223,28 @@ export function Winners(props: ScreenProps): React.ReactElement {
             marginTop: 20,
           }}
         >
-          <Card
-            rank="🏆"
-            place="Champions · 1st Place"
-            teamField="winTeam"
-            teamPH=""
-            prizeField="winPrize"
-            prizePH="£25 bar voucher"
-            hero
-          />
-          <Card
-            rank="🥄"
-            place="Wooden Spoon · 2nd from Last"
-            teamField="spoonTeam"
-            teamPH=""
-            prizeField="spoonPrize"
-            prizePH="Bottle of house wine"
-            hero={false}
-          />
+          {showManualSpoon && (
+            <Card
+              rank="🥄"
+              place="Wooden Spoon · 2nd from Last"
+              teamField="spoonTeam"
+              teamPH=""
+              prizeField="spoonPrize"
+              prizePH="Bottle of house wine"
+              hero={false}
+            />
+          )}
+          {showManualWinner && (
+            <Card
+              rank="🏆"
+              place="Champions · 1st Place"
+              teamField="winTeam"
+              teamPH=""
+              prizeField="winPrize"
+              prizePH="£25 bar voucher"
+              hero
+            />
+          )}
         </div>
       )}
       <Chrome

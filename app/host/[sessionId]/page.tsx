@@ -134,6 +134,15 @@ function makeScoreId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
 }
 
+function getWinnersRevealTotal(runtime: LiveRuntimeState): number {
+  const scoredTeamCount = runtime.teamScores.filter((team) => team.name.trim()).length;
+  return scoredTeamCount > 0 ? scoredTeamCount : 2;
+}
+
+function getWinnersRevealCount(runtime: LiveRuntimeState): number {
+  return Math.min(getWinnersRevealTotal(runtime), Math.max(0, runtime.winnersRevealCount));
+}
+
 function normalizeWarnings(input: unknown): string[] {
   if (!Array.isArray(input)) return [];
   return input
@@ -997,6 +1006,7 @@ export default function HostSessionControllerPage() {
       isChallengeSong: false,
       challengeType: null,
       challengeBonusPoints: DEFAULT_CHALLENGE_BONUS_POINTS,
+      winnersRevealCount: screenId === "winner-entry" || screenId === "winners" ? 0 : prev.winnersRevealCount,
       advanceTriggeredForTrackId: null,
       extensionMs: 0,
       freePlay: false,
@@ -1204,6 +1214,24 @@ export default function HostSessionControllerPage() {
 
   function stepScreen(delta: 1 | -1): void {
     const currentId = normalizeScreenId(runtime.screenId, deriveScreenId(runtime));
+    if (currentId === "winners") {
+      const visibleCount = getWinnersRevealCount(runtimeRef.current);
+      const revealTotal = getWinnersRevealTotal(runtimeRef.current);
+      if (delta === 1 && visibleCount < revealTotal) {
+        commitRuntime((prev) => ({
+          ...prev,
+          winnersRevealCount: Math.min(getWinnersRevealTotal(prev), getWinnersRevealCount(prev) + 1),
+        }));
+        return;
+      }
+      if (delta === -1 && visibleCount > 0) {
+        commitRuntime((prev) => ({
+          ...prev,
+          winnersRevealCount: Math.max(0, getWinnersRevealCount(prev) - 1),
+        }));
+        return;
+      }
+    }
     const currentIdx = SHOW_SCREENS.findIndex((s) => s.id === currentId);
     const baseIdx = currentIdx >= 0 ? currentIdx : 0;
     const nextIdx = Math.max(0, Math.min(SHOW_SCREENS.length - 1, baseIdx + delta));
@@ -1384,6 +1412,11 @@ export default function HostSessionControllerPage() {
   const nextScreenBlockedTitle = currentScreenId === "winner-entry"
     ? "Add both winner team names before revealing the winners screen."
     : "Add both winner team names before continuing.";
+  const winnersRevealTotal = currentScreenId === "winners" ? getWinnersRevealTotal(runtime) : 0;
+  const winnersVisibleCount = currentScreenId === "winners" ? getWinnersRevealCount(runtime) : 0;
+  const nextWinnerRank = winnersRevealTotal > winnersVisibleCount
+    ? winnersRevealTotal - winnersVisibleCount
+    : null;
   const claimAvailable =
     runtime.mode === "running" &&
     runtime.activeGameNumber != null &&
@@ -1560,7 +1593,9 @@ export default function HostSessionControllerPage() {
                     onClick={() => stepScreen(-1)}
                     disabled={SHOW_SCREENS.findIndex((s) => s.id === currentScreenId) === 0}
                   >
-                    ‹ Previous Screen
+                    {currentScreenId === "winners" && winnersVisibleCount > 0
+                      ? "‹ Hide Last Reveal"
+                      : "‹ Previous Screen"}
                   </button>
                   <button
                     type="button"
@@ -1582,6 +1617,8 @@ export default function HostSessionControllerPage() {
                       ? currentScreenId === "winner-entry"
                         ? "Add Winners To Reveal"
                         : "Add Winners To Continue"
+                      : nextWinnerRank !== null
+                        ? `Reveal #${nextWinnerRank} Place`
                       : "Next Screen ›"}
                   </button>
                 </div>
@@ -1703,6 +1740,7 @@ export default function HostSessionControllerPage() {
                     challengeBonusPoints: DEFAULT_CHALLENGE_BONUS_POINTS,
                     teamScores: [],
                     scoreToast: null,
+                    winnersRevealCount: 0,
                     isIntroSong: false,
                     introPlayed: false,
                     extensionMs: 0,

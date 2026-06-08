@@ -244,6 +244,10 @@ export function validateRuntimeState(input: unknown): LiveRuntimeState | null {
       .filter((entry): entry is LiveTeamScore => entry !== null)
     : [];
   const scoreToast = sanitizeScoreToast(input.scoreToast);
+  const winnersRevealCount = Math.min(
+    500,
+    Math.max(0, Math.round(asNumber(input.winnersRevealCount) ?? 0))
+  );
 
   // Only carry an explicit screenId. Absence is meaningful: it signals the
   // render layer to derive a screen from the runtime (deriveScreenId).
@@ -288,6 +292,7 @@ export function validateRuntimeState(input: unknown): LiveRuntimeState | null {
     challengeBonusPoints: sanitizeChallengeBonusPoints(asNumber(input.challengeBonusPoints) ?? DEFAULT_CHALLENGE_BONUS_POINTS),
     teamScores,
     scoreToast,
+    winnersRevealCount,
     preBreakTrackId:
       typeof input.preBreakTrackId === "string" && input.preBreakTrackId.trim()
         ? input.preBreakTrackId.trim()
