@@ -178,21 +178,41 @@ function getEventName(event: ManagementApiEvent): string | null {
 }
 
 function getCanonicalEventUrlBySlug(event: ManagementApiEvent, publicEventsBaseUrl: string): string | null {
+  const publicBaseUrl = normalizeHttpOrigin(publicEventsBaseUrl);
+  if (!publicBaseUrl) return null;
+
   const slugRaw = getString(event.slug);
   if (!slugRaw) return null;
   const slug = slugRaw.replace(/^\/+|\/+$/g, "");
   if (!slug) return null;
-  return resolveHttpUrl(`/events/${slug}`, publicEventsBaseUrl);
+  return resolveHttpUrl(`/events/${slug}`, publicBaseUrl);
+}
+
+function isSameOrigin(url: string, origin: string | null): boolean {
+  if (!origin) return false;
+  try {
+    return new URL(url).origin === origin;
+  } catch {
+    return false;
+  }
+}
+
+function resolveCustomerUrl(value: string, publicBaseUrl: string, managementOrigin: string | null): string | null {
+  const resolved = resolveHttpUrl(value, publicBaseUrl);
+  if (!resolved || isSameOrigin(resolved, managementOrigin)) return null;
+  return resolved;
 }
 
 function getEventUrl(event: ManagementApiEvent, baseUrl: string, publicEventsBaseUrl: string): string | null {
+  const publicBaseUrl = normalizeHttpOrigin(publicEventsBaseUrl) ?? "https://www.the-anchor.pub";
+  const managementOrigin = normalizeHttpOrigin(baseUrl);
   const candidates = [
     // Prefer canonical event URLs first (customer-facing event pages).
-    getString(event.eventUrl),
-    getString(event.event_url),
     getString(event.publicUrl),
     getString(event.public_url),
-    getCanonicalEventUrlBySlug(event, publicEventsBaseUrl),
+    getCanonicalEventUrlBySlug(event, publicBaseUrl),
+    getString(event.eventUrl),
+    getString(event.event_url),
     getString(event.url),
     // Legacy and fallback fields.
     getString(event.qrUrl),
@@ -202,7 +222,7 @@ function getEventUrl(event: ManagementApiEvent, baseUrl: string, publicEventsBas
   ].filter((v): v is string => !!v);
 
   for (const url of candidates) {
-    const resolved = resolveHttpUrl(url, baseUrl);
+    const resolved = resolveCustomerUrl(url, publicBaseUrl, managementOrigin);
     if (resolved) return resolved;
   }
 
@@ -212,13 +232,13 @@ function getEventUrl(event: ManagementApiEvent, baseUrl: string, publicEventsBas
       if (!offer || typeof offer !== "object") continue;
       const offerUrl = getString((offer as any).url) ?? getString((offer as any).bookingUrl) ?? getString((offer as any).booking_url);
       if (!offerUrl) continue;
-      const resolved = resolveHttpUrl(offerUrl, baseUrl);
+      const resolved = resolveCustomerUrl(offerUrl, publicBaseUrl, managementOrigin);
       if (resolved) return resolved;
     }
   } else if (offers && typeof offers === "object") {
     const offerUrl = getString((offers as any).url) ?? getString((offers as any).bookingUrl) ?? getString((offers as any).booking_url);
     if (offerUrl) {
-      const resolved = resolveHttpUrl(offerUrl, baseUrl);
+      const resolved = resolveCustomerUrl(offerUrl, publicBaseUrl, managementOrigin);
       if (resolved) return resolved;
     }
   }
@@ -226,7 +246,7 @@ function getEventUrl(event: ManagementApiEvent, baseUrl: string, publicEventsBas
   // Booking URL is treated as a final fallback rather than the primary destination.
   const bookingCandidates = [getString(event.bookingUrl), getString(event.booking_url)].filter((v): v is string => !!v);
   for (const url of bookingCandidates) {
-    const resolved = resolveHttpUrl(url, baseUrl);
+    const resolved = resolveCustomerUrl(url, publicBaseUrl, managementOrigin);
     if (resolved) return resolved;
   }
 

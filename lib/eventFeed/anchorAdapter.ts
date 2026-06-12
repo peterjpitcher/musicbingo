@@ -11,7 +11,7 @@ import type { EventFeedAdapter, EventFeedConfig, NormalisedEvent } from "./types
 // Internal types
 // ---------------------------------------------------------------------------
 
-type ManagementApiEvent = {
+export type ManagementApiEvent = {
   id?: unknown;
   slug?: unknown;
   eventUrl?: unknown;
@@ -58,6 +58,19 @@ function getString(v: unknown): string | null {
   return typeof v === "string" && v.trim() ? v.trim() : null;
 }
 
+function normalizeHttpOrigin(urlish: string): string | null {
+  const trimmed = urlish.trim().replace(/\/+$/, "");
+  if (!trimmed) return null;
+  const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  try {
+    const url = new URL(withScheme);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+    return url.origin;
+  } catch {
+    return null;
+  }
+}
+
 function resolveHttpUrl(value: string, baseUrl: string): string | null {
   let cleaned = value.trim();
   if (!cleaned) return null;
@@ -100,24 +113,46 @@ function getCanonicalEventUrlBySlug(
   event: ManagementApiEvent,
   websiteUrl: string,
 ): string | null {
+  const publicBaseUrl = normalizeHttpOrigin(websiteUrl);
+  if (!publicBaseUrl) return null;
+
   const slugRaw = getString(event.slug);
   if (!slugRaw) return null;
   const slug = slugRaw.replace(/^\/+|\/+$/g, "");
   if (!slug) return null;
-  return resolveHttpUrl(`/events/${slug}`, websiteUrl);
+  return resolveHttpUrl(`/events/${slug}`, publicBaseUrl);
 }
 
-function getEventUrl(
-  event: ManagementApiEvent,
-  baseUrl: string,
-  websiteUrl: string,
-): string | null {
+function isSameOrigin(url: string, origin: string | null): boolean {
+  if (!origin) return false;
+  try {
+    return new URL(url).origin === origin;
+  } catch {
+    return false;
+  }
+}
+
+function resolveCustomerUrl(value: string, publicBaseUrl: string, managementOrigin: string | null): string | null {
+  const resolved = resolveHttpUrl(value, publicBaseUrl);
+  if (!resolved || isSameOrigin(resolved, managementOrigin)) return null;
+  return resolved;
+}
+
+export function resolveAnchorEventUrl(params: {
+  event: ManagementApiEvent;
+  baseUrl: string;
+  websiteUrl: string;
+}): string | null {
+  const { event, baseUrl, websiteUrl } = params;
+  const publicBaseUrl = normalizeHttpOrigin(websiteUrl) ?? "https://www.the-anchor.pub";
+  const managementOrigin = normalizeHttpOrigin(baseUrl);
+
   const candidates = [
-    getString(event.eventUrl),
-    getString(event.event_url),
     getString(event.publicUrl),
     getString(event.public_url),
-    getCanonicalEventUrlBySlug(event, websiteUrl),
+    getCanonicalEventUrlBySlug(event, publicBaseUrl),
+    getString(event.eventUrl),
+    getString(event.event_url),
     getString(event.url),
     getString(event.qrUrl),
     getString(event.qr_url),
@@ -126,7 +161,7 @@ function getEventUrl(
   ].filter((v): v is string => !!v);
 
   for (const url of candidates) {
-    const resolved = resolveHttpUrl(url, baseUrl);
+    const resolved = resolveCustomerUrl(url, publicBaseUrl, managementOrigin);
     if (resolved) return resolved;
   }
 
@@ -139,7 +174,7 @@ function getEventUrl(
         getString((offer as Record<string, unknown>).bookingUrl) ??
         getString((offer as Record<string, unknown>).booking_url);
       if (!offerUrl) continue;
-      const resolved = resolveHttpUrl(offerUrl, baseUrl);
+      const resolved = resolveCustomerUrl(offerUrl, publicBaseUrl, managementOrigin);
       if (resolved) return resolved;
     }
   } else if (offers && typeof offers === "object") {
@@ -148,7 +183,7 @@ function getEventUrl(
       getString((offers as Record<string, unknown>).bookingUrl) ??
       getString((offers as Record<string, unknown>).booking_url);
     if (offerUrl) {
-      const resolved = resolveHttpUrl(offerUrl, baseUrl);
+      const resolved = resolveCustomerUrl(offerUrl, publicBaseUrl, managementOrigin);
       if (resolved) return resolved;
     }
   }
@@ -158,11 +193,19 @@ function getEventUrl(
     getString(event.booking_url),
   ].filter((v): v is string => !!v);
   for (const url of bookingCandidates) {
-    const resolved = resolveHttpUrl(url, baseUrl);
+    const resolved = resolveCustomerUrl(url, publicBaseUrl, managementOrigin);
     if (resolved) return resolved;
   }
 
   return null;
+}
+
+function getEventUrl(
+  event: ManagementApiEvent,
+  baseUrl: string,
+  websiteUrl: string,
+): string | null {
+  return resolveAnchorEventUrl({ event, baseUrl, websiteUrl });
 }
 
 function formatTime12h(date: Date): string {
