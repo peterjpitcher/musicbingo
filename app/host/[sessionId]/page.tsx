@@ -1421,10 +1421,15 @@ export default function HostSessionControllerPage() {
   const isWelcomeSongCurrent = runtime.currentTrack?.trackId === welcomeSong.trackId;
   const isWelcomeSongPlaying = Boolean(isWelcomeSongCurrent && runtime.currentTrack?.isPlaying);
   const panelTrack = isWelcomeScreen && !isWelcomeSongCurrent
-    ? { title: welcomeSongTitle || DEFAULT_WELCOME_SONG.title, artist: welcomeSongArtist || DEFAULT_WELCOME_SONG.artist }
+    ? {
+      title: welcomeSongTitle || DEFAULT_WELCOME_SONG.title,
+      artist: welcomeSongArtist || DEFAULT_WELCOME_SONG.artist,
+      albumImageUrl: null,
+    }
     : {
       title: runtime.currentTrack?.title ?? "—",
       artist: runtime.currentTrack?.artist ?? "",
+      albumImageUrl: runtime.currentTrack?.albumImageUrl ?? null,
     };
   const panelPlaying = isWelcomeScreen
     ? isWelcomeSongPlaying

@@ -1,8 +1,10 @@
 'use client';
 
+import { useState } from 'react';
+
 /** Prop types for the Now Playing panel */
 export interface NowPlayingPanelProps {
-  track: { title: string; artist: string };
+  track: { title: string; artist: string; albumImageUrl?: string | null };
   playing: boolean;
   /** Elapsed position in the current track, in milliseconds */
   progressMs: number;
@@ -45,6 +47,7 @@ export function NowPlayingPanel({
   onSkip,
   onRestart,
 }: NowPlayingPanelProps) {
+  const [failedArtUrl, setFailedArtUrl] = useState<string | null>(null);
   // Total track window in ms; challenges are capped at 90s regardless of timing.song
   const nextMs = (isChallenge ? 90 : timing.song) * 1000 + extendedMs;
   // Progress bar percentage, clamped to 100
@@ -59,6 +62,9 @@ export function NowPlayingPanel({
     ['Artist', timing.artist],
     ['Next', isChallenge ? 90 : timing.song],
   ];
+  const albumImageUrl = track.albumImageUrl && track.albumImageUrl !== failedArtUrl
+    ? track.albumImageUrl
+    : null;
 
   return (
     <div className="panel">
@@ -68,7 +74,19 @@ export function NowPlayingPanel({
 
       {/* Track identity row */}
       <div className="np">
-        <div className="np-art">🎵</div>
+        <div className="np-art">
+          {albumImageUrl ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              className="np-art-img"
+              src={albumImageUrl}
+              alt={`Album artwork for ${track.title}`}
+              onError={() => setFailedArtUrl(albumImageUrl)}
+            />
+          ) : (
+            <span aria-hidden="true">🎵</span>
+          )}
+        </div>
         <div style={{ minWidth: 0 }}>
           <div className="np-title">{track.title}</div>
           <div className="np-artist">{track.artist}</div>
