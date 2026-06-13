@@ -1,0 +1,2 @@
+-- Placeholder for a migration version already applied on the linked Supabase project.
+-- The equivalent schema is covered by 20260511130000_add_event_feed_venue_id.sql.

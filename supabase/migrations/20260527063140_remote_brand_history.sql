@@ -1,0 +1,2 @@
+-- Placeholder for a migration version already applied on the linked Supabase project.
+-- Later local brand schema changes are covered by 20260529120000_add_brand_fonts_and_event_logo.sql.
