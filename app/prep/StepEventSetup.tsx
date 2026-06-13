@@ -105,7 +105,7 @@ export function StepEventSetup({
             value={selectedBrandId}
             onChange={onSelectedBrandId}
           />
-          <span className="help">Brand applied to PDFs, guest screens, and host theming</span>
+          <span className="help">Brand applied to PDFs, display screens, and host theming</span>
         </div>
         <div className="fg span2">
           <label>Break playlist URL <span style={{ opacity: 0.5 }}>(optional)</span></label>

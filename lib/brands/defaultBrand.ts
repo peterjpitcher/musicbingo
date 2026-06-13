@@ -1,7 +1,7 @@
 import type { BrandConfig } from "@/lib/brands/types";
 
 /**
- * Fallback brand used by the guest TV before the session's real brand has
+ * Fallback brand used by the display TV before the session's real brand has
  * loaded (and when a session has no brand assigned). Mirrors the Anchor
  * defaults in `app/globals.css :root`, so the TV is correctly themed
  * immediately. Once the real brand arrives it replaces this.

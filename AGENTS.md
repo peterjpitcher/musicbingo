@@ -9,7 +9,7 @@ This file provides project-specific guidance. See the workspace-level `AGENTS.md
 - **Database**: Supabase (live sessions, persistent storage)
 - **Key integrations**: Spotify Web API, Anchor Management API, PDF generation (pdf-lib), QR codes
 - **Size**: ~23 files in lib/, 10+ routes, custom Python module
-- **Novel aspects**: Dual test suite (JS + Python), localStorage-to-Supabase live session sync, multi-device gameplay
+- **Novel aspects**: Dual test suite (JS + Python), Supabase-backed live session sync, private display gameplay
 
 ## Commands
 
@@ -29,14 +29,14 @@ npm run verify       # Full pipeline: lint → typecheck → test:py → test:e2
 **Routes & Pages**
 - `/` — Home/landing
 - `/host` — Game host view (prep + gameplay)
-- `/guest/[sessionId]` — Guest player view
-- `/api/sessions/*` — Live session management (Supabase Realtime)
+- `/display/[sessionId]` — Private TV display view
+- `/api/sessions/*` — Live session management
 - `/api/spotify/*` — Spotify OAuth + playlist creation
 - `/api/generate/*` — PDF & DOCX export
 
 **Key Patterns**
-- **Live Sessions**: WebSocket-like via Supabase Realtime on `live_sessions` table; clients subscribe to session channel
-- **Game State**: Hosted in localStorage (client) synced to Supabase; reveals (clues/answers) computed on-the-fly
+- **Live Sessions**: Host writes runtime snapshots to Supabase; display polls a private snapshot endpoint
+- **Game State**: Supabase is the source of truth; localStorage is draft/cache/retry only
 - **PDF Generation**: Custom lib/pdf.ts using pdf-lib + Sharp for image rendering
 - **Spotify Auth**: OAuth 2.0 callback → token stored server-side, used to create/populate playlists
 - **Custom Scripts**:
@@ -48,16 +48,16 @@ npm run verify       # Full pipeline: lint → typecheck → test:py → test:e2
 | Path | Purpose |
 |------|---------|
 | `lib/live/types.ts` | Session, game, card, reveal types |
-| `lib/live/channel.ts` | Supabase Realtime subscription logic |
+| `lib/live/channel.ts` | Same-device BroadcastChannel helper |
 | `lib/live/sessionRepo.ts` | CRUD for `live_sessions` table |
-| `lib/live/storage.ts` | localStorage ↔ Session object conversion |
+| `lib/live/storage.ts` | localStorage draft/cache helpers |
 | `lib/live/reveal.ts` | Clue/answer reveal computation |
 | `lib/generator.ts` | Create bingo cards from tracks |
 | `lib/pdf.ts` | PDF export (pdf-lib + Sharp) |
 | `lib/spotifyWeb.ts` | Spotify OAuth & web API calls |
 | `lib/spotifyLive.ts` | Live Spotify player control |
 | `lib/supabase.ts` | Supabase client init (service-role for migrations) |
-| `components/` | Game UI (host, guest, card display) |
+| `components/` | Game UI (host, private display, card display) |
 | `app/api/sessions/` | Session CRUD endpoints |
 | `app/api/spotify/` | OAuth callback, playlist creation |
 | `app/api/generate/` | PDF/DOCX generation |
@@ -83,16 +83,11 @@ MANAGEMENT_API_TOKEN=anch_your_api_key_here
 
 ## Project-Specific Rules / Gotchas
 
-### localStorage in Node/SSR
-Next.js doesn't provide localStorage natively on the server. The project works around this:
-- `next-with-localstorage.mjs` monkeypatches `globalThis.localStorage` during builds and server runs
-- All DB writes go through `lib/live/sessionRepo.ts` (Supabase client)
-- Client components hydrate from session data passed as props
-
-### Supabase Realtime Subscriptions
-- Live sessions use `supabase.channel()` for real-time updates
-- Clients subscribe on mount; unsubscribe on unmount to avoid connection leaks
-- Message format defined in `lib/live/types.ts` — stay consistent
+### Runtime Sync
+- Supabase is the source of truth for saved sessions and live runtime snapshots.
+- Host runtime writes go through `lib/live/sessionRepo.ts`.
+- `lib/live/runtimeSync.ts` keeps the newest failed runtime write and retries it when the connection returns.
+- `localStorage` is for drafts, same-device cache, and retry state only.
 
 ### Reveal Logic
 - `lib/live/reveal.ts` computes clues on-the-fly from card + reveal index

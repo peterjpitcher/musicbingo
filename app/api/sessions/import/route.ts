@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { hasAdminAccess } from "@/lib/live/access";
 import { upsertSession } from "@/lib/live/sessionRepo";
 import { validateLiveSession } from "@/lib/live/validate";
 
@@ -7,6 +8,9 @@ export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
   try {
+    if (!hasAdminAccess(request)) {
+      return NextResponse.json({ error: "Admin access required." }, { status: 401 });
+    }
     const text = await request.text();
     let parsed: unknown;
     try {

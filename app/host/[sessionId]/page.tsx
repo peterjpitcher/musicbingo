@@ -43,6 +43,12 @@ import {
   updateControlHeartbeat,
   writeRuntimeState,
 } from "@/lib/live/storage";
+import {
+  clearQueuedRuntime,
+  pushRuntimeState,
+  queueRuntime,
+  readQueuedRuntime,
+} from "@/lib/live/runtimeSync";
 import { matchChallengeSong } from "@/lib/live/challenge";
 import {
   CHALLENGE_REVEAL_CONFIG,
@@ -186,15 +192,13 @@ export default function HostSessionControllerPage() {
   const pollAbortRef = useRef<AbortController | null>(null);
   // Circuit-breaker: stop polling after a 401 until the user reconnects Spotify.
   const spotifyDisconnectedRef = useRef<boolean>(false);
-  // Throttle for cross-device runtime sync: push at most once per 2s.
-  const lastRuntimePushMsRef = useRef<number>(0);
-
   const [session, setSession] = useState<LiveSessionV1 | null>(null);
   const [runtime, setRuntime] = useState<LiveRuntimeState>(
     makeEmptyRuntimeState(sessionId || "pending")
   );
   const [notice, setNotice] = useState<string>("");
   const [noticeVariant, setNoticeVariant] = useState<"success" | "warning">("success");
+  const [runtimeSyncStatus, setRuntimeSyncStatus] = useState<"synced" | "syncing" | "offline">("synced");
   const pollFailCountRef = useRef<number>(0);
   const [error, setError] = useState<string>("");
   const [isController, setIsController] = useState<boolean>(false);
@@ -218,6 +222,7 @@ export default function HostSessionControllerPage() {
   const [titleRevealSecondsInput, setTitleRevealSecondsInput] = useState<string>("");
   const [artistRevealSecondsInput, setArtistRevealSecondsInput] = useState<string>("");
   const [awardModalOpen, setAwardModalOpen] = useState<boolean>(false);
+  const [displayOpening, setDisplayOpening] = useState<boolean>(false);
   const [_timingSaving, setTimingSaving] = useState<boolean>(false);
   // Resolved Spotify track IDs for all challenge songs of the active game.
   const challengeTrackIdsRef = useRef<Set<string>>(new Set());
@@ -232,7 +237,7 @@ export default function HostSessionControllerPage() {
   const [previewScale, setPreviewScale] = useState<number>(0.27);
   const tvFrameRef = useRef<HTMLDivElement | null>(null);
 
-  // Load brand from the session API (mirrors guest page pattern).
+  // Load brand from the session API.
   useEffect(() => {
     if (!sessionId) return;
     let cancelled = false;
@@ -357,19 +362,44 @@ export default function HostSessionControllerPage() {
       });
   }, [runtime.activeGameNumber, session, playlistRetryCount]);
 
-  // Push runtime state to the server so guests on other devices can poll it.
-  // Leading throttle: fires immediately, then blocks for 2s.
+  // Push runtime state to the server for the private display.
+  // If the network fails, keep only the newest runtime snapshot and retry it.
   useEffect(() => {
     if (!sessionId || !isController) return;
-    const now = Date.now();
-    if (now - lastRuntimePushMsRef.current < 2_000) return;
-    lastRuntimePushMsRef.current = now;
-    void fetch(`/api/sessions/${encodeURIComponent(sessionId)}/runtime`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(runtime),
-    }).catch(() => {}); // best-effort: cross-device sync, not critical path
+    setRuntimeSyncStatus("syncing");
+    void pushRuntimeState(sessionId, runtime).then((ok) => {
+      if (ok) {
+        clearQueuedRuntime(sessionId);
+        setRuntimeSyncStatus("synced");
+        return;
+      }
+      queueRuntime(sessionId, runtime);
+      setRuntimeSyncStatus("offline");
+    });
   }, [runtime, sessionId, isController]);
+
+  useEffect(() => {
+    if (!sessionId || !isController) return;
+    const flushQueued = async () => {
+      const queued = readQueuedRuntime(sessionId);
+      if (!queued) return;
+      setRuntimeSyncStatus("syncing");
+      const ok = await pushRuntimeState(sessionId, queued);
+      if (ok) {
+        clearQueuedRuntime(sessionId);
+        setRuntimeSyncStatus("synced");
+      } else {
+        setRuntimeSyncStatus("offline");
+      }
+    };
+    void flushQueued();
+    window.addEventListener("online", flushQueued);
+    const id = window.setInterval(() => void flushQueued(), 5_000);
+    return () => {
+      window.removeEventListener("online", flushQueued);
+      window.clearInterval(id);
+    };
+  }, [sessionId, isController]);
 
   const persistAndBroadcastRuntime = useCallback(
     (next: LiveRuntimeState) => {
@@ -414,6 +444,24 @@ export default function HostSessionControllerPage() {
         ],
       };
     });
+  }
+
+  async function openPrivateDisplay(): Promise<void> {
+    if (!sessionId) return;
+    setDisplayOpening(true);
+    try {
+      const res = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/links`, {
+        cache: "no-store",
+      });
+      if (!res.ok) throw new Error("Could not create private display link.");
+      const data = await res.json() as { displayUrl?: string };
+      if (!data.displayUrl) throw new Error("Private display link was missing.");
+      window.open(data.displayUrl, "music_bingo_display");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not open private display.");
+    } finally {
+      setDisplayOpening(false);
+    }
   }
 
   function removeTeamScore(teamId: string): void {
@@ -974,7 +1022,7 @@ export default function HostSessionControllerPage() {
         void sendCommand("play_break", { playlistId: session.breakPlaylistId });
       } else {
         // No break playlist configured — pause Spotify so the game doesn't
-        // keep advancing silently while the guest display shows the break screen.
+        // keep advancing silently while the display shows the break screen.
         void sendCommand("pause");
       }
     }
@@ -1452,7 +1500,7 @@ export default function HostSessionControllerPage() {
                   ? "Manual Mode"
                   : "Spotify Connected"}
               </span>
-              {/* Open guest screen */}
+              {/* Award points */}
               <button
                 type="button"
                 className="hbtn"
@@ -1462,13 +1510,14 @@ export default function HostSessionControllerPage() {
               >
                 Award Points
               </button>
-              {/* Open guest screen */}
+              {/* Open private display */}
               <button
                 type="button"
                 className="hbtn"
-                onClick={() => window.open(`/guest/${sessionId}`)}
+                onClick={() => void openPrivateDisplay()}
+                disabled={displayOpening}
               >
-                Open Guest Screen ↗
+                {displayOpening ? "Opening..." : "Open Display"}
               </button>
               {/* Back to sessions */}
               <Link href="/host" className="hbtn">
@@ -1533,6 +1582,15 @@ export default function HostSessionControllerPage() {
                 </div>
               </>
             )}
+            {runtimeSyncStatus === "offline" ? (
+              <div className="banner banner--warn" style={{ marginBottom: 0 }}>
+                <span className="bi">!</span>
+                <div className="bx">
+                  <b>Display sync is retrying</b>
+                  <p>The host keeps running. The display will catch up when the connection improves.</p>
+                </div>
+              </div>
+            ) : null}
             {notice ? (
               <div className={`banner ${noticeVariant === "warning" ? "banner--warn" : "banner--info"}`} style={{ marginBottom: 0 }}>
                 <span className="bi">{noticeVariant === "warning" ? "⚠" : "✓"}</span>

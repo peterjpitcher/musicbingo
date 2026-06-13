@@ -6,7 +6,7 @@ import type { ScreenId } from "@/lib/live/runOfShow";
  * + `isIntroSong`) to a run-of-show screen. Used as a fallback when
  * `runtime.screenId` is not set — e.g. before the Phase 3 host explicitly
  * drives the screen. When the host sets `screenId`, that takes precedence
- * (see `app/guest/[sessionId]/page.tsx`). This keeps the TV showing a sensible
+ * (see `app/display/[sessionId]/page.tsx`). This keeps the TV showing a sensible
  * screen with the current (pre-Phase-3) host.
  */
 export function deriveScreenId(runtime: LiveRuntimeState): ScreenId {

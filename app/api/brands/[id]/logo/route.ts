@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getBrand, updateBrand } from "@/lib/brands/brandRepo";
 import { uploadBrandLogo, type LogoSlot } from "@/lib/brands/brandStorage";
+import { hasAdminAccess } from "@/lib/live/access";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -18,6 +19,9 @@ function isLogoSlot(value: string | null): value is LogoSlot {
 
 export async function POST(request: NextRequest, { params }: RouteParams): Promise<NextResponse> {
   try {
+    if (!hasAdminAccess(request)) {
+      return NextResponse.json({ error: "Admin access required." }, { status: 401 });
+    }
     const { id } = await params;
     const brand = await getBrand(id);
     if (!brand) return NextResponse.json({ error: "Brand not found" }, { status: 404 });

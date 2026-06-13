@@ -245,7 +245,7 @@ async function installSpotifyLiveMocks(context, options = {}) {
   await context.route("**/api/spotify/live/status", async (route) => {
     state.statusCalls += 1;
     if (state.isPlaying) {
-      state.progressMs += 8_000;
+      state.progressMs += 12_000;
       if (state.progressMs > 35_000) state.progressMs = 35_000;
     }
 
@@ -376,6 +376,23 @@ async function installAppDataMocks(context, options = {}) {
   );
 
   await context.route(
+    (url) => /^\/api\/sessions\/[^/]+\/links$/.test(url.pathname),
+    async (route) => {
+      const parts = new URL(route.request().url()).pathname.split("/");
+      const sessionId = decodeURIComponent(parts.at(-2) ?? "");
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        headers: jsonHeaders,
+        body: JSON.stringify({
+          hostUrl: `${BASE_URL}/host/${sessionId}`,
+          displayUrl: `${BASE_URL}/display/${sessionId}`,
+        }),
+      });
+    }
+  );
+
+  await context.route(
     (url) => /^\/api\/sessions\/[^/]+$/.test(url.pathname),
     async (route) => {
       const url = new URL(route.request().url());
@@ -407,6 +424,22 @@ async function installAppDataMocks(context, options = {}) {
   );
 
   await context.route(
+    (url) => /^\/api\/sessions\/[^/]+\/commands$/.test(url.pathname),
+    async (route) => {
+      const parts = new URL(route.request().url()).pathname.split("/");
+      const sessionId = decodeURIComponent(parts.at(-2) ?? "");
+      const payload = route.request().postDataJSON?.();
+      if (payload?.runtime) runtimes.set(sessionId, payload.runtime);
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        headers: jsonHeaders,
+        body: JSON.stringify({ ok: true }),
+      });
+    }
+  );
+
+  await context.route(
     (url) => /^\/api\/sessions\/[^/]+\/runtime$/.test(url.pathname),
     async (route) => {
       const parts = new URL(route.request().url()).pathname.split("/");
@@ -434,6 +467,24 @@ async function installAppDataMocks(context, options = {}) {
         return;
       }
       await route.fulfill({ status: 405, body: "Method not allowed" });
+    }
+  );
+
+  await context.route(
+    (url) => /^\/api\/display\/[^/]+\/snapshot$/.test(url.pathname),
+    async (route) => {
+      const parts = new URL(route.request().url()).pathname.split("/");
+      const sessionId = decodeURIComponent(parts.at(-2) ?? "");
+      const session = sessions.get(sessionId);
+      const runtime = runtimes.get(sessionId);
+      await route.fulfill({
+        status: session ? 200 : 404,
+        contentType: "application/json",
+        headers: jsonHeaders,
+        body: JSON.stringify(session
+          ? { session, runtime: runtime ?? makeEmptyRuntimeFixture(sessionId), brand: null }
+          : { error: "Session not found." }),
+      });
     }
   );
 }
@@ -580,6 +631,45 @@ function makeLiveSessionFixture(sessionId = "flow-live-session") {
         addedCount: 26,
       },
     ],
+  };
+}
+
+function makeEmptyRuntimeFixture(sessionId) {
+  return {
+    version: "music-bingo-live-runtime-v1",
+    sessionId,
+    mode: "idle",
+    activeGameNumber: null,
+    spotifyControlAvailable: true,
+    currentTrack: null,
+    playedTracks: [],
+    revealState: {
+      showAlbum: false,
+      showTitle: false,
+      showArtist: false,
+      shouldAdvance: false,
+    },
+    revealConfig: {
+      albumMs: 10000,
+      titleMs: 20000,
+      artistMs: 25000,
+      nextMs: 30000,
+    },
+    advanceTriggeredForTrackId: null,
+    warningMessage: null,
+    isChallengeSong: false,
+    challengeType: null,
+    challengeBonusPoints: 10,
+    teamScores: [],
+    scoreToast: null,
+    winnersRevealCount: 0,
+    preBreakTrackId: null,
+    preBreakPlaylistId: null,
+    extensionMs: 0,
+    freePlay: false,
+    isIntroSong: false,
+    introPlayed: false,
+    updatedAtMs: 0,
   };
 }
 
@@ -740,21 +830,21 @@ async function main() {
       window.localStorage.setItem("music-bingo-live-sessions-v1", JSON.stringify([payload]));
     }, makeLiveSessionFixture("flow-live-session"));
     const flow6HostPage = await flow6Context.newPage();
-    const flow6GuestPage = await flow6Context.newPage();
+    const flow6DisplayPage = await flow6Context.newPage();
 
-    await runFlow(flowResults, "Flow 7: Host and guest live screens sync with reveal progression", async () => {
+    await runFlow(flowResults, "Flow 7: Host and display screens sync with reveal progression", async () => {
       await flow6HostPage.goto(`${BASE_URL}/host/flow-live-session`, { waitUntil: "domcontentloaded" });
       // The After Hours host console shows the session name in the top bar (not a heading).
       await flow6HostPage.getByText(/Flow Live Session/i).first().waitFor({ timeout: 15_000 });
       await flow6HostPage.getByRole("button", { name: "Start Game 1" }).waitFor({ timeout: 15_000 });
 
-      await flow6GuestPage.goto(`${BASE_URL}/guest/flow-live-session`, { waitUntil: "domcontentloaded" });
-      // The guest TV renders the run-of-show screens inside a full-bleed,
+      await flow6DisplayPage.goto(`${BASE_URL}/display/flow-live-session`, { waitUntil: "domcontentloaded" });
+      // The display TV renders the run-of-show screens inside a full-bleed,
       // 1920×1080 scaler (the "After Hours" TV display).
-      await flow6GuestPage.locator(".viewport").waitFor({ timeout: 15_000 });
-      await flow6GuestPage.locator(".stage-scaler").first().waitFor({ timeout: 15_000 });
+      await flow6DisplayPage.locator(".viewport").waitFor({ timeout: 15_000 });
+      await flow6DisplayPage.locator(".stage-scaler").first().waitFor({ timeout: 15_000 });
 
-      const guestStyles = await flow6GuestPage.evaluate(() => {
+      const displayStyles = await flow6DisplayPage.evaluate(() => {
         const viewport = document.querySelector(".viewport");
         const rect = viewport?.getBoundingClientRect();
         return {
@@ -763,17 +853,17 @@ async function main() {
         };
       });
       assert.ok(
-        guestStyles.shellWidth >= guestStyles.viewportWidth - 1,
-        `Guest TV viewport should be full-bleed (viewport ${guestStyles.shellWidth}, window ${guestStyles.viewportWidth})`
+        displayStyles.shellWidth >= displayStyles.viewportWidth - 1,
+        `Display TV viewport should be full-bleed (viewport ${displayStyles.shellWidth}, window ${displayStyles.viewportWidth})`
       );
 
       await flow6HostPage.getByRole("button", { name: "Start Game 1" }).click();
 
-      // Guest (no explicit screenId from the legacy host) derives the game screen
+      // Display (no explicit screenId from the legacy host) derives the game screen
       // and reflects the synced track + reveal progression.
-      await flow6GuestPage.locator("text=Flow Live Song One").waitFor({ timeout: 15_000 });
-      await flow6GuestPage.locator("text=Flow Live Artist A").waitFor({ timeout: 15_000 });
-      await flow6GuestPage.locator("text=Flow Live Song Two").waitFor({ timeout: 20_000 });
+      await flow6DisplayPage.locator("text=Flow Live Song One").waitFor({ timeout: 15_000 });
+      await flow6DisplayPage.locator("text=Flow Live Artist A").waitFor({ timeout: 15_000 });
+      await flow6DisplayPage.locator("text=Flow Live Song Two").waitFor({ timeout: 20_000 });
     });
 
     await flow6Context.close();
@@ -785,7 +875,7 @@ async function main() {
       window.localStorage.setItem("music-bingo-live-sessions-v1", JSON.stringify([payload]));
     }, makeLiveSessionFixture("flow-live-fallback"));
     const flow7HostPage = await flow7Context.newPage();
-    const flow7GuestPage = await flow7Context.newPage();
+    const flow7DisplayPage = await flow7Context.newPage();
 
     await runFlow(flowResults, "Flow 8: Live fallback warning appears when Spotify control is unavailable", async () => {
       await flow7HostPage.goto(`${BASE_URL}/host/flow-live-fallback`, { waitUntil: "domcontentloaded" });
@@ -794,9 +884,9 @@ async function main() {
 
       // The audience TV intentionally does NOT show the manual-mode chip — that
       // operational warning lives on the host controller (asserted above). Verify
-      // the guest still renders correctly while Spotify control is unavailable.
-      await flow7GuestPage.goto(`${BASE_URL}/guest/flow-live-fallback`, { waitUntil: "domcontentloaded" });
-      await flow7GuestPage.locator(".viewport").waitFor({ timeout: 10_000 });
+      // the display still renders correctly while Spotify control is unavailable.
+      await flow7DisplayPage.goto(`${BASE_URL}/display/flow-live-fallback`, { waitUntil: "domcontentloaded" });
+      await flow7DisplayPage.locator(".viewport").waitFor({ timeout: 10_000 });
     });
 
     await flow7Context.close();

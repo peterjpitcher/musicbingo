@@ -30,20 +30,20 @@ Next.js app to generate a full Music Bingo event pack from two plain-text song l
 6) Open the URL shown in your terminal (usually `http://127.0.0.1:3000`), paste songs for both games, set themes, choose challenge songs, enter the event date, and click **Generate Event Pack + Create 2 Spotify Playlists**.
    - Download is a single zip with 2 card PDFs + 1 run sheet PDF.
    - Spotify playlist creation requires a one-time “Connect Spotify” step.
-   - After playlists are created, use **Save Live Session** or **Export Live Session JSON** to prepare event-night host/guest runtime.
+   - After playlists are created, use **Save Live Session** or **Export Live Session JSON** to prepare the event-night host/display runtime.
 
-## Live runtime (Host + Guest)
+## Live runtime (Host + Private Display)
 ### Routes
 - Host dashboard: `/host`
 - Host controller: `/host/<sessionId>`
-- Guest display: `/guest/<sessionId>`
+- Private display: `/display/<sessionId>` opened from the host controller
 
 ### Event-night flow
 1) Build your event pack and Spotify playlists on `/`.
 2) Save a Live Session (or export/import JSON).
-3) Open `/host`, launch the session controller, then open the guest screen on a second window/display.
+3) Open `/host`, launch the session controller, then click **Open Display** on the host screen.
 4) Start Game 1 or Game 2 from the host controller.
-5) Guest reveal schedule per track:
+5) Display reveal schedule per track:
    - 10s: album cover
    - 20s: song title
    - 25s: artist
@@ -57,13 +57,13 @@ Next.js app to generate a full Music Bingo event pack from two plain-text song l
 - If you connected Spotify before these scopes were added, click **Disconnect** then **Connect Spotify** again.
 
 ### Sync model
-- Host and Guest are designed for the same machine/browser profile.
-- Primary sync: `BroadcastChannel`.
-- Fallback sync: localStorage snapshot polling every 2s.
+- Supabase is the source of truth for saved sessions and live runtime snapshots.
+- The host keeps a local retry queue for runtime sync.
+- The private display polls a protected snapshot endpoint and keeps the last good state if the connection is flaky.
 
 ### Fallback mode
 - If Spotify API playback control is unavailable (for example no active device / Premium limitation), live mode switches to **manual host control mode**:
-  - Guest reveal/timing still runs.
+  - Display reveal/timing still runs.
   - Host controls playback directly in the Spotify app.
 
 ## Input format
@@ -72,6 +72,6 @@ Next.js app to generate a full Music Bingo event pack from two plain-text song l
 - Max 50 parsed songs per game list
 
 ## Notes
-- No database; uploaded song lists are processed in-memory only.
+- Supabase stores saved sessions and live runtime state.
 - Vercel project slug: `music-bingo`.
 - Git auto-deploy smoke test marker.

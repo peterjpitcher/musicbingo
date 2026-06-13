@@ -19,7 +19,8 @@ This project has **8 pages** and **19 API route handlers** across 15 route files
 | `/prep` | `app/prep/page.tsx` | Session preparation wizard (event setup, game config, generate/connect) |
 | `/host` | `app/host/page.tsx` | Host dashboard -- list/manage sessions |
 | `/host/[sessionId]` | `app/host/[sessionId]/page.tsx` | Live host game view for a specific session |
-| `/guest/[sessionId]` | `app/guest/[sessionId]/page.tsx` | Guest player view (join via QR/link) |
+| `/display/[sessionId]` | `app/display/[sessionId]/page.tsx` | Private TV display view |
+| `/guest/[sessionId]` | `app/guest/[sessionId]/page.tsx` | Legacy removed guest link notice |
 | `/brands` | `app/brands/page.tsx` | Brand management list |
 | `/brands/[id]/edit` | `app/brands/[id]/edit/page.tsx` | Edit existing brand |
 | `/brands/new/edit` | `app/brands/new/edit/page.tsx` | Create new brand |

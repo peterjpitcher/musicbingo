@@ -19,8 +19,8 @@ import { AlbumArt } from "@/components/screens/AlbumArt";
 /**
  * Smoothly interpolates the playing track's `progressMs` between the ~2s server
  * polls so the "Next song" countdown/bar ticks live instead of jumping. Mirrors
- * the guest page's `useInterpolatedProgress` so the bar behaves identically on
- * the guest TV and the host preview (both render this component via the
+ * the display page's `useInterpolatedProgress` so the bar behaves identically on
+ * the display TV and the host preview (both render this component via the
  * registry). Returns `null` when there is no live, playing track.
  */
 function useLiveProgressMs(runtime: LiveRuntimeState | null | undefined): number | null {

@@ -3,15 +3,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { deleteSession, getSession } from "@/lib/live/sessionRepo";
 import { resolveBrandConfig } from "@/lib/brands/brandRepo";
 import { getBrandLogoPublicUrl } from "@/lib/brands/brandStorage";
+import { hasAnySessionAccess, hasSessionAccess } from "@/lib/live/access";
 
 export const runtime = "nodejs";
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
+    if (!hasAnySessionAccess(request, id, ["host", "display"])) {
+      return NextResponse.json({ error: "Session access required." }, { status: 401 });
+    }
     const session = await getSession(id);
     if (!session) {
       return NextResponse.json({ error: "Session not found." }, { status: 404 });
@@ -35,11 +39,14 @@ export async function GET(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
+    if (!hasSessionAccess(request, id, "host")) {
+      return NextResponse.json({ error: "Host access required." }, { status: 401 });
+    }
     await deleteSession(id);
     return NextResponse.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
   } catch (err: any) {

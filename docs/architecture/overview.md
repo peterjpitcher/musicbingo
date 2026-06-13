@@ -26,7 +26,7 @@ project: music-bingo
 
 ## Project Summary
 
-Music Bingo is a multi-device live game host application. A host prepares a bingo session with tracks from Spotify, generates branded PDF/DOCX bingo cards, and runs a real-time game that guests join via a unique session URL. The system syncs game state between host and guests using Supabase Realtime.
+Music Bingo is a multi-device live game host application. A host prepares a bingo session with tracks from Spotify, generates branded PDF/DOCX bingo cards, and runs a real-time game with a private TV display link. The system syncs game state from the host to the display using Supabase-backed runtime snapshots.
 
 **Counts at a glance:**
 
@@ -57,7 +57,7 @@ This project has **no authentication or authorization layer**. There is no middl
 - Supabase client uses service-role key directly (`lib/supabase.ts`)
 - Spotify OAuth tokens are stored in HTTP-only cookies (not user auth -- app-level Spotify access)
 
-This is consistent with the app's use case: a single host operator runs games at a venue, and guests join via public URLs. See [[relationships]] for the full cross-reference map.
+The current model is: a host operator runs games at a venue, and the TV display opens through a private display link. See [[relationships]] for the full cross-reference map.
 
 ## Environment Variables
 

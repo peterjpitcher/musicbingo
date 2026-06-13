@@ -1,4 +1,5 @@
 import JSZip from "jszip";
+import { NextRequest, NextResponse } from "next/server";
 
 import { renderRunSheetPdf, makeRunSheetFilename } from "@/lib/pdfRunSheet";
 import { formatEventDateDisplay } from "@/lib/eventDate";
@@ -28,6 +29,7 @@ import { sanitizeFilenamePart } from "@/lib/utils";
 import { resolveBrandConfig, getBrandFeedConfig } from "@/lib/brands/brandRepo";
 import { fetchBrandLogoPngBytes } from "@/lib/brands/brandStorage";
 import type { BrandConfig } from "@/lib/brands/types";
+import { hasAdminAccess } from "@/lib/live/access";
 
 export const runtime = "nodejs";
 
@@ -256,8 +258,11 @@ async function renderGamePdfWithEvents(params: {
   return new Uint8Array(await pdf.save());
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    if (!hasAdminAccess(request)) {
+      return NextResponse.json({ error: "Admin access required." }, { status: 401 });
+    }
     const form = await request.formData();
 
     const eventDateInput = asString(form.get("event_date")).trim();

@@ -1,6 +1,6 @@
 /**
  * Canonical run-of-show. Shared by the host controller (the "Run Of Show" list +
- * Prev/Next) and the guest TV (which screen to render for runtime.screenId).
+ * Prev/Next) and the display TV (which screen to render for runtime.screenId).
  * Order matches the design bundle (app.jsx SCREENS / host.jsx STEPS).
  */
 export type ScreenId =
@@ -47,7 +47,7 @@ export const RUN_OF_SHOW: RunOfShowStep[] = [
   { id: "thanks", short: "Thank You", sub: "Reviews / next event" },
   // On-demand overlay — triggered by the host's Bingo Claim button on a shout,
   // not reached via Prev/Next and hidden from the run-of-show list. Still a
-  // registered ScreenId so the guest renders it when screenId === "claim".
+  // registered ScreenId so the display renders it when screenId === "claim".
   { id: "claim", short: "Bingo Claim", sub: "Songs played this game", overlay: true },
   // System screens — not part of the navigable show, rendered on state.
   { id: "sys-load", short: "⚙ Loading", sub: "Connecting" },

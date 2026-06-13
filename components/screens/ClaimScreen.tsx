@@ -14,7 +14,7 @@ import { Chrome } from "@/components/motifs/Chrome";
  *
  * The list is `runtime.playedTracks`, which the host accumulates on each track
  * change and resets at the start of each game — so it always lists exactly this
- * game's songs. The screen is read-only on the guest TV; it just renders the
+ * game's songs. The screen is read-only on the display TV; it just renders the
  * synced state.
  *
  * Layout: After-Hours styling on the 1920×1080 stage. Once the list gets long,

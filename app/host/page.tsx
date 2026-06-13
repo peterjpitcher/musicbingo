@@ -355,6 +355,20 @@ export default function HostDashboardPage() {
     }
   }
 
+  async function openController(session: LiveSessionV1): Promise<void> {
+    try {
+      setError("");
+      const res = await fetch(`/api/sessions/${encodeURIComponent(session.id)}/links`, {
+        cache: "no-store",
+      });
+      if (!res.ok) throw new Error("Could not create private host link.");
+      const data = await res.json() as { hostUrl?: string };
+      window.location.href = data.hostUrl || `/host/${session.id}`;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not open host controller.");
+    }
+  }
+
   return (
     <div className="host-root">
       <AppHeader
@@ -523,9 +537,13 @@ export default function HostDashboardPage() {
                       {/* Actions */}
                       <td>
                         <div className="gt-actions">
-                          <a className="hbtn hbtn--primary" href={`/host/${session.id}`}>
+                          <button
+                            type="button"
+                            className="hbtn hbtn--primary"
+                            onClick={() => void openController(session)}
+                          >
                             &#9654; Control
-                          </a>
+                          </button>
                           <a className="hbtn" href={`/prep?session=${session.id}`}>
                             &#9998; Edit
                           </a>

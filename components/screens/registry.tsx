@@ -19,7 +19,7 @@ import { SysNotFound } from "./SysNotFound";
 /**
  * Maps each run-of-show screen id to a renderer. Screens that vary by
  * game/round/type are closed over here so every entry takes the same
- * `ScreenProps`. Consumed by the guest TV and the host preview:
+ * `ScreenProps`. Consumed by the private display and the host preview:
  * `SCREEN_REGISTRY[screenId]({ brand, runtime })`.
  */
 export const SCREEN_REGISTRY: Record<ScreenId, (props: ScreenProps) => ReactNode> = {

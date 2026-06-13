@@ -13,6 +13,16 @@ type SessionRow = {
   brand_id: string | null;
 };
 
+function isMissingOptionalTableError(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false;
+  const message = error.message ?? "";
+  return (
+    error.code === "42P01"
+    || message.includes("Could not find the table")
+    || message.includes("schema cache")
+  );
+}
+
 export async function listSessions(): Promise<LiveSessionV1[]> {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
@@ -87,6 +97,17 @@ export async function deleteSession(id: string): Promise<void> {
 
 export async function getRuntimeState(id: string): Promise<LiveRuntimeState | null> {
   const supabase = getSupabaseClient();
+  const snapshot = await supabase
+    .from("session_runtime_snapshots")
+    .select("runtime_data")
+    .eq("session_id", id)
+    .maybeSingle();
+
+  if (!snapshot.error && snapshot.data) {
+    const runtime = validateRuntimeState((snapshot.data as { runtime_data: unknown }).runtime_data);
+    if (runtime) return runtime;
+  }
+
   const { data, error } = await supabase
     .from("live_sessions")
     .select("runtime_data")
@@ -110,6 +131,37 @@ export async function upsertRuntimeState(id: string, runtime: LiveRuntimeState):
     .eq("id", id);
 
   if (error) throw new Error(`Failed to upsert runtime state: ${error.message}`);
+
+  const snapshot = await supabase.from("session_runtime_snapshots").upsert(
+    {
+      session_id: id,
+      runtime_data: validated,
+      source: "host",
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "session_id" }
+  );
+
+  if (snapshot.error && !isMissingOptionalTableError(snapshot.error)) {
+    throw new Error(`Failed to upsert runtime snapshot: ${snapshot.error.message}`);
+  }
+}
+
+export async function appendSessionEvent(params: {
+  sessionId: string;
+  eventType: string;
+  payload?: unknown;
+  clientEventId?: string | null;
+}): Promise<void> {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase.from("session_events").insert({
+    session_id: params.sessionId,
+    client_event_id: params.clientEventId ?? null,
+    event_type: params.eventType,
+    payload: params.payload ?? {},
+  });
+
+  if (error) throw new Error(`Failed to append session event: ${error.message}`);
 }
 
 export async function updateSessionBrand(sessionId: string, brandId: string): Promise<void> {

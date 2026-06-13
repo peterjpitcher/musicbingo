@@ -20,7 +20,7 @@ export function VenueLogo({ brand, size = "md" }: VenueLogoProps): React.ReactEl
   if (brand.logo_dark_url) {
     return (
       // Brand logos are dynamic Storage URLs/keys, not next/image-friendly —
-      // matches the existing guest page convention (raw <img>).
+      // matches the existing display page convention (raw <img>).
       // eslint-disable-next-line @next/next/no-img-element
       <img
         src={brand.logo_dark_url}

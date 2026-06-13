@@ -233,7 +233,7 @@ export type LiveRuntimeState = {
    */
   playedTracks?: PlayedTrack[];
   revealState: LiveRevealState;
-  /** Normal-song reveal timing for this live run. Mirrored here so open guest screens receive timing changes. */
+  /** Normal-song reveal timing for this live run. Mirrored here so open display screens receive timing changes. */
   revealConfig?: RevealConfig;
   advanceTriggeredForTrackId: string | null;
   warningMessage: string | null;
