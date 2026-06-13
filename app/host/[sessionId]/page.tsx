@@ -1094,14 +1094,14 @@ export default function HostSessionControllerPage() {
     );
   }
 
-  async function saveSongTiming() {
+  async function saveSongTiming(inputs = {
+    albumSeconds: albumRevealSecondsInput,
+    titleSeconds: titleRevealSecondsInput,
+    artistSeconds: artistRevealSecondsInput,
+    songPlaySeconds: songPlaySecondsInput,
+  }) {
     if (!session || !isController) return;
-    const revealConfig = parseRevealConfigInputs({
-      albumSeconds: albumRevealSecondsInput,
-      titleSeconds: titleRevealSecondsInput,
-      artistSeconds: artistRevealSecondsInput,
-      songPlaySeconds: songPlaySecondsInput,
-    });
+    const revealConfig = parseRevealConfigInputs(inputs);
     if (!revealConfig) {
       setError(
         `Timing must be ordered as album, title, artist, next song, with song play time between ${Math.floor(MIN_SONG_PLAY_MS / 1000)} and ${Math.floor(MAX_SONG_PLAY_MS / 1000)} seconds.`
@@ -1769,6 +1769,12 @@ export default function HostSessionControllerPage() {
 
               {/* Timing panel — converts ms ↔ seconds */}
               <TimingPanel
+                key={[
+                  normalRevealConfig.nextMs,
+                  normalRevealConfig.albumMs,
+                  normalRevealConfig.titleMs,
+                  normalRevealConfig.artistMs,
+                ].join(":")}
                 timing={{
                   song: Math.round(normalRevealConfig.nextMs / 1000),
                   album: Math.round(normalRevealConfig.albumMs / 1000),
@@ -1777,11 +1783,17 @@ export default function HostSessionControllerPage() {
                 }}
                 setTiming={(t) => {
                   // Convert seconds back to ms and run through the existing save path.
-                  setSongPlaySecondsInput(String(t.song));
-                  setAlbumRevealSecondsInput(String(t.album));
-                  setTitleRevealSecondsInput(String(t.title));
-                  setArtistRevealSecondsInput(String(t.artist));
-                  void saveSongTiming();
+                  const inputs = {
+                    songPlaySeconds: String(t.song),
+                    albumSeconds: String(t.album),
+                    titleSeconds: String(t.title),
+                    artistSeconds: String(t.artist),
+                  };
+                  setSongPlaySecondsInput(inputs.songPlaySeconds);
+                  setAlbumRevealSecondsInput(inputs.albumSeconds);
+                  setTitleRevealSecondsInput(inputs.titleSeconds);
+                  setArtistRevealSecondsInput(inputs.artistSeconds);
+                  void saveSongTiming(inputs);
                 }}
               />
 

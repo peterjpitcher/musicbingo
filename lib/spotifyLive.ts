@@ -239,13 +239,12 @@ export async function startPlaylistPlayback(params: {
     throw new SpotifyLiveError("API_ERROR", "Invalid playlist id for live playback.");
   }
 
-  if (typeof params.shuffle === "boolean") {
-    await setShuffleMode({
-      accessToken: params.accessToken,
-      state: params.shuffle,
-      deviceId: params.deviceId,
-    });
-  }
+  const shuffle = params.shuffle ?? false;
+  await setShuffleMode({
+    accessToken: params.accessToken,
+    state: shuffle,
+    deviceId: params.deviceId,
+  });
 
   await runPlayerCommand({
     accessToken: params.accessToken,
@@ -255,7 +254,7 @@ export async function startPlaylistPlayback(params: {
     body: {
       context_uri: `spotify:playlist:${normalizedPlaylistId}`,
       position_ms: 0,
-      ...(params.shuffle ? {} : { offset: { position: 0 } }),
+      ...(shuffle ? {} : { offset: { position: 0 } }),
     },
     actionLabel: "Start playback",
   });

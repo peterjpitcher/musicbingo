@@ -61,6 +61,9 @@ describe("getContent precedence", () => {
     expect(getContent("welcomeTitle", {})).toBe("Music");
     expect(getContent("welcomeTitle2", {})).toBe("Bingo");
   });
+  it("defaults the review QR URL", () => {
+    expect(getContent("reviewQrUrl", {})).toBe("https://vip-club.uk/jls0mu");
+  });
   it("every ContentKey has a placeholder string", () => {
     for (const k of CONTENT_KEYS) expect(typeof getContent(k, {})).toBe("string");
   });

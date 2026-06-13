@@ -60,7 +60,7 @@ export const CONTENT_PLACEHOLDERS: Record<ContentKey, string> = {
   winPrize: "£25 bar voucher", spoonPrize: "Bottle of house wine",
   nextDate: "Fri 27 June · 8PM", tyL1: "Thank You", tyL2: "& Goodnight",
   tyLede: "We hope you had a brilliant night. If you did, a Google review means the world to us.",
-  reviewQrUrl: "", bookQrUrl: "",
+  reviewQrUrl: "https://vip-club.uk/jls0mu", bookQrUrl: "",
   nfL1: "Nothing", nfL2: "On Yet",
 };
 

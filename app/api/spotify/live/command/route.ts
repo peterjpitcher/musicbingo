@@ -110,8 +110,7 @@ async function runCommand(params: {
     if (!playlistId) {
       throw new SpotifyLiveError("API_ERROR", "`playlistId` is required for play_game.");
     }
-    await setShuffleMode({ accessToken: params.accessToken, state: false, deviceId });
-    await startPlaylistPlayback({ accessToken: params.accessToken, playlistId, deviceId });
+    await startPlaylistPlayback({ accessToken: params.accessToken, playlistId, deviceId, shuffle: false });
     return;
   }
 
@@ -156,8 +155,7 @@ async function runCommand(params: {
       await setShuffleMode({ accessToken: params.accessToken, state: false, deviceId });
       await startTrackInPlaylistPlayback({ accessToken: params.accessToken, playlistId, trackId, deviceId });
     } else if (playlistId) {
-      await setShuffleMode({ accessToken: params.accessToken, state: false, deviceId });
-      await startPlaylistPlayback({ accessToken: params.accessToken, playlistId, deviceId });
+      await startPlaylistPlayback({ accessToken: params.accessToken, playlistId, deviceId, shuffle: false });
     } else {
       await resumePlayback({ accessToken: params.accessToken, deviceId });
     }
