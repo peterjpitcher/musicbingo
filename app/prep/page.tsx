@@ -25,6 +25,14 @@ import {
   type LiveSessionV1,
 } from "@/lib/live/types";
 import { parseSongListText } from "@/lib/parser";
+import {
+  clearPrepDraft,
+  makeEmptyChallengeEntries,
+  readPrepDraft,
+  writePrepDraft,
+  type ChallengeEntry,
+  type PrepDraftV1,
+} from "@/lib/prepDraft";
 import { parseSpotifyTrackUrl } from "@/lib/spotifyTrackUrl";
 import type { Song } from "@/lib/types";
 import { sanitizeFilenamePart } from "@/lib/utils";
@@ -50,8 +58,6 @@ type SpotifyPlaylistResult = {
   notFoundCount: number;
   notFound: Array<{ artist: string; title: string }>;
 };
-
-type ChallengeEntry = { value: string; type: "sing-along" | "dance-along" };
 
 type PlaylistPhaseResult = {
   gameNumber: 1 | 2;
@@ -102,7 +108,7 @@ function parseChallengeBonusInput(input: string): number {
  * song-list pruning effects and round-trips correctly on save.
  */
 function challengeEntriesFromGame(game: LiveGameConfig): ChallengeEntry[] {
-  const entries: ChallengeEntry[] = Array(5).fill(null).map(() => ({ value: "", type: "sing-along" as const }));
+  const entries: ChallengeEntry[] = makeEmptyChallengeEntries();
   getChallengeSongs(game)
     .slice(0, 5)
     .forEach((cs, idx) => {
@@ -157,7 +163,7 @@ function PrepPageInner() {
   const [game1Theme, setGame1Theme] = useState<string>(DEFAULT_GAME_THEME);
   const [game1SongsText, setGame1SongsText] = useState<string>("");
   const [game1ChallengeSongs, setGame1ChallengeSongs] = useState<ChallengeEntry[]>(
-    Array(5).fill(null).map(() => ({ value: "", type: "sing-along" as const }))
+    makeEmptyChallengeEntries()
   );
   const [game1ChallengeBonusPointsInput, setGame1ChallengeBonusPointsInput] = useState<string>(
     String(DEFAULT_CHALLENGE_BONUS_POINTS)
@@ -169,7 +175,7 @@ function PrepPageInner() {
   const [game2Theme, setGame2Theme] = useState<string>(DEFAULT_GAME_THEME);
   const [game2SongsText, setGame2SongsText] = useState<string>("");
   const [game2ChallengeSongs, setGame2ChallengeSongs] = useState<ChallengeEntry[]>(
-    Array(5).fill(null).map(() => ({ value: "", type: "sing-along" as const }))
+    makeEmptyChallengeEntries()
   );
   const [game2ChallengeBonusPointsInput, setGame2ChallengeBonusPointsInput] = useState<string>(
     String(DEFAULT_CHALLENGE_BONUS_POINTS)
@@ -196,6 +202,13 @@ function PrepPageInner() {
   const [refreshing, setRefreshing] = useState(false);
   const pendingAutoSave = useRef(false);
   const saveLiveSessionRef = useRef<() => Promise<void>>();
+  const [savingLive, setSavingLive] = useState(false);
+  // Draft autosave (new-game mode): guards against losing typed prep on refresh
+  const [draftNotice, setDraftNotice] = useState<string>("");
+  const [draftReady, setDraftReady] = useState(false);
+  // Remembers the id of the last successful save so repeat saves overwrite the
+  // same session instead of minting a new one each time
+  const savedSessionIdRef = useRef<string | null>(null);
 
   const parsedGame1 = useMemo(() => parseSongListText(game1SongsText), [game1SongsText]);
   const parsedGame2 = useMemo(() => parseSongListText(game2SongsText), [game2SongsText]);
@@ -275,12 +288,94 @@ function PrepPageInner() {
   const playlistSignatureRef = useRef<string | null>(null);
   const formSignatureRef = useRef<string>(formInputSignature);
 
+  const draftPayload = useMemo<PrepDraftV1>(
+    () => ({
+      version: 1,
+      savedAt: new Date().toISOString(),
+      currentStep,
+      eventDate,
+      countInput,
+      songPlaySecondsInput,
+      albumRevealSecondsInput,
+      titleRevealSecondsInput,
+      artistRevealSecondsInput,
+      liveSessionName,
+      liveSessionNameDirty,
+      breakPlaylistId,
+      selectedBrandId,
+      game1Theme,
+      game1SongsText,
+      game1ChallengeSongs,
+      game1ChallengeBonusPointsInput,
+      game1IntroUrl,
+      game1IntroSongs,
+      game2Theme,
+      game2SongsText,
+      game2ChallengeSongs,
+      game2ChallengeBonusPointsInput,
+      game2IntroUrl,
+      game2IntroSongs,
+    }),
+    [
+      albumRevealSecondsInput,
+      artistRevealSecondsInput,
+      breakPlaylistId,
+      countInput,
+      currentStep,
+      eventDate,
+      game1ChallengeBonusPointsInput,
+      game1ChallengeSongs,
+      game1IntroSongs,
+      game1IntroUrl,
+      game1SongsText,
+      game1Theme,
+      game2ChallengeBonusPointsInput,
+      game2ChallengeSongs,
+      game2IntroSongs,
+      game2IntroUrl,
+      game2SongsText,
+      game2Theme,
+      liveSessionName,
+      liveSessionNameDirty,
+      selectedBrandId,
+      songPlaySecondsInput,
+      titleRevealSecondsInput,
+    ]
+  );
+
   function resetRevealTimingDefaults() {
     const revealConfig = DEFAULT_REVEAL_CONFIG;
     setSongPlaySecondsInput(formatSecondsInput(revealConfig.nextMs));
     setAlbumRevealSecondsInput(formatSecondsInput(revealConfig.albumMs));
     setTitleRevealSecondsInput(formatSecondsInput(revealConfig.titleMs));
     setArtistRevealSecondsInput(formatSecondsInput(revealConfig.artistMs));
+  }
+
+  /** Throw away the restored draft and reset the wizard to a blank new game. */
+  function discardDraft() {
+    clearPrepDraft();
+    setDraftNotice("");
+    setCurrentStep(0);
+    setEventDate(todayIso());
+    setCountInput("40");
+    resetRevealTimingDefaults();
+    setLiveSessionName("");
+    setLiveSessionNameDirty(false);
+    setBreakPlaylistId("");
+    setSelectedBrandId(null);
+    setGame1Theme(DEFAULT_GAME_THEME);
+    setGame1SongsText("");
+    setGame1ChallengeSongs(makeEmptyChallengeEntries());
+    setGame1ChallengeBonusPointsInput(String(DEFAULT_CHALLENGE_BONUS_POINTS));
+    setGame1IntroUrl("");
+    setGame1IntroSongs([]);
+    setGame2Theme(DEFAULT_GAME_THEME);
+    setGame2SongsText("");
+    setGame2ChallengeSongs(makeEmptyChallengeEntries());
+    setGame2ChallengeBonusPointsInput(String(DEFAULT_CHALLENGE_BONUS_POINTS));
+    setGame2IntroUrl("");
+    setGame2IntroSongs([]);
+    window.scrollTo(0, 0);
   }
 
   useEffect(() => {
@@ -384,6 +479,66 @@ function PrepPageInner() {
   // Run once on mount when the param is present
   }, [editSessionParam]);
 
+  // Restore an unsaved prep draft (new-game mode only; edit mode hydrates from
+  // the server above). A draft exists whenever songs were typed but the live
+  // session was never saved, e.g. after an accidental refresh or tab close.
+  useEffect(() => {
+    if (editSessionParam) return;
+    const draft = readPrepDraft();
+    if (draft) {
+      setCurrentStep(draft.currentStep);
+      setEventDate(draft.eventDate || todayIso());
+      setCountInput(draft.countInput);
+      if (draft.songPlaySecondsInput) setSongPlaySecondsInput(draft.songPlaySecondsInput);
+      if (draft.albumRevealSecondsInput) setAlbumRevealSecondsInput(draft.albumRevealSecondsInput);
+      if (draft.titleRevealSecondsInput) setTitleRevealSecondsInput(draft.titleRevealSecondsInput);
+      if (draft.artistRevealSecondsInput) setArtistRevealSecondsInput(draft.artistRevealSecondsInput);
+      setLiveSessionName(draft.liveSessionName);
+      setLiveSessionNameDirty(draft.liveSessionNameDirty);
+      setBreakPlaylistId(draft.breakPlaylistId);
+      setSelectedBrandId(draft.selectedBrandId);
+      setGame1Theme(draft.game1Theme || DEFAULT_GAME_THEME);
+      setGame1SongsText(draft.game1SongsText);
+      setGame1ChallengeSongs(draft.game1ChallengeSongs);
+      setGame1ChallengeBonusPointsInput(
+        draft.game1ChallengeBonusPointsInput || String(DEFAULT_CHALLENGE_BONUS_POINTS)
+      );
+      setGame1IntroUrl(draft.game1IntroUrl);
+      setGame1IntroSongs(draft.game1IntroSongs);
+      setGame2Theme(draft.game2Theme || DEFAULT_GAME_THEME);
+      setGame2SongsText(draft.game2SongsText);
+      setGame2ChallengeSongs(draft.game2ChallengeSongs);
+      setGame2ChallengeBonusPointsInput(
+        draft.game2ChallengeBonusPointsInput || String(DEFAULT_CHALLENGE_BONUS_POINTS)
+      );
+      setGame2IntroUrl(draft.game2IntroUrl);
+      setGame2IntroSongs(draft.game2IntroSongs);
+      const savedAt = draft.savedAt ? new Date(draft.savedAt) : null;
+      const savedAtDisplay =
+        savedAt && !Number.isNaN(savedAt.getTime()) ? savedAt.toLocaleString("en-GB") : "";
+      setDraftNotice(
+        savedAtDisplay
+          ? `Restored your unsaved prep draft (autosaved ${savedAtDisplay}).`
+          : "Restored your unsaved prep draft."
+      );
+    }
+    setDraftReady(true);
+  }, [editSessionParam]);
+
+  // Debounced draft autosave. Songs text is the valuable data: with none typed
+  // the draft is removed so a fresh visit starts clean.
+  useEffect(() => {
+    if (editSessionParam || !draftReady) return;
+    const handle = window.setTimeout(() => {
+      if (!draftPayload.game1SongsText.trim() && !draftPayload.game2SongsText.trim()) {
+        clearPrepDraft();
+        return;
+      }
+      writePrepDraft(draftPayload);
+    }, 400);
+    return () => window.clearTimeout(handle);
+  }, [draftPayload, draftReady, editSessionParam]);
+
   useEffect(() => {
     if (formSignatureRef.current === formInputSignature) return;
     formSignatureRef.current = formInputSignature;
@@ -416,7 +571,7 @@ function PrepPageInner() {
     if (!parsedGame1.songs.length) {
       if (game1ChallengeSongs.some((c) => c.value)) {
         setGame1ChallengeSongs(
-          Array(5).fill(null).map(() => ({ value: "", type: "sing-along" as const }))
+          makeEmptyChallengeEntries()
         );
       }
       return;
@@ -430,7 +585,7 @@ function PrepPageInner() {
 
     if (!pruned.some((c) => c.value)) {
       const autoFirst = makeSongSelectionValue(parsedGame1.songs[0] as Song);
-      const reset: ChallengeEntry[] = Array(5).fill(null).map(() => ({ value: "", type: "sing-along" as const }));
+      const reset: ChallengeEntry[] = makeEmptyChallengeEntries();
       reset[0] = { value: autoFirst, type: "sing-along" };
       setGame1ChallengeSongs(reset);
     } else if (prunedChanged) {
@@ -443,7 +598,7 @@ function PrepPageInner() {
     if (!parsedGame2.songs.length) {
       if (game2ChallengeSongs.some((c) => c.value)) {
         setGame2ChallengeSongs(
-          Array(5).fill(null).map(() => ({ value: "", type: "sing-along" as const }))
+          makeEmptyChallengeEntries()
         );
       }
       return;
@@ -457,7 +612,7 @@ function PrepPageInner() {
 
     if (!pruned.some((c) => c.value)) {
       const autoFirst = makeSongSelectionValue(parsedGame2.songs[0] as Song);
-      const reset: ChallengeEntry[] = Array(5).fill(null).map(() => ({ value: "", type: "sing-along" as const }));
+      const reset: ChallengeEntry[] = makeEmptyChallengeEntries();
       reset[0] = { value: autoFirst, type: "sing-along" };
       setGame2ChallengeSongs(reset);
     } else if (prunedChanged) {
@@ -584,8 +739,10 @@ function PrepPageInner() {
     }
     return {
       version: LIVE_SESSION_VERSION,
-      // Reuse the existing id in edit mode so upsert overwrites the same row
-      id: editingSessionId ?? makeSessionId(),
+      // Reuse the edit-mode id, else the id from an earlier save this visit, so
+      // repeat saves (including the event-pack auto-save) overwrite one row
+      // instead of creating duplicate sessions
+      id: editingSessionId ?? savedSessionIdRef.current ?? makeSessionId(),
       name: sessionName,
       createdAt: new Date().toISOString(),
       eventDateInput: eventDate,
@@ -647,23 +804,38 @@ function PrepPageInner() {
     };
   }
 
+  /** Build, upsert, and remember the session id; clears the device draft. */
+  async function persistLiveSession(): Promise<LiveSessionV1> {
+    const session = buildLiveSessionPayload();
+    await upsertLiveSession(session);
+    savedSessionIdRef.current = session.id;
+    // The prep is now safely on the server, the device draft has done its job
+    if (!editSessionParam) {
+      clearPrepDraft();
+      setDraftNotice("");
+    }
+    return session;
+  }
+
   async function saveLiveSession() {
+    setSavingLive(true);
     try {
-      const session = buildLiveSessionPayload();
-      await upsertLiveSession(session);
+      const session = await persistLiveSession();
       setLiveSessionNotice(`Saved live session: ${session.name}`);
       setError("");
-    } catch (err: any) {
+    } catch (err: unknown) {
       setLiveSessionNotice("");
-      setError(err?.message ?? "Failed to save live session.");
+      setError(err instanceof Error ? err.message : "Failed to save live session.");
+    } finally {
+      setSavingLive(false);
     }
   }
   saveLiveSessionRef.current = saveLiveSession;
 
   async function exportLiveSession() {
+    setSavingLive(true);
     try {
-      const session = buildLiveSessionPayload();
-      await upsertLiveSession(session);
+      const session = await persistLiveSession();
       const json = exportLiveSessionJson(session);
       const blob = new Blob([json], { type: "application/json;charset=utf-8" });
       downloadBlob(
@@ -672,9 +844,11 @@ function PrepPageInner() {
       );
       setLiveSessionNotice(`Exported live session: ${session.name}`);
       setError("");
-    } catch (err: any) {
+    } catch (err: unknown) {
       setLiveSessionNotice("");
-      setError(err?.message ?? "Failed to export live session.");
+      setError(err instanceof Error ? err.message : "Failed to export live session.");
+    } finally {
+      setSavingLive(false);
     }
   }
 
@@ -1137,6 +1311,25 @@ function PrepPageInner() {
           <Notice variant="warning" className="mb-4">{editHydrationNotice}</Notice>
         )}
 
+        {draftNotice && !editingSessionId && (
+          <Notice variant="info" className="mb-4">
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+                flexWrap: "wrap",
+              }}
+            >
+              <span>{draftNotice}</span>
+              <Button variant="secondary" size="sm" onClick={discardDraft}>
+                Discard draft
+              </Button>
+            </div>
+          </Notice>
+        )}
+
         {editingSessionId && !editHydrationNotice && (
           <div className="editbanner">
             <span className="pillmini">Editing</span>
@@ -1243,6 +1436,7 @@ function PrepPageInner() {
           <StepGenerateConnect
             canSubmit={canSubmit}
             busy={busy}
+            saving={savingLive}
             spotifyConnected={spotifyConnected}
             spotifyConnecting={spotifyConnecting}
             spotifyCreating={spotifyCreating}

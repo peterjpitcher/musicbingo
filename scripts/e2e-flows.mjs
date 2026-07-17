@@ -890,6 +890,38 @@ async function main() {
     });
 
     await flow7Context.close();
+
+    const flow9Context = await browser.newContext();
+    await installAppDataMocks(flow9Context);
+    await installSpotifyMocks(flow9Context, { initialConnected: false });
+    const flow9Page = await flow9Context.newPage();
+
+    await runFlow(flowResults, "Flow 9: Prep draft survives a reload and can be discarded", async () => {
+      await openPrep(flow9Page);
+      await flow9Page.getByRole("button", { name: /Next: Game 1/i }).click();
+      await flow9Page.getByRole("heading", { name: /Game 1/i }).waitFor();
+      await fillCurrentGameStep(flow9Page, songListA);
+
+      // The draft autosave is debounced (400ms); give it a moment to hit localStorage.
+      await sleep(700);
+
+      await flow9Page.reload({ waitUntil: "networkidle" });
+      await flow9Page.getByText(/Restored your unsaved prep draft/i).waitFor({ timeout: 10_000 });
+      await flow9Page.getByRole("heading", { name: /Game 1/i }).waitFor();
+      const restoredSongs = await flow9Page.locator("textarea").inputValue();
+      assert.ok(restoredSongs.includes("FlowA Artist 1"), "Restored draft should contain the typed songs");
+      await flow9Page.locator("text=26 songs").first().waitFor();
+
+      await flow9Page.getByRole("button", { name: "Discard draft" }).click();
+      await flow9Page.getByRole("heading", { name: "Event Setup" }).waitFor();
+
+      await flow9Page.reload({ waitUntil: "networkidle" });
+      await flow9Page.getByRole("heading", { name: "Event Setup" }).waitFor();
+      const noticeCount = await flow9Page.getByText(/Restored your unsaved prep draft/i).count();
+      assert.equal(noticeCount, 0, "Discarded draft should not be restored after reload");
+    });
+
+    await flow9Context.close();
   } finally {
     if (browser) await browser.close();
     await stopAppServer(server);

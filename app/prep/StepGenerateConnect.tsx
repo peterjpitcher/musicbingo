@@ -32,6 +32,7 @@ type ResolveResult =
 type StepGenerateConnectProps = {
   canSubmit: boolean;
   busy: boolean;
+  saving: boolean;
   spotifyConnected: boolean;
   spotifyConnecting: boolean;
   spotifyCreating: boolean;
@@ -81,6 +82,7 @@ function makeRowKey(gameNumber: number, artist: string, title: string) {
 export function StepGenerateConnect({
   canSubmit,
   busy,
+  saving,
   spotifyConnected,
   spotifyConnecting,
   spotifyCreating,
@@ -329,34 +331,55 @@ export function StepGenerateConnect({
         </Button>
       </div>
 
-      {/* Live session block */}
-      {livePlaylistByGame ? (
-        <div className="genrow" style={{ flexDirection: "column", alignItems: "flex-start", gap: 12 }}>
-          <div style={{ display: "flex", gap: 14, alignItems: "center", width: "100%" }}>
-            <div className="ic">📡</div>
-            <div className="gx"><b>Live Session</b><p>Save to host console or export as JSON</p></div>
+      {/* Live session block. Always visible so the save path is never hidden:
+          saving needs both playlists (the host console drives Spotify playback
+          from them), so until then the buttons are disabled with the reason. */}
+      {(() => {
+        const canSaveLive = Boolean(livePlaylistByGame);
+        const missingPlaylistGames = [1, 2].filter(
+          (n) => !spotifyResult?.some((r) => r.gameNumber === n && r.playlistId)
+        );
+        const saveHint =
+          spotifyResult && missingPlaylistGames.length === 1
+            ? `Game ${missingPlaylistGames[0]}'s playlist wasn't created. Use "Create Spotify Playlists" again to enable saving.`
+            : "Create the Spotify playlists above to enable saving. Your prep autosaves as a draft on this device in the meantime.";
+        return (
+          <div className="genrow" style={{ flexDirection: "column", alignItems: "flex-start", gap: 12 }}>
+            <div style={{ display: "flex", gap: 14, alignItems: "center", width: "100%" }}>
+              <div className="ic">📡</div>
+              <div className="gx"><b>Live Session</b><p>Save to host console or export as JSON</p></div>
+            </div>
+            <div className="fg" style={{ width: "100%" }}>
+              <label style={{ fontSize: 12, letterSpacing: ".1em", textTransform: "uppercase", color: "rgb(var(--cream-rgb)/.65)", fontWeight: 700 }}>
+                Session name
+              </label>
+              <input
+                type="text"
+                value={liveSessionName}
+                onChange={(e) => onLiveSessionName(e.target.value)}
+                placeholder="Music Bingo - Event Date"
+              />
+            </div>
+            {liveSessionNotice ? (
+              <Notice variant="success">{liveSessionNotice}</Notice>
+            ) : null}
+            {!canSaveLive ? (
+              <p style={{ margin: 0, fontSize: 13, color: "rgb(var(--cream-rgb)/.65)" }}>
+                {saveHint}
+              </p>
+            ) : null}
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <Button variant="primary" onClick={onSaveLiveSession} disabled={!canSaveLive || saving}>
+                {saving ? "Saving…" : "Save Live Session"}
+              </Button>
+              <Button variant="secondary" onClick={onExportLiveSession} disabled={!canSaveLive || saving}>
+                Export JSON
+              </Button>
+              <Button as="link" href="/host" variant="secondary">Open Host Console</Button>
+            </div>
           </div>
-          <div className="fg" style={{ width: "100%" }}>
-            <label style={{ fontSize: 12, letterSpacing: ".1em", textTransform: "uppercase", color: "rgb(var(--cream-rgb)/.65)", fontWeight: 700 }}>
-              Session name
-            </label>
-            <input
-              type="text"
-              value={liveSessionName}
-              onChange={(e) => onLiveSessionName(e.target.value)}
-              placeholder="Music Bingo - Event Date"
-            />
-          </div>
-          {liveSessionNotice ? (
-            <Notice variant="success">{liveSessionNotice}</Notice>
-          ) : null}
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <Button variant="primary" onClick={onSaveLiveSession}>Save Live Session</Button>
-            <Button variant="secondary" onClick={onExportLiveSession}>Export JSON</Button>
-            <Button as="link" href="/host" variant="secondary">Open Host Console</Button>
-          </div>
-        </div>
-      ) : null}
+        );
+      })()}
 
       <div className="wiznav">
         <Button variant="secondary" onClick={onBack}>← Back</Button>
