@@ -253,6 +253,8 @@ export type LiveRuntimeState = {
   preBreakTrackId: string | null;
   /** Playlist ID stored before going to break, so resume can restart in the right context. */
   preBreakPlaylistId: string | null;
+  /** Epoch ms when the break screen opened; drives the TV's live break countdown. */
+  breakStartedAtMs: number | null;
   /** Extra ms added to the reveal schedule via the +30s and Skip 30s buttons. Resets to 0 on track change. */
   extensionMs: number;
   /** When true, auto-advance is disabled and songs play in full (free play / post-round mode). */
@@ -347,6 +349,7 @@ export function makeEmptyRuntimeState(sessionId: string): LiveRuntimeState {
     winnersRevealCount: 0,
     preBreakTrackId: null,
     preBreakPlaylistId: null,
+    breakStartedAtMs: null,
     extensionMs: 0,
     freePlay: false,
     isIntroSong: false,

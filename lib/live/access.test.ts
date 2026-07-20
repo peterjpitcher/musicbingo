@@ -29,4 +29,29 @@ describe("session access tokens", () => {
 
     expect(hasSessionAccess(req, "session-1", "host")).toBe(true);
   });
+
+  test("fails closed in production when APP_ADMIN_SECRET is missing", () => {
+    vi.stubEnv("APP_ADMIN_SECRET", "");
+    vi.stubEnv("NODE_ENV", "production");
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const req = new NextRequest("https://example.com/api/sessions/session-1/runtime");
+
+    // No admin bypass and no cookie/token: access is denied, not open.
+    expect(hasSessionAccess(req, "session-1", "host")).toBe(false);
+
+    errorSpy.mockRestore();
+  });
+
+  test("signed tokens still work in production without the admin secret", () => {
+    vi.stubEnv("APP_ADMIN_SECRET", "");
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "service-key");
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const token = createSessionAccessToken("session-1", "display");
+    const req = new NextRequest("https://example.com/api/display/session-1/snapshot");
+    expect(hasSessionAccess(req, "session-1", "display", token)).toBe(true);
+
+    errorSpy.mockRestore();
+  });
 });

@@ -10,6 +10,10 @@ export interface GameFlowPanelProps {
   onStart: (n: 1 | 2) => void;
   onBreak: () => void;
   onResume: () => void;
+  /** Game whose playback the break interrupted (null when the break fell between games). */
+  resumeGameNumber: 1 | 2 | null;
+  /** Resume the interrupted game's playlist from the song it was on. */
+  onResumeGame: () => void;
   onEnd: () => void;
   onReset: () => void;
   /** Show the Bingo Claim screen (lists this game's played songs on the TV). */
@@ -40,6 +44,8 @@ export function GameFlowPanel({
   onStart,
   onBreak,
   onResume,
+  resumeGameNumber,
+  onResumeGame,
   onEnd,
   onReset,
   onClaim,
@@ -62,9 +68,19 @@ export function GameFlowPanel({
       </h2>
 
       {mode === 'break' ? (
-        /* Break mode — continue to the next screen or end the session */
+        /* Break mode: resume an interrupted game, continue the show, or end.
+           The resume button only appears when the break cut a game off mid-song;
+           it restarts that song and carries on through the playlist. */
         <div className="btn-row">
-          <button className="hbtn hbtn--go hbtn--lg grow" onClick={onResume}>
+          {resumeGameNumber ? (
+            <button className="hbtn hbtn--go hbtn--lg grow" onClick={onResumeGame}>
+              ▶ Resume Game {resumeGameNumber}
+            </button>
+          ) : null}
+          <button
+            className={`hbtn hbtn--lg grow${resumeGameNumber ? '' : ' hbtn--go'}`}
+            onClick={onResume}
+          >
             ▶ Continue Show
           </button>
           <button className="hbtn hbtn--danger" onClick={onEnd}>

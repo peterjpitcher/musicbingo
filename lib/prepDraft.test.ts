@@ -85,6 +85,21 @@ test("clearPrepDraft removes the stored draft", () => {
   expect(store.has(PREP_DRAFT_STORAGE_KEY)).toBe(false);
 });
 
+test("scoped drafts are isolated per session and from the new-game draft", () => {
+  const newGameDraft = { ...makeDraft(), game1Theme: "new-game" };
+  const editDraft = { ...makeDraft(), game1Theme: "edit-abc" };
+  writePrepDraft(newGameDraft);
+  writePrepDraft(editDraft, "session-abc");
+
+  expect(readPrepDraft()?.game1Theme).toBe("new-game");
+  expect(readPrepDraft("session-abc")?.game1Theme).toBe("edit-abc");
+  expect(readPrepDraft("session-other")).toBeNull();
+
+  clearPrepDraft("session-abc");
+  expect(readPrepDraft("session-abc")).toBeNull();
+  expect(readPrepDraft()?.game1Theme).toBe("new-game");
+});
+
 test("readPrepDraft returns null for corrupt JSON", () => {
   store.set(PREP_DRAFT_STORAGE_KEY, "{not json");
   expect(readPrepDraft()).toBeNull();

@@ -107,5 +107,11 @@ test("shouldTriggerNextForTrack fires once per track", () => {
 test("updateAdvanceTrackMarker clears marker when track changes", () => {
   expect(updateAdvanceTrackMarker({ trackId: "abc", advanceTriggeredForTrackId: "abc" })).toBe("abc");
   expect(updateAdvanceTrackMarker({ trackId: "xyz", advanceTriggeredForTrackId: "abc" })).toBeNull();
-  expect(updateAdvanceTrackMarker({ trackId: null, advanceTriggeredForTrackId: "abc" })).toBeNull();
+});
+
+test("updateAdvanceTrackMarker holds the marker through transient empty playback", () => {
+  // A momentary "nothing playing" gap between tracks must not re-arm the
+  // trigger, or a stale report of the old track could fire a double skip.
+  expect(updateAdvanceTrackMarker({ trackId: null, advanceTriggeredForTrackId: "abc" })).toBe("abc");
+  expect(updateAdvanceTrackMarker({ trackId: null, advanceTriggeredForTrackId: null })).toBeNull();
 });

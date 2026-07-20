@@ -28,6 +28,7 @@ import { getContent, type ContentKey } from "@/lib/live/content";
 import { DEFAULT_BRAND_CONFIG } from "@/lib/brands/defaultBrand";
 import type { BrandConfig } from "@/lib/brands/types";
 import { computeRevealState, shouldTriggerNextForTrack, updateAdvanceTrackMarker } from "@/lib/live/reveal";
+import { makeIntroTracking, trackIntroPlayback, type IntroTracking } from "@/lib/live/introState";
 import { getLiveSession, upsertLiveSession } from "@/lib/live/sessionApi";
 import {
   formatSecondsInput,
@@ -228,6 +229,15 @@ export default function HostSessionControllerPage() {
   const challengeTrackIdsRef = useRef<Set<string>>(new Set());
   // Resolved Spotify track ID for the intro song (first track in playlist when introSongArtist is set).
   const introTrackIdRef = useRef<string | null>(null);
+  // Anchor-based intro tracking set by playIntroSong; survives stale status
+  // reports and market-relinked track ids (see lib/live/introState.ts).
+  const introAnchorRef = useRef<IntroTracking | null>(null);
+  // Auto-advance guards: one skip command in flight at a time, and a count of
+  // consecutive failures so the retry loop can surface a warning.
+  const advanceInFlightRef = useRef<boolean>(false);
+  const advanceFailCountRef = useRef<number>(0);
+  // When the tab went hidden (browser throttling suspends the poll loop).
+  const hiddenAtMsRef = useRef<number | null>(null);
 
   // ---- After Hours console additions ----
   const [brand, setBrand] = useState<BrandConfig | null>(null);
@@ -511,12 +521,36 @@ export default function HostSessionControllerPage() {
           : null;
         const trackChanged = track?.trackId != null && track.trackId !== prev.currentTrack?.trackId;
 
-        // --- Intro song detection (derived every tick, not sticky) ---
-        const isIntroSong = !prev.introPlayed
-          && introTrackIdRef.current != null
-          && track?.trackId === introTrackIdRef.current;
-        // Flip introPlayed on first track change after intro was playing.
-        const introPlayed = prev.introPlayed || (prev.isIntroSong && trackChanged);
+        // --- Intro song detection ---
+        // Primary: anchor tracking set by playIntroSong. It holds the intro
+        // flag through Spotify's stale post-command status and relinked track
+        // ids, and only finishes when playback moves away from the observed
+        // intro track, so the intro always plays in full.
+        // Fallback (e.g. page refreshed mid-intro, no anchor): direct id
+        // comparison. The intro only counts as finished when the changed-to
+        // track is NOT the intro itself, so the first report of the intro
+        // track cannot end it.
+        let isIntroSong: boolean;
+        let introFinished = false;
+        if (prev.isIntroSong && !prev.introPlayed && introAnchorRef.current) {
+          const introResult = trackIntroPlayback(introAnchorRef.current, track?.trackId ?? null);
+          introAnchorRef.current = introResult.tracking;
+          isIntroSong = introResult.isIntroSong;
+          introFinished = introResult.introFinished;
+        } else {
+          isIntroSong = !prev.introPlayed
+            && introTrackIdRef.current != null
+            && track?.trackId === introTrackIdRef.current;
+          introFinished = prev.isIntroSong && trackChanged && !isIntroSong;
+        }
+        const introPlayed = prev.introPlayed || introFinished;
+        // Clear the anchor only when an intro actually ends. Snapshots that run
+        // BEFORE playIntroSong's own runtime commit (the command response is
+        // queued first, with prev.isIntroSong still false) must not wipe the
+        // freshly set anchor.
+        if (introFinished || (prev.isIntroSong && !isIntroSong)) {
+          introAnchorRef.current = null;
+        }
 
         // --- Challenge song detection (uses resolved Set; falls back to text matching) ---
         // Intro takes precedence: when intro is playing, challenge is false.
@@ -771,6 +805,7 @@ export default function HostSessionControllerPage() {
         Boolean(data.canControlPlayback) &&
         !runtimeRef.current.freePlay &&
         !runtimeRef.current.isIntroSong &&
+        !advanceInFlightRef.current &&
         shouldTriggerNextForTrack({
           trackId: track?.trackId ?? null,
           revealState,
@@ -804,22 +839,40 @@ export default function HostSessionControllerPage() {
           }).catch(() => {});
           return;
         }
-        if (trackId) {
-          commitRuntime((prev) => ({
-            ...prev,
-            advanceTriggeredForTrackId: trackId,
-          }));
-        }
-        const nextRes = await fetch("/api/spotify/live/command", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "next" }),
-        });
-        if (!nextRes.ok) {
-          const nextError = await nextRes
-            .text()
-            .catch(() => "Failed to advance to next song.");
-          setError(nextError || "Failed to advance to next song.");
+        // Send the skip first and only mark the track as advanced on success.
+        // A failed skip leaves the marker clear, so the next 2-second poll
+        // retries automatically instead of stalling on this song. The in-flight
+        // ref stops overlapping skip commands from concurrent polls.
+        advanceInFlightRef.current = true;
+        try {
+          const nextRes = await fetch("/api/spotify/live/command", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "next" }),
+          });
+          if (nextRes.ok) {
+            advanceFailCountRef.current = 0;
+            if (trackId) {
+              commitRuntime((prev) => ({
+                ...prev,
+                advanceTriggeredForTrackId: trackId,
+              }));
+            }
+          } else {
+            advanceFailCountRef.current += 1;
+            if (advanceFailCountRef.current >= 3) {
+              const nextError = await nextRes
+                .text()
+                .catch(() => "Failed to advance to next song.");
+              setError(
+                `${nextError || "Failed to advance to next song."} Retrying automatically.`
+              );
+            }
+          }
+        } catch {
+          advanceFailCountRef.current += 1;
+        } finally {
+          advanceInFlightRef.current = false;
         }
       }
 
@@ -849,6 +902,30 @@ export default function HostSessionControllerPage() {
       pollAbortRef.current?.abort();
     };
   }, [pollStatus, session]);
+
+  // Browsers throttle timers in hidden tabs, which suspends the 2-second poll
+  // that drives reveals and auto-skips. Poll immediately when the tab becomes
+  // visible again so the game catches up at once, and warn the host if the
+  // engine was suspended mid-game.
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        hiddenAtMsRef.current = Date.now();
+        return;
+      }
+      const hiddenForMs = hiddenAtMsRef.current ? Date.now() - hiddenAtMsRef.current : 0;
+      hiddenAtMsRef.current = null;
+      void pollStatus();
+      if (hiddenForMs > 10_000 && runtimeRef.current.mode === "running") {
+        setNoticeVariant("warning");
+        setNotice(
+          "Reveals and auto-skips pause while this tab is in the background. Keep the host screen visible during games."
+        );
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, [pollStatus]);
 
   const sendCommand = useCallback(
     async (
@@ -906,6 +983,7 @@ export default function HostSessionControllerPage() {
       return;
     }
     setNotice("");
+    introAnchorRef.current = null;
     const ok = await sendCommand(
       "play_game",
       { playlistId: game.playlistId },
@@ -974,6 +1052,12 @@ export default function HostSessionControllerPage() {
     setNotice("");
     const ok = await sendCommand("play_track", { trackId: intros[0].trackId });
     if (ok) {
+      // Track the intro from command time: status may still report the
+      // pre-intro track for a tick or two, or report a relinked track id.
+      introAnchorRef.current = makeIntroTracking({
+        expectedTrackId: intros[0].trackId,
+        currentTrackId: runtimeRef.current.currentTrack?.trackId ?? null,
+      });
       commitRuntime((prev) => {
         const introTrack = prev.currentTrack?.trackId === intros[0].trackId ? prev.currentTrack : null;
         return {
@@ -1003,8 +1087,15 @@ export default function HostSessionControllerPage() {
   }
 
   function openBreakScreen() {
-    const trackId = runtimeRef.current.currentTrack?.trackId ?? null;
-    const gamePlaylistId = runtimeRef.current.activeGameNumber
+    // Only remember a resume point when the break interrupts an actual game
+    // song (running, or paused mid-game). Breaks taken between games (or during
+    // an intro, which is not part of the game playlist) have nothing to resume.
+    const interruptedGame =
+      (runtimeRef.current.mode === "running" || runtimeRef.current.mode === "paused") &&
+      !runtimeRef.current.isIntroSong &&
+      runtimeRef.current.activeGameNumber != null;
+    const trackId = interruptedGame ? runtimeRef.current.currentTrack?.trackId ?? null : null;
+    const gamePlaylistId = interruptedGame
       ? session?.games.find((g) => g.gameNumber === runtimeRef.current.activeGameNumber)?.playlistId ?? null
       : null;
     const spotifyAvailable = runtimeRef.current.spotifyControlAvailable;
@@ -1015,6 +1106,7 @@ export default function HostSessionControllerPage() {
       screenId: "break" as ScreenId,
       preBreakTrackId: trackId,
       preBreakPlaylistId: gamePlaylistId,
+      breakStartedAtMs: Date.now(),
     }));
 
     if (spotifyAvailable) {
@@ -1072,6 +1164,7 @@ export default function HostSessionControllerPage() {
       screenId,
       preBreakTrackId: null,
       preBreakPlaylistId: null,
+      breakStartedAtMs: null,
       isIntroSong: false,
       isChallengeSong: false,
       challengeType: null,
@@ -1091,6 +1184,59 @@ export default function HostSessionControllerPage() {
     const baseIdx = currentIdx >= 0 ? currentIdx : SHOW_STEPS.findIndex((s) => s.id === "break");
     const nextIdx = Math.max(0, Math.min(SHOW_STEPS.length - 1, baseIdx + 1));
     leaveBreakToScreen(SHOW_STEPS[nextIdx].id);
+  }
+
+  /** The game a mid-game break interrupted, or null when there is nothing to resume. */
+  function breakResumeGameNumber(): 1 | 2 | null {
+    // Reads render state (not runtimeRef) so the button appears/disappears in
+    // the same render as the break state change.
+    const playlistId = runtime.preBreakPlaylistId;
+    const trackId = runtime.preBreakTrackId;
+    if (!playlistId || !trackId) return null;
+    return session?.games.find((g) => g.playlistId === playlistId)?.gameNumber ?? null;
+  }
+
+  /** Resume the interrupted game from the song it was on (restarts that song). */
+  async function resumeGameFromBreak() {
+    const playlistId = runtimeRef.current.preBreakPlaylistId;
+    const trackId = runtimeRef.current.preBreakTrackId;
+    const game = session?.games.find((g) => g.playlistId === playlistId);
+    if (!session || !game || !playlistId || !trackId) return;
+
+    const backToGame = (prev: LiveRuntimeState): LiveRuntimeState => ({
+      ...prev,
+      mode: "running",
+      activeGameNumber: game.gameNumber,
+      screenId: (game.gameNumber === 1 ? "game1" : "game2") as ScreenId,
+      preBreakTrackId: null,
+      preBreakPlaylistId: null,
+      breakStartedAtMs: null,
+      advanceTriggeredForTrackId: null,
+      isIntroSong: false,
+      extensionMs: 0,
+      freePlay: false,
+    });
+
+    const ok = await sendCommand(
+      "resume_from_track",
+      { playlistId, trackId },
+      { modeOnSuccess: "running" }
+    );
+    if (ok) {
+      commitRuntime(backToGame);
+      setNoticeVariant("success");
+      setNotice(`Resumed Game ${game.gameNumber} from where it left off.`);
+    } else {
+      // Spotify unavailable: return the TV to the game screen anyway and let
+      // the host drive playback by hand (manual host control mode).
+      commitRuntime((prev) => ({
+        ...backToGame(prev),
+        spotifyControlAvailable: false,
+        warningMessage: prev.warningMessage || "Manual host control mode active.",
+      }));
+      setNoticeVariant("warning");
+      setNotice("Spotify control unavailable. Restart the game playlist in the Spotify app.");
+    }
   }
 
   function openClaimScreen() {
@@ -1780,6 +1926,8 @@ export default function HostSessionControllerPage() {
                 onStart={(n) => void startGame(n)}
                 onBreak={openBreakScreen}
                 onResume={resumeFromBreak}
+                resumeGameNumber={breakResumeGameNumber()}
+                onResumeGame={() => void resumeGameFromBreak()}
                 onClaim={openClaimScreen}
                 onBackToGame={returnFromClaimScreen}
                 claimAvailable={claimAvailable}
@@ -1875,6 +2023,7 @@ export default function HostSessionControllerPage() {
             open={awardModalOpen}
             teams={runtime.teamScores}
             presets={AWARD_PRESETS}
+            defaultBonusPoints={activeGame ? getChallengeBonusPoints(activeGame) : undefined}
             onClose={() => setAwardModalOpen(false)}
             onAddTeam={addTeamScore}
             onRemoveTeam={removeTeamScore}

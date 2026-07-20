@@ -41,7 +41,10 @@ export function updateAdvanceTrackMarker(params: {
   advanceTriggeredForTrackId: string | null;
 }): string | null {
   const { trackId, advanceTriggeredForTrackId } = params;
-  if (!trackId) return null;
   if (!advanceTriggeredForTrackId) return null;
+  // Hold the marker through transient "nothing playing" gaps: clearing it there
+  // would re-arm the trigger while a stale report of the old track can still
+  // arrive, causing a double skip.
+  if (!trackId) return advanceTriggeredForTrackId;
   return advanceTriggeredForTrackId === trackId ? advanceTriggeredForTrackId : null;
 }

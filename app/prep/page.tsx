@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, Suspense } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { AppHeader } from "@/components/layout/AppHeader";
@@ -129,6 +129,11 @@ function normaliseIntroSongsForSignature(songs: IntroSong[]): IntroSong[] {
   return [...songs].sort((a, b) => a.type.localeCompare(b.type));
 }
 
+function draftSavedAtDisplay(draft: PrepDraftV1): string {
+  const savedAt = draft.savedAt ? new Date(draft.savedAt) : null;
+  return savedAt && !Number.isNaN(savedAt.getTime()) ? savedAt.toLocaleString("en-GB") : "";
+}
+
 function PrepPageInner() {
   const searchParams = useSearchParams();
   const editSessionParam = searchParams.get("session");
@@ -209,6 +214,12 @@ function PrepPageInner() {
   // Remembers the id of the last successful save so repeat saves overwrite the
   // same session instead of minting a new one each time
   const savedSessionIdRef = useRef<string | null>(null);
+  // The edited/first-saved session's createdAt, so re-saves update the modified
+  // time but never the created date
+  const sessionCreatedAtRef = useRef<string | null>(null);
+  // Draft signature at restore/hydration time; drafts are only written once the
+  // form differs from this baseline
+  const hydratedSignatureRef = useRef<string | null>(null);
 
   const parsedGame1 = useMemo(() => parseSongListText(game1SongsText), [game1SongsText]);
   const parsedGame2 = useMemo(() => parseSongListText(game2SongsText), [game2SongsText]);
@@ -351,10 +362,15 @@ function PrepPageInner() {
     setArtistRevealSecondsInput(formatSecondsInput(revealConfig.artistMs));
   }
 
-  /** Throw away the restored draft and reset the wizard to a blank new game. */
+  /** Throw away the restored draft: edit mode reloads the saved game, new mode resets to blank. */
   function discardDraft() {
-    clearPrepDraft();
+    clearPrepDraft(editSessionParam);
     setDraftNotice("");
+    if (editSessionParam) {
+      // Reload so the wizard re-hydrates from the saved session state
+      window.location.reload();
+      return;
+    }
     setCurrentStep(0);
     setEventDate(todayIso());
     setCountInput("40");
@@ -386,6 +402,37 @@ function PrepPageInner() {
       .catch(() => {});
   }, []);
 
+  /** Apply a stored draft over the wizard state (new-game restore and edit-mode restore). */
+  const applyDraftToState = useCallback((draft: PrepDraftV1): void => {
+    setCurrentStep(draft.currentStep);
+    setEventDate(draft.eventDate || todayIso());
+    setCountInput(draft.countInput);
+    if (draft.songPlaySecondsInput) setSongPlaySecondsInput(draft.songPlaySecondsInput);
+    if (draft.albumRevealSecondsInput) setAlbumRevealSecondsInput(draft.albumRevealSecondsInput);
+    if (draft.titleRevealSecondsInput) setTitleRevealSecondsInput(draft.titleRevealSecondsInput);
+    if (draft.artistRevealSecondsInput) setArtistRevealSecondsInput(draft.artistRevealSecondsInput);
+    setLiveSessionName(draft.liveSessionName);
+    setLiveSessionNameDirty(draft.liveSessionNameDirty);
+    setBreakPlaylistId(draft.breakPlaylistId);
+    setSelectedBrandId(draft.selectedBrandId);
+    setGame1Theme(draft.game1Theme || DEFAULT_GAME_THEME);
+    setGame1SongsText(draft.game1SongsText);
+    setGame1ChallengeSongs(draft.game1ChallengeSongs);
+    setGame1ChallengeBonusPointsInput(
+      draft.game1ChallengeBonusPointsInput || String(DEFAULT_CHALLENGE_BONUS_POINTS)
+    );
+    setGame1IntroUrl(draft.game1IntroUrl);
+    setGame1IntroSongs(draft.game1IntroSongs);
+    setGame2Theme(draft.game2Theme || DEFAULT_GAME_THEME);
+    setGame2SongsText(draft.game2SongsText);
+    setGame2ChallengeSongs(draft.game2ChallengeSongs);
+    setGame2ChallengeBonusPointsInput(
+      draft.game2ChallengeBonusPointsInput || String(DEFAULT_CHALLENGE_BONUS_POINTS)
+    );
+    setGame2IntroUrl(draft.game2IntroUrl);
+    setGame2IntroSongs(draft.game2IntroSongs);
+  }, []);
+
   // Hydrate wizard state when ?session=<id> is present (edit mode)
   useEffect(() => {
     if (!editSessionParam) return;
@@ -397,6 +444,7 @@ function PrepPageInner() {
         if (cancelled) return;
 
         if (!loaded || !loaded.prepData) {
+          setDraftReady(true);
           setEditHydrationNotice(
             "Could not reconstruct the original song text for this session — the prep data is missing. " +
             "You can duplicate it from the dashboard or proceed as a new game."
@@ -466,56 +514,45 @@ function PrepPageInner() {
         // Preserve the session id so save overwrites the same record
         setEditingSessionId(loaded.id);
         setEditingSessionName(loaded.name);
+        // Re-saves keep the original created date; upsert bumps updated_at
+        sessionCreatedAtRef.current = loaded.createdAt ?? null;
+
+        // Unsaved edits to this game from a previous visit win over server state
+        const draft = readPrepDraft(editSessionParam);
+        if (draft) {
+          applyDraftToState(draft);
+          const savedAtDisplay = draftSavedAtDisplay(draft);
+          setDraftNotice(
+            savedAtDisplay
+              ? `Restored unsaved edits to this game (autosaved ${savedAtDisplay}). Save the live session to keep them, or discard.`
+              : "Restored unsaved edits to this game. Save the live session to keep them, or discard."
+          );
+        }
+        setDraftReady(true);
       } catch {
         if (!cancelled) {
           setEditHydrationNotice(
             "Failed to load the session for editing. You can proceed as a new game."
           );
+          setDraftReady(true);
         }
       }
     })();
 
     return () => { cancelled = true; };
   // Run once on mount when the param is present
-  }, [editSessionParam]);
+  }, [applyDraftToState, editSessionParam]);
 
-  // Restore an unsaved prep draft (new-game mode only; edit mode hydrates from
-  // the server above). A draft exists whenever songs were typed but the live
-  // session was never saved, e.g. after an accidental refresh or tab close.
+  // Restore an unsaved prep draft (new-game mode; edit mode restores its own
+  // per-session draft after server hydration above). A draft exists whenever
+  // the form was changed but the live session was never saved, e.g. after an
+  // accidental refresh or tab close.
   useEffect(() => {
     if (editSessionParam) return;
     const draft = readPrepDraft();
     if (draft) {
-      setCurrentStep(draft.currentStep);
-      setEventDate(draft.eventDate || todayIso());
-      setCountInput(draft.countInput);
-      if (draft.songPlaySecondsInput) setSongPlaySecondsInput(draft.songPlaySecondsInput);
-      if (draft.albumRevealSecondsInput) setAlbumRevealSecondsInput(draft.albumRevealSecondsInput);
-      if (draft.titleRevealSecondsInput) setTitleRevealSecondsInput(draft.titleRevealSecondsInput);
-      if (draft.artistRevealSecondsInput) setArtistRevealSecondsInput(draft.artistRevealSecondsInput);
-      setLiveSessionName(draft.liveSessionName);
-      setLiveSessionNameDirty(draft.liveSessionNameDirty);
-      setBreakPlaylistId(draft.breakPlaylistId);
-      setSelectedBrandId(draft.selectedBrandId);
-      setGame1Theme(draft.game1Theme || DEFAULT_GAME_THEME);
-      setGame1SongsText(draft.game1SongsText);
-      setGame1ChallengeSongs(draft.game1ChallengeSongs);
-      setGame1ChallengeBonusPointsInput(
-        draft.game1ChallengeBonusPointsInput || String(DEFAULT_CHALLENGE_BONUS_POINTS)
-      );
-      setGame1IntroUrl(draft.game1IntroUrl);
-      setGame1IntroSongs(draft.game1IntroSongs);
-      setGame2Theme(draft.game2Theme || DEFAULT_GAME_THEME);
-      setGame2SongsText(draft.game2SongsText);
-      setGame2ChallengeSongs(draft.game2ChallengeSongs);
-      setGame2ChallengeBonusPointsInput(
-        draft.game2ChallengeBonusPointsInput || String(DEFAULT_CHALLENGE_BONUS_POINTS)
-      );
-      setGame2IntroUrl(draft.game2IntroUrl);
-      setGame2IntroSongs(draft.game2IntroSongs);
-      const savedAt = draft.savedAt ? new Date(draft.savedAt) : null;
-      const savedAtDisplay =
-        savedAt && !Number.isNaN(savedAt.getTime()) ? savedAt.toLocaleString("en-GB") : "";
+      applyDraftToState(draft);
+      const savedAtDisplay = draftSavedAtDisplay(draft);
       setDraftNotice(
         savedAtDisplay
           ? `Restored your unsaved prep draft (autosaved ${savedAtDisplay}).`
@@ -523,21 +560,41 @@ function PrepPageInner() {
       );
     }
     setDraftReady(true);
-  }, [editSessionParam]);
+  }, [applyDraftToState, editSessionParam]);
 
-  // Debounced draft autosave. Songs text is the valuable data: with none typed
-  // the draft is removed so a fresh visit starts clean.
+  // Signature of the draftable form state (ignoring timestamps and the current
+  // step) used to detect real changes against the restore/hydration baseline.
+  const draftSignature = useMemo(
+    () => JSON.stringify({ ...draftPayload, savedAt: "", currentStep: 0 }),
+    [draftPayload]
+  );
+
+  // Capture the baseline on the first render after restore/hydration.
   useEffect(() => {
-    if (editSessionParam || !draftReady) return;
+    if (draftReady && hydratedSignatureRef.current === null) {
+      hydratedSignatureRef.current = draftSignature;
+    }
+  }, [draftReady, draftSignature]);
+
+  // Debounced draft autosave, scoped per session in edit mode. Nothing is
+  // written until the form differs from the baseline, and a new-game draft
+  // with no songs is removed so fresh visits start clean.
+  useEffect(() => {
+    if (!draftReady) return;
     const handle = window.setTimeout(() => {
-      if (!draftPayload.game1SongsText.trim() && !draftPayload.game2SongsText.trim()) {
+      if (
+        !editSessionParam &&
+        !draftPayload.game1SongsText.trim() &&
+        !draftPayload.game2SongsText.trim()
+      ) {
         clearPrepDraft();
         return;
       }
-      writePrepDraft(draftPayload);
+      if (draftSignature === hydratedSignatureRef.current) return;
+      writePrepDraft(draftPayload, editSessionParam);
     }, 400);
     return () => window.clearTimeout(handle);
-  }, [draftPayload, draftReady, editSessionParam]);
+  }, [draftPayload, draftReady, draftSignature, editSessionParam]);
 
   useEffect(() => {
     if (formSignatureRef.current === formInputSignature) return;
@@ -744,7 +801,9 @@ function PrepPageInner() {
       // instead of creating duplicate sessions
       id: editingSessionId ?? savedSessionIdRef.current ?? makeSessionId(),
       name: sessionName,
-      createdAt: new Date().toISOString(),
+      // Preserved across edits and re-saves; only a brand-new game stamps now.
+      // The repo bumps updated_at on every upsert.
+      createdAt: sessionCreatedAtRef.current ?? new Date().toISOString(),
       eventDateInput: eventDate,
       eventDateDisplay,
       revealConfig,
@@ -809,11 +868,12 @@ function PrepPageInner() {
     const session = buildLiveSessionPayload();
     await upsertLiveSession(session);
     savedSessionIdRef.current = session.id;
-    // The prep is now safely on the server, the device draft has done its job
-    if (!editSessionParam) {
-      clearPrepDraft();
-      setDraftNotice("");
-    }
+    sessionCreatedAtRef.current = session.createdAt;
+    // The prep is now safely on the server, the device draft has done its job.
+    // The saved state becomes the new baseline for future draft writes.
+    clearPrepDraft(editSessionParam);
+    setDraftNotice("");
+    hydratedSignatureRef.current = draftSignature;
     return session;
   }
 
@@ -1311,7 +1371,7 @@ function PrepPageInner() {
           <Notice variant="warning" className="mb-4">{editHydrationNotice}</Notice>
         )}
 
-        {draftNotice && !editingSessionId && (
+        {draftNotice && (
           <Notice variant="info" className="mb-4">
             <div
               style={{

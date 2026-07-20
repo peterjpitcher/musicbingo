@@ -10,6 +10,15 @@ import type { IntroSong } from "@/lib/live/types";
 
 export const PREP_DRAFT_STORAGE_KEY = "music-bingo-prep-draft-v1";
 
+/**
+ * Drafts are scoped: the new-game wizard uses the bare key, and editing an
+ * existing session uses a per-session key so unsaved edits to one game never
+ * bleed into another (or into a new game).
+ */
+export function prepDraftStorageKey(scope?: string | null): string {
+  return scope ? `${PREP_DRAFT_STORAGE_KEY}:${scope}` : PREP_DRAFT_STORAGE_KEY;
+}
+
 export const CHALLENGE_ENTRY_COUNT = 5;
 
 export type ChallengeEntry = { value: string; type: "sing-along" | "dance-along" };
@@ -116,10 +125,10 @@ export function sanitizePrepDraft(input: unknown): PrepDraftV1 | null {
   };
 }
 
-export function readPrepDraft(): PrepDraftV1 | null {
+export function readPrepDraft(scope?: string | null): PrepDraftV1 | null {
   if (!canUseStorage()) return null;
   try {
-    const raw = window.localStorage.getItem(PREP_DRAFT_STORAGE_KEY);
+    const raw = window.localStorage.getItem(prepDraftStorageKey(scope));
     if (!raw) return null;
     return sanitizePrepDraft(JSON.parse(raw) as unknown);
   } catch {
@@ -127,25 +136,25 @@ export function readPrepDraft(): PrepDraftV1 | null {
   }
 }
 
-export function writePrepDraft(draft: PrepDraftV1): void {
+export function writePrepDraft(draft: PrepDraftV1, scope?: string | null): void {
   if (!canUseStorage()) return;
   try {
-    window.localStorage.setItem(PREP_DRAFT_STORAGE_KEY, JSON.stringify(draft));
+    window.localStorage.setItem(prepDraftStorageKey(scope), JSON.stringify(draft));
   } catch (err) {
     if (err instanceof DOMException && err.name === "QuotaExceededError") {
       console.warn(
         "[music-bingo] localStorage quota exceeded, the prep draft was not saved. Clear browser storage to resolve.",
-        PREP_DRAFT_STORAGE_KEY
+        prepDraftStorageKey(scope)
       );
     }
     // Ignore other errors (e.g. SecurityError in private/restricted environments)
   }
 }
 
-export function clearPrepDraft(): void {
+export function clearPrepDraft(scope?: string | null): void {
   if (!canUseStorage()) return;
   try {
-    window.localStorage.removeItem(PREP_DRAFT_STORAGE_KEY);
+    window.localStorage.removeItem(prepDraftStorageKey(scope));
   } catch {
     // ignore storage delete failures in private/restricted environments
   }

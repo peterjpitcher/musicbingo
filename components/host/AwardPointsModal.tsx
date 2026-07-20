@@ -12,6 +12,8 @@ type AwardPointsModalProps = {
   open: boolean;
   teams: LiveTeamScore[];
   presets: AwardPreset[];
+  /** Default for the free-typed bonus box: the active game's configured challenge bonus. */
+  defaultBonusPoints?: number;
   onClose: () => void;
   onAddTeam: (name: string) => void;
   onRemoveTeam: (teamId: string) => void;
@@ -22,6 +24,7 @@ export function AwardPointsModal({
   open,
   teams,
   presets,
+  defaultBonusPoints,
   onClose,
   onAddTeam,
   onRemoveTeam,
@@ -81,7 +84,7 @@ export function AwardPointsModal({
                 key={team.id}
                 team={team}
                 presets={presets}
-                bonusInput={bonusInputsByTeam[team.id] ?? "10"}
+                bonusInput={bonusInputsByTeam[team.id] ?? String(defaultBonusPoints ?? 10)}
                 onBonusInput={(value) =>
                   setBonusInputsByTeam((prev) => ({ ...prev, [team.id]: value }))
                 }

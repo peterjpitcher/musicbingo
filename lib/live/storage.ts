@@ -301,6 +301,12 @@ export function validateRuntimeState(input: unknown): LiveRuntimeState | null {
       typeof input.preBreakPlaylistId === "string" && input.preBreakPlaylistId.trim()
         ? input.preBreakPlaylistId.trim()
         : null,
+    breakStartedAtMs:
+      typeof input.breakStartedAtMs === "number" &&
+      Number.isFinite(input.breakStartedAtMs) &&
+      input.breakStartedAtMs > 0
+        ? input.breakStartedAtMs
+        : null,
     extensionMs: asNumber(input.extensionMs) ?? 0,
     freePlay: Boolean(input.freePlay),
     isIntroSong: Boolean(input.isIntroSong),

@@ -19,8 +19,18 @@ function tokenSecret(): string {
   );
 }
 
+function isProduction(): boolean {
+  return process.env.NODE_ENV === "production";
+}
+
+/**
+ * Protection is on whenever a secret is configured, and ALWAYS in production:
+ * a production deploy without APP_ADMIN_SECRET fails closed (admin access is
+ * denied until the variable is set) instead of leaving every session open to
+ * anyone with the URL. Local dev without a secret stays open for convenience.
+ */
 export function isAdminProtectionEnabled(): boolean {
-  return Boolean(configuredSecret());
+  return Boolean(configuredSecret()) || isProduction();
 }
 
 function digest(input: string): string {
@@ -114,6 +124,13 @@ export function createAdminCookieValue(): string {
 
 export function hasAdminAccess(request: NextRequest): boolean {
   if (!isAdminProtectionEnabled()) return true;
+  if (!configuredSecret() && isProduction()) {
+    // Fail closed: nobody can unlock admin until the secret is configured.
+    console.error(
+      "[music-bingo] APP_ADMIN_SECRET is not set in production; admin access is locked until it is configured."
+    );
+    return false;
+  }
   const value = request.cookies.get(ADMIN_COOKIE)?.value;
   return Boolean(value && safeEqual(value, createAdminCookieValue()));
 }
