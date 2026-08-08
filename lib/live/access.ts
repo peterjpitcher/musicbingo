@@ -135,13 +135,22 @@ export function hasAdminAccess(request: NextRequest): boolean {
   return Boolean(value && safeEqual(value, createAdminCookieValue()));
 }
 
+/**
+ * 400 days is the ceiling browsers allow (Chrome and Firefox clamp anything
+ * longer, per RFC 6265bis), so this is as close to "never expires" as a cookie
+ * can get. A shorter window bought no real security here, since this is a
+ * single-operator internal tool, but it did silently lock the host out of the
+ * games list mid-event whenever it lapsed.
+ */
+const ADMIN_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 400;
+
 export function setAdminCookie(response: NextResponse): void {
   response.cookies.set(ADMIN_COOKIE, createAdminCookieValue(), {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: 60 * 60 * 24 * 14,
+    maxAge: ADMIN_COOKIE_MAX_AGE_SECONDS,
   });
 }
 

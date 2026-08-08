@@ -19,6 +19,7 @@ import {
   DEFAULT_BODY_FONT,
 } from "@/lib/brands/fonts";
 import type { Brand, BrandConfig, BrandInput } from "@/lib/brands/types";
+import { assertAdminUnlocked } from "@/lib/live/adminGuard";
 
 /** Sentinel id used in `?id=` to mean "create a new venue". */
 const NEW_ID = "new";
@@ -89,6 +90,7 @@ function BrandsEditor(): React.ReactElement {
 
   const refreshBrands = useCallback(async (): Promise<BrandWithUrls[]> => {
     const res = await fetch("/api/brands");
+    assertAdminUnlocked(res);
     if (!res.ok) throw new Error(`Failed to load venues (HTTP ${res.status})`);
     const data: BrandWithUrls[] = await res.json();
     setBrands(data);
@@ -161,6 +163,7 @@ function BrandsEditor(): React.ReactElement {
         method: "POST",
         body: formData,
       });
+      assertAdminUnlocked(res);
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error((data as { error?: string }).error || `Failed to upload ${slot}.`);
@@ -260,6 +263,7 @@ function BrandsEditor(): React.ReactElement {
     setNotice("");
     try {
       const res = await fetch(`/api/brands/${selId}`, { method: "DELETE" });
+      assertAdminUnlocked(res);
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error((data as { error?: string }).error || "Failed to delete venue.");

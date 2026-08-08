@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { Brand } from "@/lib/brands/types";
+import { assertAdminUnlocked } from "@/lib/live/adminGuard";
 
 type BrandSelectorProps = {
   value: string | null;
@@ -17,7 +18,10 @@ export function BrandSelector({ value, onChange, className, disabled }: BrandSel
 
   useEffect(() => {
     fetch("/api/brands")
-      .then((res) => (res.ok ? res.json() : []))
+      .then((res) => {
+        assertAdminUnlocked(res);
+        return res.ok ? res.json() : [];
+      })
       .then((data) => setBrands(data))
       .catch(() => setLoadError(true))
       .finally(() => setLoading(false));

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Notice } from "@/components/ui/Notice";
 import { formatEventDateDisplay } from "@/lib/eventDate";
 import { DEFAULT_GAME_THEME, MAX_SONGS_PER_GAME, makeSongSelectionValue } from "@/lib/gameInput";
+import { assertAdminUnlocked } from "@/lib/live/adminGuard";
 import { exportLiveSessionJson, getLiveSession, upsertLiveSession } from "@/lib/live/sessionApi";
 import {
   formatSecondsInput,
@@ -926,6 +927,7 @@ function PrepPageInner() {
       pdfForm.set("count", String(count));
 
       const res = await fetch("/api/generate", { method: "POST", body: pdfForm });
+      assertAdminUnlocked(res);
       if (!res.ok) {
         const msg = await res.text();
         throw new Error(msg || "Failed to generate output bundle.");
@@ -1228,6 +1230,7 @@ function PrepPageInner() {
       pdfForm.set("count", String(count));
 
       const res = await fetch("/api/generate", { method: "POST", body: pdfForm });
+      assertAdminUnlocked(res);
       if (!res.ok) {
         const msg = await res.text();
         throw new Error(msg || "Failed to generate output bundle.");

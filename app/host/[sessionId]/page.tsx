@@ -10,6 +10,7 @@ import { AppHeader } from "@/components/layout/AppHeader";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Notice } from "@/components/ui/Notice";
+import { assertAdminUnlocked } from "@/lib/live/adminGuard";
 import { publishLiveMessage } from "@/lib/live/channel";
 import { NowPlayingPanel } from "@/components/host/NowPlayingPanel";
 import { GameFlowPanel } from "@/components/host/GameFlowPanel";
@@ -463,6 +464,7 @@ export default function HostSessionControllerPage() {
       const res = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/links`, {
         cache: "no-store",
       });
+      assertAdminUnlocked(res);
       if (!res.ok) throw new Error("Could not create private display link.");
       const data = await res.json() as { displayUrl?: string };
       if (!data.displayUrl) throw new Error("Private display link was missing.");

@@ -5,6 +5,7 @@ import type { FormEvent } from "react";
 
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Notice } from "@/components/ui/Notice";
+import { safeNextPath } from "@/lib/live/adminGuard";
 
 export default function AdminUnlockPage() {
   const [nextPath, setNextPath] = useState("/host");
@@ -13,8 +14,7 @@ export default function AdminUnlockPage() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    const next = new URLSearchParams(window.location.search).get("next");
-    if (next?.startsWith("/")) setNextPath(next);
+    setNextPath(safeNextPath(new URLSearchParams(window.location.search).get("next")));
   }, []);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -31,7 +31,7 @@ export default function AdminUnlockPage() {
         const data = await res.json().catch(() => null);
         throw new Error(data?.error || "Could not unlock admin.");
       }
-      window.location.href = nextPath.startsWith("/") ? nextPath : "/host";
+      window.location.href = safeNextPath(nextPath);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not unlock admin.");
     } finally {
