@@ -6,7 +6,7 @@ import {
   DEFAULT_DISPLAY_FONT,
   DEFAULT_BODY_FONT,
 } from "@/lib/brands/fonts";
-import type { Brand } from "@/lib/brands/types";
+import type { BrandWithUrls } from "@/lib/brands/brandList";
 
 /** A QR link as edited in the form. */
 export type QrItem = { label: string; url: string };
@@ -93,12 +93,6 @@ export function blankEditableBrand(): EditableBrand {
     eventLogoPreview: "",
   };
 }
-
-type BrandWithUrls = Brand & {
-  logo_dark_public_url?: string;
-  logo_light_public_url?: string;
-  event_logo_public_url?: string;
-};
 
 /** Convert a loaded brand (API shape) into the editable draft. */
 export function brandToEditable(brand: BrandWithUrls): EditableBrand {

@@ -18,17 +18,12 @@ import {
   DEFAULT_DISPLAY_FONT,
   DEFAULT_BODY_FONT,
 } from "@/lib/brands/fonts";
-import type { Brand, BrandConfig, BrandInput } from "@/lib/brands/types";
+import { refreshBrandList, type BrandWithUrls } from "@/lib/brands/brandList";
+import type { BrandConfig, BrandInput } from "@/lib/brands/types";
 import { assertAdminUnlocked } from "@/lib/live/adminGuard";
 
 /** Sentinel id used in `?id=` to mean "create a new venue". */
 const NEW_ID = "new";
-
-type BrandWithUrls = Brand & {
-  logo_dark_public_url?: string;
-  logo_light_public_url?: string;
-  event_logo_public_url?: string;
-};
 
 /** Files staged for upload on the next save, keyed by slot. */
 type StagedFiles = Partial<Record<EditableLogoSlot, File>>;
@@ -88,11 +83,13 @@ function BrandsEditor(): React.ReactElement {
 
   const isNew = selId === NEW_ID || selId === null;
 
+  // Always goes back to the server: this is the editor, so it must not serve a
+  // list another page cached. The result refreshes the shared cache too, so any
+  // selector mounted elsewhere picks up an edit without its own request.
+  // refreshBrandList calls assertAdminUnlocked and rethrows, so a lapsed cookie
+  // still bounces to the unlock page.
   const refreshBrands = useCallback(async (): Promise<BrandWithUrls[]> => {
-    const res = await fetch("/api/brands");
-    assertAdminUnlocked(res);
-    if (!res.ok) throw new Error(`Failed to load venues (HTTP ${res.status})`);
-    const data: BrandWithUrls[] = await res.json();
+    const data = await refreshBrandList();
     setBrands(data);
     return data;
   }, []);

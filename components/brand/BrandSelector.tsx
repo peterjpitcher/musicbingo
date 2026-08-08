@@ -1,8 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import type { Brand } from "@/lib/brands/types";
-import { assertAdminUnlocked } from "@/lib/live/adminGuard";
+import { useBrandList } from "@/lib/brands/brandList";
 
 type BrandSelectorProps = {
   value: string | null;
@@ -12,20 +10,11 @@ type BrandSelectorProps = {
 };
 
 export function BrandSelector({ value, onChange, className, disabled }: BrandSelectorProps): React.ReactNode {
-  const [brands, setBrands] = useState<Brand[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
-
-  useEffect(() => {
-    fetch("/api/brands")
-      .then((res) => {
-        assertAdminUnlocked(res);
-        return res.ok ? res.json() : [];
-      })
-      .then((data) => setBrands(data))
-      .catch(() => setLoadError(true))
-      .finally(() => setLoading(false));
-  }, []);
+  // Shared across every mounted selector: /host renders one per game row, and
+  // fetching per row meant a dozen identical GET /api/brands on a page load.
+  // The store calls assertAdminUnlocked, so a lapsed cookie still bounces to
+  // the unlock page, once for the page rather than once per row.
+  const { brands, loading, error, errorStatus } = useBrandList();
 
   if (loading) {
     return (
@@ -35,10 +24,15 @@ export function BrandSelector({ value, onChange, className, disabled }: BrandSel
     );
   }
 
-  if (loadError || brands.length === 0) {
+  // A server that answered and refused (the admin gate's 401 once the unlock
+  // cookie has lapsed) still reads as "nothing to pick", as it did when this
+  // component fetched for itself. Only a request that never landed is an error.
+  const requestFailed = error !== null && errorStatus === null;
+
+  if (requestFailed || brands.length === 0) {
     return (
       <select disabled className={className}>
-        <option>{loadError ? "Failed to load brands" : "No brands available"}</option>
+        <option>{requestFailed ? "Failed to load brands" : "No brands available"}</option>
       </select>
     );
   }
