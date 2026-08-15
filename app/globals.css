@@ -337,6 +337,7 @@
 .tag { font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; padding: 4px 10px; border-radius: 999px; }
 .tag--intro { background: rgb(150 90 200 / .25); border: 1px solid rgb(170 120 210 / .7); color: #d9b8f0; }
 .tag--chal { background: rgb(var(--brand-accent-rgb) / .22); border: 1px solid var(--brand-accent-light); color: var(--brand-accent-light); }
+.tag--warn { background: rgb(210 130 40 / .25); border: 1px solid rgb(240 170 70 / .8); color: #ffcf8f; }
 
 /* progress + reveal */
 .prog { height: 10px; border-radius: 999px; background: rgb(0 0 0 / .35); overflow: hidden; margin: 4px 0 10px; }

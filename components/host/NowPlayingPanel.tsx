@@ -13,6 +13,12 @@ export interface NowPlayingPanelProps {
   isIntro: boolean;
   isChallenge: boolean;
   freePlay: boolean;
+  /**
+   * Why auto-advance is not running, or null when it is. Intro and Free Play
+   * have their own tags, so this covers the states that would otherwise stop
+   * songs advancing with nothing on screen to explain it.
+   */
+  autoAdvanceOff?: string | null;
   /** Extra milliseconds added by the host via +30s */
   extendedMs: number;
   onTransport: (action: 'previous' | 'pause' | 'resume' | 'next') => void;
@@ -37,6 +43,7 @@ export function NowPlayingPanel({
   isIntro,
   isChallenge,
   freePlay,
+  autoAdvanceOff = null,
   extendedMs,
   onTransport,
   welcomeIntroActive = false,
@@ -96,6 +103,9 @@ export function NowPlayingPanel({
               <span className="tag tag--chal">Challenge · 90s</span>
             )}
             {freePlay && <span className="tag tag--chal">Free Play</span>}
+            {autoAdvanceOff && !isIntro && !freePlay && (
+              <span className="tag tag--warn">{autoAdvanceOff}</span>
+            )}
           </div>
         </div>
       </div>

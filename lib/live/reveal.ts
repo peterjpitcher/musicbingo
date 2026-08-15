@@ -36,6 +36,40 @@ export function shouldTriggerNextForTrack(params: {
   return advanceTriggeredForTrackId !== trackId;
 }
 
+/**
+ * Number of consecutive polls that must report real playback while the runtime
+ * still says "paused" before the mode is recovered. At the 2-second poll rate
+ * that is roughly 4 seconds, comfortably past the window where Spotify's
+ * eventually-consistent status still reports the old isPlaying after a
+ * deliberate pause, and far short of losing a song.
+ */
+export const PAUSED_BUT_PLAYING_POLLS_BEFORE_RECOVERY = 3;
+
+/**
+ * Decides whether a runtime stuck on "paused" should be put back to "running".
+ *
+ * The auto-advance engine only runs in "running" mode, but the host can leave
+ * the runtime on "paused" while Spotify is genuinely playing again: pressing
+ * Resume in the Spotify app rather than in the host console, or a resume
+ * command that quietly failed. That combination silently stops songs advancing
+ * for the rest of the game (14 Aug 2026: game 2 ran 17 songs on manual skips).
+ * Sustained real playback on a bingo screen is the source of truth.
+ *
+ * Only the game screens qualify. The Bingo Claim overlay also pauses, and there
+ * the host wants playback to stay stopped even if the pause command misfired.
+ */
+export function shouldRecoverRunningMode(params: {
+  mode: string;
+  screenId: string;
+  isPlaying: boolean;
+  consecutivePlayingPolls: number;
+}): boolean {
+  const { mode, screenId, isPlaying, consecutivePlayingPolls } = params;
+  if (mode !== "paused" || !isPlaying) return false;
+  if (screenId !== "game1" && screenId !== "game2") return false;
+  return consecutivePlayingPolls >= PAUSED_BUT_PLAYING_POLLS_BEFORE_RECOVERY;
+}
+
 export function updateAdvanceTrackMarker(params: {
   trackId: string | null;
   advanceTriggeredForTrackId: string | null;

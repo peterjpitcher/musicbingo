@@ -28,7 +28,12 @@ import { deriveScreenId } from "@/lib/live/deriveScreen";
 import { getContent, type ContentKey } from "@/lib/live/content";
 import { DEFAULT_BRAND_CONFIG } from "@/lib/brands/defaultBrand";
 import type { BrandConfig } from "@/lib/brands/types";
-import { computeRevealState, shouldTriggerNextForTrack, updateAdvanceTrackMarker } from "@/lib/live/reveal";
+import {
+  computeRevealState,
+  shouldRecoverRunningMode,
+  shouldTriggerNextForTrack,
+  updateAdvanceTrackMarker,
+} from "@/lib/live/reveal";
 import { makeIntroTracking, trackIntroPlayback, type IntroTracking } from "@/lib/live/introState";
 import { getLiveSession, upsertLiveSession } from "@/lib/live/sessionApi";
 import {
@@ -237,6 +242,9 @@ export default function HostSessionControllerPage() {
   // consecutive failures so the retry loop can surface a warning.
   const advanceInFlightRef = useRef<boolean>(false);
   const advanceFailCountRef = useRef<number>(0);
+  // Consecutive polls seen with the runtime on "paused" while Spotify reports
+  // real playback on a game screen. Used to restore auto-advance (see pollStatus).
+  const pausedButPlayingPollsRef = useRef<number>(0);
   // When the tab went hidden (browser throttling suspends the poll loop).
   const hiddenAtMsRef = useRef<number | null>(null);
 
@@ -789,6 +797,32 @@ export default function HostSessionControllerPage() {
       pollFailCountRef.current = 0;
       const data = (await res.json()) as LiveStatusResponse;
       applyStatusSnapshot(data);
+
+      // --- Recover a stale "paused" mode from real playback ---
+      // See shouldRecoverRunningMode: the engine below only runs in "running"
+      // mode, and a runtime left on "paused" while Spotify actually plays used
+      // to stop songs advancing for the rest of the game.
+      const isPlayingNow = Boolean(data.playback?.isPlaying);
+      pausedButPlayingPollsRef.current =
+        runtimeRef.current.mode === "paused" && isPlayingNow
+          ? pausedButPlayingPollsRef.current + 1
+          : 0;
+      if (
+        shouldRecoverRunningMode({
+          mode: runtimeRef.current.mode,
+          screenId: normalizeScreenId(
+            runtimeRef.current.screenId,
+            deriveScreenId(runtimeRef.current)
+          ),
+          isPlaying: isPlayingNow,
+          consecutivePlayingPolls: pausedButPlayingPollsRef.current,
+        })
+      ) {
+        pausedButPlayingPollsRef.current = 0;
+        commitRuntime((prev) => (prev.mode === "paused" ? { ...prev, mode: "running" } : prev));
+        setNoticeVariant("warning");
+        setNotice("Playback resumed outside the host controls, so auto-advance is back on.");
+      }
 
       if (runtimeRef.current.mode !== "running") return;
       const track = normalizeTrackSnapshot(data.playback);
@@ -1466,6 +1500,19 @@ export default function HostSessionControllerPage() {
   const effectiveBrand = brand ?? DEFAULT_BRAND_CONFIG;
   const currentScreenId = normalizeScreenId(runtime.screenId, deriveScreenId(runtime));
 
+  // Why songs are not auto-advancing right now, shown on the Now Playing panel
+  // so a stalled game engine is never a silent surprise mid-show.
+  const autoAdvanceOff =
+    currentScreenId !== "game1" && currentScreenId !== "game2"
+      ? null
+      : !isController
+        ? "Auto-advance off: another tab has control"
+        : runtime.mode !== "running"
+          ? "Auto-advance off: paused"
+          : !runtime.spotifyControlAvailable
+            ? "Auto-advance off: no Spotify control"
+            : null;
+
   // EditContext value — Change 3
   const editValue: EditContextValue = {
     editing,
@@ -1879,16 +1926,25 @@ export default function HostSessionControllerPage() {
                 isIntro={runtime.isIntroSong}
                 isChallenge={isChallenge}
                 freePlay={runtime.freePlay}
+                autoAdvanceOff={autoAdvanceOff}
                 extendedMs={runtime.extensionMs}
                 onTransport={(action) => {
                   if (action === "pause" || action === "resume") {
                     void sendCommand(action, undefined, {
                       modeOnSuccess: action === "pause" ? "paused" : "running",
                     });
-                  } else if (action === "next") {
-                    void sendCommand("next");
-                  } else if (action === "previous") {
-                    void sendCommand("previous");
+                  } else if (action === "next" || action === "previous") {
+                    // Skipping by hand on a bingo screen means the game is live,
+                    // so clear any stale "paused" at the same time. Without this
+                    // a host who paused, then kept the show moving with Next,
+                    // never got the auto-advance engine back.
+                    const onGameScreen =
+                      currentScreenId === "game1" || currentScreenId === "game2";
+                    void sendCommand(
+                      action,
+                      undefined,
+                      onGameScreen ? { modeOnSuccess: "running" } : undefined
+                    );
                   }
                 }}
                 welcomeIntroActive={isWelcomeScreen}

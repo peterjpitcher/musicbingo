@@ -3,8 +3,10 @@ import { test, expect } from "vitest";
 import {
   computeRevealState,
   getRevealPhase,
+  shouldRecoverRunningMode,
   shouldTriggerNextForTrack,
   updateAdvanceTrackMarker,
+  PAUSED_BUT_PLAYING_POLLS_BEFORE_RECOVERY,
 } from "@/lib/live/reveal";
 import { getRevealConfigWithExtension, makeRevealConfigForSongPlayMs } from "@/lib/live/types";
 
@@ -114,4 +116,26 @@ test("updateAdvanceTrackMarker holds the marker through transient empty playback
   // trigger, or a stale report of the old track could fire a double skip.
   expect(updateAdvanceTrackMarker({ trackId: null, advanceTriggeredForTrackId: "abc" })).toBe("abc");
   expect(updateAdvanceTrackMarker({ trackId: null, advanceTriggeredForTrackId: null })).toBeNull();
+});
+
+test("shouldRecoverRunningMode restores auto-advance when a paused game is really playing", () => {
+  const settled = PAUSED_BUT_PLAYING_POLLS_BEFORE_RECOVERY;
+  const base = { mode: "paused", screenId: "game2", isPlaying: true, consecutivePlayingPolls: settled };
+
+  expect(shouldRecoverRunningMode(base)).toBe(true);
+  expect(shouldRecoverRunningMode({ ...base, screenId: "game1" })).toBe(true);
+
+  // A deliberate pause must stick: Spotify can still report the old isPlaying
+  // for a poll or two, so recovery waits for sustained playback.
+  expect(shouldRecoverRunningMode({ ...base, consecutivePlayingPolls: settled - 1 })).toBe(false);
+
+  // Nothing to recover when playback really is stopped, or the mode is fine.
+  expect(shouldRecoverRunningMode({ ...base, isPlaying: false })).toBe(false);
+  expect(shouldRecoverRunningMode({ ...base, mode: "running" })).toBe(false);
+
+  // Off the bingo screens the pause is intentional and stays put, including the
+  // Bingo Claim overlay where the host wants the room quiet.
+  expect(shouldRecoverRunningMode({ ...base, screenId: "claim" })).toBe(false);
+  expect(shouldRecoverRunningMode({ ...base, screenId: "break" })).toBe(false);
+  expect(shouldRecoverRunningMode({ ...base, screenId: "sing" })).toBe(false);
 });
