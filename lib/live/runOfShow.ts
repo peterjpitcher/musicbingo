@@ -5,7 +5,8 @@
  */
 export type ScreenId =
   | "welcome" | "order" | "quiz1" | "title" | "rules" | "dance"
-  | "game1" | "claim" | "break" | "quiz2" | "sing" | "game2" | "winner-entry" | "winners" | "thanks"
+  | "game1" | "claim" | "break" | "standings" | "quiz2" | "sing" | "game2"
+  | "winner-entry" | "winners" | "thanks"
   | "sys-load" | "sys-none";
 
 export interface RunOfShowStep {
@@ -39,6 +40,7 @@ export const RUN_OF_SHOW: RunOfShowStep[] = [
   { id: "dance", short: "Dance Warm-Up", sub: "Intro · plays in full", game: 1, intro: true },
   { id: "game1", short: "Game 1", sub: "Music Bingo", game: 1, play: true },
   { id: "break", short: "Interval", sub: "Break screen" },
+  { id: "standings", short: "Half-Time Standings", sub: "Positions only, no scores" },
   { id: "quiz2", short: "Switch · Quiz R2", sub: "KaraFun round 2" },
   { id: "sing", short: "Sing Warm-Up", sub: "Intro · plays in full", game: 2, intro: true },
   { id: "game2", short: "Game 2", sub: "Music Bingo", game: 2, play: true },

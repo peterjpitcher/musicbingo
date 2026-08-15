@@ -5,19 +5,28 @@ import { Ball } from "@/components/motifs/Ball";
 import { Chrome } from "@/components/motifs/Chrome";
 import { Editable } from "@/components/motifs/Editable";
 
-/** Static default running-order entries (placeholders). */
+/**
+ * Static default running-order entries (placeholders).
+ *
+ * The content keys are deliberately out of display order: half-time standings
+ * was added after the rest of the show and took the next free key (`ro7`)
+ * rather than renumbering, so wording a host had already customised for Quiz
+ * Two, Game 2 and Prizes stays attached to the row it was written for.
+ */
 const RUN_ORDER = [
   { n: "01", t: "Quiz · Round One",  s: "Grab your phones — KaraFun mobile quiz", k: "ro1" },
   { n: "02", t: "Music Bingo · Game 1", s: "Warm up, then 50 songs to dab",       k: "ro2" },
   { n: "03", t: "The Interval",       s: "Refill at the bar — back in 10",         k: "ro3" },
-  { n: "04", t: "Quiz · Round Two",  s: "Round two of the mobile quiz",            k: "ro4" },
-  { n: "05", t: "Music Bingo · Game 2", s: "Sing-along warm up, then Game 2",      k: "ro5" },
-  { n: "06", t: "Prizes & Winners",  s: "Top table & wooden-spoon prizes",         k: "ro6" },
+  { n: "04", t: "Half-Time Standings", s: "Who's up, who's chasing, no scores",    k: "ro7" },
+  { n: "05", t: "Quiz · Round Two",  s: "Round two of the mobile quiz",            k: "ro4" },
+  { n: "06", t: "Music Bingo · Game 2", s: "Sing-along warm up, then Game 2",      k: "ro5" },
+  { n: "07", t: "Prizes & Winners",  s: "Top table & wooden-spoon prizes",         k: "ro6" },
 ] as const;
 
 /**
  * "Tonight's Running Order" screen.
- * Six items stagger-animate in from the left using `an-slideL d1…d6` classes.
+ * Items stagger-animate in from the left using `an-slideL d1…d6` classes; rows
+ * past the sixth reuse the last delay rather than landing with no animation.
  */
 export function RunningOrder({ brand }: ScreenProps): JSX.Element {
   return (

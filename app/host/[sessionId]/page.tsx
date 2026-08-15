@@ -1209,7 +1209,10 @@ export default function HostSessionControllerPage() {
       extensionMs: 0,
     }));
 
-    if (runtimeRef.current.spotifyControlAvailable) {
+    // Half-time standings is still part of the interval beat, so the break
+    // playlist plays on underneath the reveal. Everything else ends the break,
+    // and gotoScreen stops the music when the show leaves standings.
+    if (screenId !== "standings" && runtimeRef.current.spotifyControlAvailable) {
       void sendCommand("pause", undefined, { modeOnSuccess: "idle" });
     }
   }
@@ -1442,6 +1445,12 @@ export default function HostSessionControllerPage() {
     if (runtimeRef.current.mode === "break") {
       leaveBreakToScreen(id);
       return;
+    }
+    // Standings runs with the break playlist still going (see leaveBreakToScreen),
+    // so stop it on the way out. The screens that want their own music route
+    // above this and start it themselves.
+    if (currentId === "standings" && runtimeRef.current.spotifyControlAvailable) {
+      void sendCommand("pause", undefined, { modeOnSuccess: "idle" });
     }
     commitRuntime((prev) => ({ ...prev, screenId: id }));
   }

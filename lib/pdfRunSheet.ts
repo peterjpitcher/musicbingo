@@ -162,6 +162,7 @@ function buildSchedule(params: RenderRunSheetPdfParams, game1Theme: string, game
     { title: `${challengeTypeLabel(g1Challenge)} warm up`, note: "Full song - get the room moving" },
     { title: "Music Bingo - Game 1", note: `${game1Theme} - lines & full house` },
     { title: "Interval", note: "Break - bar refills (~10 min)" },
+    { title: "Half-time standings", note: "Read out the positions - no scores" },
     { title: "Quiz - Round 2", note: "KaraFun mobile quiz round two" },
     { title: `${challengeTypeLabel(g2Challenge)} warm up`, note: "Full song - big sing-along" },
     { title: "Music Bingo - Game 2", note: `${game2Theme} - different song list` },

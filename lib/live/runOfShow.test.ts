@@ -2,12 +2,18 @@ import { describe, it, expect } from "vitest";
 import { RUN_OF_SHOW, SHOW_STEPS, isScreenId, normalizeScreenId, type ScreenId } from "@/lib/live/runOfShow";
 
 describe("RUN_OF_SHOW", () => {
-  it("has the 14 navigable show steps in canonical order (excludes overlays + system)", () => {
+  it("has the 15 navigable show steps in canonical order (excludes overlays + system)", () => {
     const ids = SHOW_STEPS.map((s) => s.id);
     expect(ids).toEqual([
       "welcome", "order", "quiz1", "title", "rules", "dance",
-      "game1", "break", "quiz2", "sing", "game2", "winner-entry", "winners", "thanks",
+      "game1", "break", "standings", "quiz2", "sing", "game2",
+      "winner-entry", "winners", "thanks",
     ]);
+  });
+  it("shows the half-time standings straight after the interval", () => {
+    const ids = SHOW_STEPS.map((s) => s.id);
+    expect(ids.indexOf("standings")).toBe(ids.indexOf("break") + 1);
+    expect(ids.indexOf("quiz2")).toBe(ids.indexOf("standings") + 1);
   });
   it("places winner entry between game2 and the winners reveal", () => {
     const ids = SHOW_STEPS.map((s) => s.id);

@@ -13,7 +13,9 @@ export const CONTENT_KEYS = [
   "welcomeTitle", "welcomeTitle2", "welcomeTitleC", "welcomeLede", "welcomeLedeA",
   "welcomeDate", "introTitle", "introArtist", "titleTagline",
   // running order
+  // ro7 is the half-time standings row, added later and shown fourth (see RunningOrder).
   "ro1t", "ro1s", "ro2t", "ro2s", "ro3t", "ro3s", "ro4t", "ro4s", "ro5t", "ro5s", "ro6t", "ro6s",
+  "ro7t", "ro7s",
   // quiz switch
   "q1_l1", "q1_lede", "q2_l1", "q2_lede",
   // house rules
@@ -46,6 +48,7 @@ export const CONTENT_PLACEHOLDERS: Record<ContentKey, string> = {
   ro4t: "Quiz · Round Two", ro4s: "Round two of the mobile quiz",
   ro5t: "Music Bingo · Game 2", ro5s: "Sing-along warm up, then Game 2",
   ro6t: "Prizes & Winners", ro6s: "Top table & wooden-spoon prizes",
+  ro7t: "Half-Time Standings", ro7s: "Who's up, who's chasing, no scores",
   q1_l1: "Music Quiz", q1_lede: "Open the KaraFun app on your phone and get ready — we'll switch the big screen over to the quiz now.",
   q2_l1: "Music Quiz", q2_lede: "Round two — phones out again. We'll switch the big screen over to the quiz.",
   hr1t: "Listen for the song", hr1s: "Every clip is a track. Know the song or the artist? Find it on your card.",

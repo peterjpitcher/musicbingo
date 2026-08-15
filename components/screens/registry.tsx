@@ -10,6 +10,7 @@ import { Warmup } from "./Warmup";
 import { GameLive } from "./GameLive";
 import { ClaimScreen } from "./ClaimScreen";
 import { BreakScreen } from "./BreakScreen";
+import { Standings } from "./Standings";
 import { WinnerEntry } from "./WinnerEntry";
 import { Winners } from "./Winners";
 import { ThankYou } from "./ThankYou";
@@ -32,6 +33,7 @@ export const SCREEN_REGISTRY: Record<ScreenId, (props: ScreenProps) => ReactNode
   game1: (p) => <GameLive {...p} game={1} />,
   claim: (p) => <ClaimScreen {...p} />,
   break: (p) => <BreakScreen {...p} />,
+  standings: (p) => <Standings {...p} />,
   quiz2: (p) => <QuizSwitch {...p} round="Two" />,
   sing: (p) => <Warmup {...p} type="sing" />,
   game2: (p) => <GameLive {...p} game={2} />,
