@@ -6,10 +6,10 @@
   - `app/api/generate` (PDF generator endpoint)
   - `lib/` (parser + generator + PDF renderer)
   - `public/` (logo asset)
-- Keep `scripts/` for the separate Spotify Python script.
+- Keep `scripts/` for build and end-to-end helper scripts.
 - Add dependency management:
   - `package.json` (Next + pdf-lib + qrcode)
-  - `pyproject.toml` (Spotify script deps)
+  - `pyproject.toml` (Python reference implementation and its pytest suite)
 - Add `.env.example` (Spotify placeholders; no secrets committed).
 
 ## Milestone 1 — Parsing & validation
@@ -46,8 +46,10 @@
   - Validate QR scanability from a printed page
 
 ## Milestone 4 — QR code providers
-- Implement `StaticQRProvider`:
-  - Generates menu QR for `https://vip-club.uk/vvjkz0`
+- The static menu QR has been removed along with the Flask generator, because it
+  hardcoded the retired `vip-club.uk` domain.
+  - `opts.brandConfig.qr_items` supplies footer label text only, not QR targets
+  - The only QR targets the renderer draws are event URLs (`lib/pdf.ts`)
 - Implement placeholder `ManagementAPIQRProvider` interface:
   - For now returns “unavailable” placeholders
   - Later: fetch URLs from management app API and render them as QRs

@@ -14,7 +14,7 @@ def test_render_cards_pdf_produces_pdf_bytes(tmp_path: Path):
         logo_path=None,
         qr_event_1=None,
         qr_event_2=None,
-        qr_menu="https://vip-club.uk/vvjkz0",
+        qr_menu="https://example.com/menu",
         show_card_id=True,
     )
     pdf = render_cards_pdf(cards, opts)

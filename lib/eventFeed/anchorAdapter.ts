@@ -132,9 +132,33 @@ function isSameOrigin(url: string, origin: string | null): boolean {
   }
 }
 
+/**
+ * Retired short-link domains. `events.booking_url` in the management app is free
+ * text a manager types in, so a retired host can still arrive from the API. A
+ * printed QR code cannot be recalled, so reject these candidates outright and
+ * let the canonical `/events/<slug>` URL win instead (or, with no slug, print no
+ * QR at all rather than a dead one).
+ */
+const LEGACY_SHORT_LINK_HOSTS = new Set(["vip-club.uk", "www.vip-club.uk"]);
+
+function isLegacyShortLinkHost(url: string): boolean {
+  let host: string;
+  try {
+    host = new URL(url).hostname.toLowerCase().replace(/\.$/, "");
+  } catch {
+    return false;
+  }
+  if (LEGACY_SHORT_LINK_HOSTS.has(host)) return true;
+  for (const legacyHost of LEGACY_SHORT_LINK_HOSTS) {
+    if (host.endsWith(`.${legacyHost}`)) return true;
+  }
+  return false;
+}
+
 function resolveCustomerUrl(value: string, publicBaseUrl: string, managementOrigin: string | null): string | null {
   const resolved = resolveHttpUrl(value, publicBaseUrl);
   if (!resolved || isSameOrigin(resolved, managementOrigin)) return null;
+  if (isLegacyShortLinkHost(resolved)) return null;
   return resolved;
 }
 

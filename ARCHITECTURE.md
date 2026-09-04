@@ -37,7 +37,7 @@ Rationale:
    - Ensures no duplicate cards across the run (signature set)
 
 4) **QR Provider**
-   - `StaticQRProvider`: always returns menu URL for QR
+   - Brand config `qr_items`: supplies footer label text only, not QR targets
    - `ManagementAPIQRProvider` (future): fetches two event URLs; returns placeholders on failure
 
 5) **PDF Renderer**

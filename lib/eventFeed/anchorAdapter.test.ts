@@ -53,3 +53,40 @@ test("resolveAnchorEventUrl rejects management URLs when no public URL exists", 
     }),
   ).toBeNull();
 });
+
+test("resolveAnchorEventUrl rejects a legacy vip-club.uk booking URL in favour of the slug", () => {
+  expect(
+    resolveAnchorEventUrl({
+      baseUrl,
+      websiteUrl: "https://www.the-anchor.pub",
+      event: {
+        slug: "music-bingo-2026-09-18",
+        bookingUrl: "https://vip-club.uk/abc123",
+      },
+    }),
+  ).toBe("https://www.the-anchor.pub/events/music-bingo-2026-09-18");
+});
+
+test("resolveAnchorEventUrl returns null for a legacy vip-club.uk booking URL with no slug", () => {
+  expect(
+    resolveAnchorEventUrl({
+      baseUrl,
+      websiteUrl: "https://www.the-anchor.pub",
+      event: {
+        booking_url: "vip-club.uk/abc123",
+      },
+    }),
+  ).toBeNull();
+});
+
+test("resolveAnchorEventUrl rejects vip-club.uk subdomains in offers", () => {
+  expect(
+    resolveAnchorEventUrl({
+      baseUrl,
+      websiteUrl: "https://www.the-anchor.pub",
+      event: {
+        offers: [{ url: "https://go.vip-club.uk/abc123" }],
+      },
+    }),
+  ).toBeNull();
+});

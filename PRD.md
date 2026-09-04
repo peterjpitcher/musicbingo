@@ -10,9 +10,12 @@ Build a simple, offline-first application that:
    - Event logo (left)
    - Venue/brand logo (right)
 6) Places **three QR codes** at the bottom of each card:
-   - **Menu QR** (static): `https://vip-club.uk/vvjkz0`
-   - **Event QR #1** (dynamic, from management API; fallback placeholder if unavailable)
-   - **Event QR #2** (dynamic, from management API; fallback placeholder if unavailable)
+   - **Event QR #1** (dynamic, from management API; omitted if unavailable)
+   - **Event QR #2** (dynamic, from management API; omitted if unavailable)
+
+   There is no longer a static venue or menu QR. It was removed with the Flask
+   generator, which hardcoded the retired `vip-club.uk` domain. `brands.qr_items`
+   supplies footer label text only, not QR targets.
 7) Includes a separate **Python script** to create a Spotify playlist from the same song list, using the event date in the playlist name.
 
 Constraints:
@@ -87,7 +90,6 @@ If these are not met, the app must stop with a clear error explaining what’s m
    - Three QR codes with short labels (black text):
      - Event QR #1 (left)
      - Event QR #2 (center)
-     - Menu (right) — points to `https://vip-club.uk/vvjkz0`
    - Optional card identifier (small) for auditing uniqueness.
 
 ### Grid relationship
@@ -132,9 +134,12 @@ Implementation requirement:
 - Avoid grayscale fills; use hatching/patterning if decoration is desired.
 
 ## QR Code Requirements
-### Static menu QR (required)
-- Always generate a QR code for: `https://vip-club.uk/vvjkz0`
-- Include label such as “Menu” / “Order at the bar”.
+### Static venue QR (removed)
+- The card previously carried a third, static QR pointing at a hardcoded
+  `vip-club.uk` short link. That domain is being retired, so the QR and the Flask
+  generator that produced it have both been deleted.
+- `brands.qr_items` contributes footer **label text** only (`lib/pdf.ts`); it does
+  not supply any QR target.
 
 ### Dynamic event QR codes (planned integration)
 Two QR codes should be populated per event from the management app API.
@@ -189,7 +194,7 @@ Modules/components:
    - Event date in header
    - Artists 5×5 grid (25 artists)
    - Titles 5×5 grid (25 titles)
-   - Three QR codes at bottom, including the static menu QR
+   - Three QR codes at bottom, including the venue QR
 3) No two cards in the PDF are identical (per signature definition).
 4) The app does not persist the uploaded song list (no DB/files saved besides the PDF output).
 5) The app can authenticate with Spotify, create a private playlist, add tracks in batches, and report not-found tracks.

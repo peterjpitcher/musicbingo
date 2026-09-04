@@ -63,7 +63,12 @@ export const CONTENT_PLACEHOLDERS: Record<ContentKey, string> = {
   winPrize: "£25 bar voucher", spoonPrize: "Bottle of house wine",
   nextDate: "Fri 27 June · 8PM", tyL1: "Thank You", tyL2: "& Goodnight",
   tyLede: "We hope you had a brilliant night. If you did, a Google review means the world to us.",
-  reviewQrUrl: "https://vip-club.uk/jls0mu", bookQrUrl: "",
+  // Canonical short link, not the retired vip-club.uk one. Kept as a real default rather
+  // than "" because brands.qr_items is currently null for every brand, so falling through
+  // to resolveQrUrl would yield brand.website_url, which is stored without a scheme and
+  // makes an unusable QR code. A host override still wins, and the short link keeps the
+  // scan tracked. Populate brands.qr_items with a "review" entry to retire this default.
+  reviewQrUrl: "https://l.the-anchor.pub/jls0mu", bookQrUrl: "",
   nfL1: "Nothing", nfL2: "On Yet",
 };
 
