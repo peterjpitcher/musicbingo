@@ -215,7 +215,10 @@ export function createBaronsHubAdapter(config: EventFeedConfig): EventFeedAdapte
       }
 
       const json = (await res.json()) as BaronsHubResponse;
-      const events = json?.data ?? [];
+      if (!Array.isArray(json?.data)) {
+        throw new Error("Unexpected BaronsHub API response: missing events array");
+      }
+      const events = json.data;
 
       return events
         .map((e) => toNormalisedEvent(e, config.baseUrl))

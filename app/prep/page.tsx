@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Button } from "@/components/ui/Button";
 import { Notice } from "@/components/ui/Notice";
+import { promotionNotice } from "@/lib/eventFeed/promotionStatus";
 import { formatEventDateDisplay } from "@/lib/eventDate";
 import { DEFAULT_GAME_THEME, MAX_SONGS_PER_GAME, makeSongSelectionValue } from "@/lib/gameInput";
 import { assertAdminUnlocked } from "@/lib/live/adminGuard";
@@ -933,39 +934,7 @@ function PrepPageInner() {
         throw new Error(msg || "Failed to generate output bundle.");
       }
 
-      const qrStatus = res.headers.get("x-music-bingo-qr-status");
-      const requestedRaw = res.headers.get("x-music-bingo-events-requested");
-      const eventsWithUrl = res.headers.get("x-music-bingo-events-with-url");
-      const eventsCount = res.headers.get("x-music-bingo-events-count");
-      const qrError = res.headers.get("x-music-bingo-qr-error");
-      const expectedEvents = (() => {
-        const n = requestedRaw ? Number.parseInt(requestedRaw, 10) : 4;
-        return Number.isFinite(n) && n > 0 ? n : 4;
-      })();
-
-      if (qrStatus && qrStatus !== "ok") {
-        if (qrStatus === "missing_config") {
-          setQrNotice("Upcoming event QRs: management API not configured.");
-        } else if (qrStatus === "no_events") {
-          setQrNotice("Upcoming event QRs: no upcoming events found after this date (placeholders used).");
-        } else if (qrStatus === "error") {
-          setQrNotice(`Upcoming event QRs: ${qrError || "failed to fetch events"} (placeholders used).`);
-        }
-      } else if (eventsWithUrl && eventsWithUrl !== String(expectedEvents)) {
-        const resolvedCount = Number.parseInt(eventsWithUrl, 10);
-        if (Number.isFinite(resolvedCount) && resolvedCount >= 0 && resolvedCount < expectedEvents) {
-          setQrNotice(
-            `Upcoming event QRs: only ${resolvedCount}/${expectedEvents} event URLs resolved (placeholders used).`
-          );
-        }
-      } else if (eventsCount && eventsCount !== String(expectedEvents)) {
-        const foundCount = Number.parseInt(eventsCount, 10);
-        if (Number.isFinite(foundCount) && foundCount >= 0 && foundCount < expectedEvents) {
-          setQrNotice(
-            `Upcoming event QRs: only ${foundCount}/${expectedEvents} upcoming events found (placeholders used).`
-          );
-        }
-      }
+      setQrNotice(promotionNotice(res.headers));
 
       const blob = await res.blob();
       const filename =
@@ -1236,39 +1205,7 @@ function PrepPageInner() {
         throw new Error(msg || "Failed to generate output bundle.");
       }
 
-      const qrStatus = res.headers.get("x-music-bingo-qr-status");
-      const requestedRaw = res.headers.get("x-music-bingo-events-requested");
-      const eventsWithUrl = res.headers.get("x-music-bingo-events-with-url");
-      const eventsCount = res.headers.get("x-music-bingo-events-count");
-      const qrError = res.headers.get("x-music-bingo-qr-error");
-      const expectedEvents = (() => {
-        const n = requestedRaw ? Number.parseInt(requestedRaw, 10) : 4;
-        return Number.isFinite(n) && n > 0 ? n : 4;
-      })();
-
-      if (qrStatus && qrStatus !== "ok") {
-        if (qrStatus === "missing_config") {
-          setQrNotice("Upcoming event QRs: management API not configured.");
-        } else if (qrStatus === "no_events") {
-          setQrNotice("Upcoming event QRs: no upcoming events found after this date (placeholders used).");
-        } else if (qrStatus === "error") {
-          setQrNotice(`Upcoming event QRs: ${qrError || "failed to fetch events"} (placeholders used).`);
-        }
-      } else if (eventsWithUrl && eventsWithUrl !== String(expectedEvents)) {
-        const resolvedCount = Number.parseInt(eventsWithUrl, 10);
-        if (Number.isFinite(resolvedCount) && resolvedCount >= 0 && resolvedCount < expectedEvents) {
-          setQrNotice(
-            `Upcoming event QRs: only ${resolvedCount}/${expectedEvents} event URLs resolved (placeholders used).`
-          );
-        }
-      } else if (eventsCount && eventsCount !== String(expectedEvents)) {
-        const foundCount = Number.parseInt(eventsCount, 10);
-        if (Number.isFinite(foundCount) && foundCount >= 0 && foundCount < expectedEvents) {
-          setQrNotice(
-            `Upcoming event QRs: only ${foundCount}/${expectedEvents} upcoming events found (placeholders used).`
-          );
-        }
-      }
+      setQrNotice(promotionNotice(res.headers));
 
       const blob = await res.blob();
       const filename =

@@ -77,3 +77,8 @@ Review: `tasks/codex-qa-review/2026-05-09-intro-songs-multi-challenge-v2-*`
 - [ ] 7.2 `npm run typecheck`
 - [ ] 7.3 `npm run build`
 - [ ] 7.4 Manual smoke test: prep screen shows 5 challenge + intro dropdowns
+
+
+## API connections, 5 September 2026
+
+- [x] Complete the approved Music Bingo feed remediation and verification in tasks/fix-function/2026-09-05-api-connections/todo.md.
