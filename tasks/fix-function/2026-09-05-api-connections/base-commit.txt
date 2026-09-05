@@ -1,0 +1,5 @@
+{
+  "source": "/Users/peterpitcher/Cursor/OJ-MusicBingo",
+  "base_commit": "3a13d4bbddddc8d00632c868b93ab2f8b625eaa1",
+  "dirty": ""
+}

@@ -10,7 +10,8 @@ import {
   resolveChallengeSong,
   resolveChallengeSongs,
 } from "@/lib/gameInput";
-import { fetchEventsForBrand } from "@/lib/eventFeed";
+import { loadEventsForPack } from "@/lib/eventFeed";
+import { promotionHeaders } from "@/lib/eventFeed/promotionStatus";
 import type { NormalisedEvent } from "@/lib/eventFeed";
 import {
   loadDefaultLogoPngBytes,
@@ -383,8 +384,11 @@ export async function POST(request: NextRequest) {
     const brandId = asString(form.get("brand_id")).trim() || null;
     const brandConfig = await resolveBrandConfig(brandId);
 
-    const feedConfig = brandConfig ? await getBrandFeedConfig(brandConfig.id) : null;
-    const upcomingEvents = feedConfig ? await fetchEventsForBrand(feedConfig, eventDateInput) : [];
+    const eventFeed = await loadEventsForPack(
+      () => brandConfig ? getBrandFeedConfig(brandConfig.id) : Promise.resolve(null),
+      eventDateInput,
+    );
+    const upcomingEvents = eventFeed.events;
 
     let logoRightPngBytes: Uint8Array | null = null;
     let logoLeftPngBytes: Uint8Array | null = null;
@@ -466,6 +470,7 @@ export async function POST(request: NextRequest) {
         "Content-Type": "application/zip",
         "Content-Disposition": `attachment; filename="${filename}"`,
         "Cache-Control": "no-store",
+        ...promotionHeaders(eventFeed),
       },
     });
   } catch (err: unknown) {

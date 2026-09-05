@@ -745,13 +745,41 @@ async function main() {
       assert.ok(await matchedRows.count() >= 2, "Expected playlist summary for both games");
 
       const generateButton = flow123Page.getByRole("button", { name: "Generate Event Pack" });
-      const [download] = await Promise.all([
+      const [download, packResponse] = await Promise.all([
         flow123Page.waitForEvent("download", { timeout: 120_000 }),
+        flow123Page.waitForResponse((response) => response.url().endsWith("/api/generate")),
         generateButton.click(),
       ]);
 
       await download.saveAs(DOWNLOAD_PATH);
       await validateDownloadedBundle(DOWNLOAD_PATH);
+      assert.ok(packResponse.headers()["x-music-bingo-qr-status"], "Pack response must expose feed status");
+
+      // Both download controls must surface promotional failures while keeping the pack available.
+      const packBytes = await readFile(DOWNLOAD_PATH);
+      for (const [buttonName, status, notice] of [
+        ["Generate Event Pack", "error", "Upcoming events could not be loaded."],
+        ["Download Only", "missing_config", "Upcoming events: the event feed is not configured."],
+      ]) {
+        await flow123Page.route("**/api/generate", (route) => route.fulfill({
+          status: 200,
+          headers: {
+            "content-type": "application/zip",
+            "content-disposition": 'attachment; filename="test-event-pack.zip"',
+            "x-music-bingo-qr-status": status,
+            "x-music-bingo-events-requested": "4",
+            "x-music-bingo-events-count": "0",
+            "x-music-bingo-events-with-url": "0",
+          },
+          body: packBytes,
+        }));
+        await Promise.all([
+          flow123Page.waitForEvent("download"),
+          flow123Page.getByRole("button", { name: buttonName, exact: true }).click(),
+        ]);
+        await flow123Page.getByText(notice, { exact: false }).waitFor();
+        await flow123Page.unroute("**/api/generate");
+      }
     });
 
     await flow123Context.close();

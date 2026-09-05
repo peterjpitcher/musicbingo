@@ -415,7 +415,7 @@ async function fetchEventsFromApi(params: {
     throw new Error(msg);
   }
 
-  return envelope.data ?? { events: [] };
+  throw new Error("Unexpected management API response: missing events array");
 }
 
 // ---------------------------------------------------------------------------

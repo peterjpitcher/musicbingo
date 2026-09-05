@@ -31,41 +31,52 @@ export function createEventFeedAdapter(config: EventFeedConfig): EventFeedAdapte
   }
 }
 
-/**
- * Fetch upcoming events for a brand using its feed configuration.
- *
- * Returns an empty array on any error (network, parse, missing config).
- * Never logs API keys.
- */
+export interface EventFeedResult {
+  status: "ok" | "disabled" | "missing_config" | "no_events" | "error";
+  events: NormalisedEvent[];
+}
+
+/** Promotional feeds are optional, but failures must stay visible to the host. */
 export async function fetchEventsForBrand(
-  feedConfig: BrandFeedConfig,
+  feedConfig: BrandFeedConfig | null,
   sessionDate: string,
   limit: number = 12,
-): Promise<NormalisedEvent[]> {
-  if (feedConfig.type === "none") return [];
-  if (!feedConfig.baseUrl && feedConfig.type !== "anchor_management") return [];
-  if (!feedConfig.apiKey && feedConfig.type !== "anchor_management") return [];
+): Promise<EventFeedResult> {
+  if (feedConfig?.type === "none") return { status: "disabled", events: [] };
+  if (!feedConfig?.baseUrl?.trim() || !feedConfig.apiKey?.trim()) {
+    return { status: "missing_config", events: [] };
+  }
 
   try {
     const config: EventFeedConfig = {
-      type: feedConfig.type as "anchor_management" | "baronshub",
-      baseUrl: feedConfig.baseUrl ?? "",
-      apiKey: feedConfig.apiKey ?? "",
+      type: feedConfig.type,
+      baseUrl: feedConfig.baseUrl,
+      apiKey: feedConfig.apiKey,
       websiteUrl: feedConfig.websiteUrl ?? "",
       venueId: feedConfig.venueId ?? null,
     };
-    const adapter = createEventFeedAdapter(config);
-    return await adapter.fetchUpcomingEvents({
+    const events = await createEventFeedAdapter(config).fetchUpcomingEvents({
       afterDate: sessionDate,
       limit,
       sessionDate,
     });
-  } catch (error) {
-    const brandType = feedConfig.type;
-    console.warn(
-      `Event feed failed for ${brandType} adapter:`,
-      error instanceof Error ? error.message : "Unknown error",
-    );
-    return [];
+    return { status: events.length ? "ok" : "no_events", events };
+  } catch {
+    // Provider response bodies can contain credentials. Keep them out of logs and headers.
+    console.warn(`Event feed failed for ${feedConfig.type} adapter.`);
+    return { status: "error", events: [] };
+  }
+}
+
+/** Include configuration failures in the same optional-feed boundary. */
+export async function loadEventsForPack(
+  loadConfig: () => Promise<BrandFeedConfig | null>,
+  sessionDate: string,
+): Promise<EventFeedResult> {
+  try {
+    return await fetchEventsForBrand(await loadConfig(), sessionDate);
+  } catch {
+    console.warn("Event feed configuration could not be loaded.");
+    return { status: "error", events: [] };
   }
 }
