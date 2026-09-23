@@ -11,6 +11,7 @@
     "start": "node scripts/next-with-localstorage.mjs start",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
+    "check:anon-access": "node scripts/check-anon-access.mjs",
     "test:e2e": "node scripts/e2e-flows.mjs",
     "test:py": "python3 -m pytest -q",
     "test:unit": "vitest run",

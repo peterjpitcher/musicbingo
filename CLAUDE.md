@@ -1,123 +1,89 @@
-# CLAUDE.md — Music Bingo
+# CLAUDE.md: Music Bingo
 
-This file provides project-specific guidance. See the workspace-level `CLAUDE.md` one directory up for shared conventions.
+Workspace standards live in `/Users/peterpitcher/Cursor/CLAUDE.md`. Read that first; nothing in it is repeated here. `AGENTS.md` is a relative symlink to this file, so Claude Code, Codex and Cursor read the same rules.
 
-## Quick Profile
+## What this is
 
-- **Framework**: Next.js 16, React 18.3
-- **Test runners**: Playwright (E2E), Python pytest, Node (custom scripts)
-- **Database**: Supabase (live sessions, persistent storage)
-- **Key integrations**: Spotify Web API, Anchor Management API, PDF generation (pdf-lib), QR codes
-- **Size**: ~23 files in lib/, 10+ routes, custom Python module
-- **Novel aspects**: Dual test suite (JS + Python), localStorage-to-Supabase live session sync, multi-device gameplay
+A single-operator internal tool for running Music Bingo nights at The Anchor and other brands. The prep wizard turns two song lists into an event pack (card PDFs, run sheet, DOCX host clipboard) and two private Spotify playlists; the host controller at `/host/[sessionId]` then drives a private TV display at `/display/[sessionId]` through a fixed run of show. Players use printed cards; there is no per-player screen. Production: `https://music-bingo.vercel.app`.
+
+## Stack, where it differs from the workspace default
+
+- **Next.js 16.1.3** (not 15), **React 18.3** (not 19), TypeScript 5.5, no middleware. Node 20.9 or later.
+- **Tailwind 3.4** with `tailwind.config.ts`; brand colours are runtime CSS variables exposed as `brand-primary`, `brand-accent`, `ink`, `cream`.
+- **No user auth, no Supabase Auth, no server actions.** Every route uses the service-role client (`lib/supabase.ts`); mutations are API route handlers; RLS is on with `anon` and `authenticated` revoked. The workspace auth, RLS-policy and audit-log rules do not apply; the admin secret gates access (below).
+- Tests: **Vitest**, **Playwright** flows (`scripts/e2e-flows.mjs`) and **pytest** for the legacy Python module; not Jest. ESLint 9 flat config, `no-explicit-any` off.
 
 ## Commands
 
 ```bash
-npm run dev          # Start Next.js dev with custom localStorage script
-npm run build        # Production build with custom script
-npm run start        # Production server
-npm run lint         # ESLint (zero warnings)
-npm run typecheck    # TypeScript (no emit)
-npm run test:e2e     # Playwright flows (scripts/e2e-flows.mjs)
-npm run test:py      # Python pytest -q
-npm run verify       # Full pipeline: lint → typecheck → test:py → test:e2e → build
+npm run dev | build | start   # via scripts/next-with-localstorage.mjs
+npm run lint                  # eslint . --max-warnings=0
+npm run typecheck
+npm run test:unit             # vitest run
+npm run test:py               # python3 -m pytest -q (Python 3.11+)
+npm run test:e2e              # Playwright; boots its own server on 127.0.0.1:3100
+npm run verify                # lint, typecheck, test:unit, test:py, test:e2e, build
 ```
+
+- The wrapper passes `--localstorage-file=.next/node-localstorage.json` via `NODE_OPTIONS` so Node's Web Storage API works server-side. Use the npm scripts, not `npx next`.
+- E2E mocks Spotify and the app's own APIs, so it needs no credentials, only Chromium (`npx playwright install chromium`).
+- `music_bingo/` and `tests/*.py` are the original offline Python generator (5x5 cards), unused by the web app but still run by `verify`.
 
 ## Architecture
 
-**Routes & Pages**
-- `/` — Home/landing
-- `/host` — Game host view (prep + gameplay)
-- `/guest/[sessionId]` — Guest player view
-- `/api/sessions/*` — Live session management (Supabase Realtime)
-- `/api/spotify/*` — Spotify OAuth + playlist creation
-- `/api/generate/*` — PDF & DOCX export
-
-**Key Patterns**
-- **Live Sessions**: WebSocket-like via Supabase Realtime on `live_sessions` table; clients subscribe to session channel
-- **Game State**: Hosted in localStorage (client) synced to Supabase; reveals (clues/answers) computed on-the-fly
-- **PDF Generation**: Custom lib/pdf.ts using pdf-lib + Sharp for image rendering
-- **Spotify Auth**: OAuth 2.0 callback → token stored server-side, used to create/populate playlists
-- **Custom Scripts**:
-  - `next-with-localstorage.mjs` wraps Next.js CLI to enable localStorage in Node/SSR
-  - `e2e-flows.mjs` runs Playwright flows end-to-end
-
-## Key Files
-
-| Path | Purpose |
-|------|---------|
-| `lib/live/types.ts` | Session, game, card, reveal types |
-| `lib/live/channel.ts` | Supabase Realtime subscription logic |
-| `lib/live/sessionRepo.ts` | CRUD for `live_sessions` table |
-| `lib/live/storage.ts` | localStorage ↔ Session object conversion |
-| `lib/live/reveal.ts` | Clue/answer reveal computation |
-| `lib/generator.ts` | Create bingo cards from tracks |
-| `lib/pdf.ts` | PDF export (pdf-lib + Sharp) |
-| `lib/spotifyWeb.ts` | Spotify OAuth & web API calls |
-| `lib/spotifyLive.ts` | Live Spotify player control |
-| `lib/supabase.ts` | Supabase client init (service-role for migrations) |
-| `components/` | Game UI (host, guest, card display) |
-| `app/api/sessions/` | Session CRUD endpoints |
-| `app/api/spotify/` | OAuth callback, playlist creation |
-| `app/api/generate/` | PDF/DOCX generation |
-| `supabase/migrations/` | DB schema: `live_sessions`, `session_events` |
-
-## Environment Variables
-
 ```
-# Spotify OAuth (from developer.spotify.com)
-SPOTIFY_CLIENT_ID=
-SPOTIFY_CLIENT_SECRET=
-# Optional: override callback URI if default doesn't match Spotify app settings
-SPOTIFY_WEB_REDIRECT_URI=http://localhost:3000/api/spotify/callback
-
-# Supabase (required)
-SUPABASE_URL=https://your-project-ref.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
-
-# Optional: Anchor Management API (for next 3 events in PDF QR codes)
-MANAGEMENT_API_BASE_URL=https://management.orangejelly.co.uk
-MANAGEMENT_API_TOKEN=anch_your_api_key_here
+app/prep                 Prep wizard
+app/host, app/host/[id]  Dashboard and live controller
+app/display/[id]         Private TV display
+app/brands, app/admin    Brand management, admin unlock
+app/guest/[id]           Retired stub
+app/api/*                sessions, display, spotify, brands, generate, admin/unlock
+lib/live/                Runtime types, reveal, run of show, repo, sync, access
+supabase/migrations/     Applied with npx supabase db push; nothing runs them at deploy
 ```
 
-## Project-Specific Rules / Gotchas
+### Data and sync model
 
-### localStorage in Node/SSR
-Next.js doesn't provide localStorage natively on the server. The project works around this:
-- `next-with-localstorage.mjs` monkeypatches `globalThis.localStorage` during builds and server runs
-- All DB writes go through `lib/live/sessionRepo.ts` (Supabase client)
-- Client components hydrate from session data passed as props
+- Tables: `live_sessions` (`data` and `runtime_data` JSONB, validated in app only), `session_runtime_snapshots` (latest host runtime), `session_events` (append-only; `runtime_snapshot` rows about every 2 seconds while the host holds the control lock; pg_cron keeps 90 days) and `brands`. Storage bucket `brand-assets`.
+- **Sync is not Supabase Realtime.** The host `PUT`s runtime to `/api/sessions/[id]/runtime`; failed writes queue in localStorage (`lib/live/runtimeSync.ts`) and retry every 5 seconds. The display polls `/api/display/[id]/snapshot` every 1.5 seconds while running (5 idle). Same-device tabs share a `BroadcastChannel`. The control lock goes stale after 15 seconds; newest wins by `updatedAtMs`.
+- Supabase is the source of truth; localStorage holds only prep drafts, the retry queue, the control lock and legacy saved sessions.
 
-### Supabase Realtime Subscriptions
-- Live sessions use `supabase.channel()` for real-time updates
-- Clients subscribe on mount; unsubscribe on unmount to avoid connection leaks
-- Message format defined in `lib/live/types.ts` — stay consistent
+### Access model
 
-### Reveal Logic
-- `lib/live/reveal.ts` computes clues on-the-fly from card + reveal index
-- **Critical**: all clients must use the same seed/reveal algorithm for consistency
-- Test with `npm run test:py` (Python implementation also available)
+- `APP_ADMIN_SECRET` turns protection on; in production it is always on and a deploy without it fails closed. Unlocking at `/admin` sets the `music_bingo_admin` cookie (400 days). Host and display links carry signed tokens that set a per-session role cookie for 14 days.
+- An empty games list in production almost always means the admin cookie lapsed or the secret changed, not lost data: probe `GET /api/sessions` for a 401 before touching Supabase. `lib/live/adminGuard.ts` redirects to `/admin` on 401; let that error propagate rather than falling back to cached data.
 
-### PDF Export Path
-- Uses Sharp + pdf-lib to render images + embed fonts
-- Spotify metadata fetched at export time (may vary if playlist updated mid-game)
-- QR codes generated via `qrcode` library; embed in PDF with dimensions ~50x50px
+## Game and show rules
 
-### Python Test Suite
-- Located in `music_bingo/` (Python module)
-- Tests game logic, reveal computation, PDF parsing
-- Run with `npm run test:py`; requires Python 3.8+
-- Useful for validating cross-language consistency
+- Input: one list per game, `Artist – Title` (en dash preferred; spaced hyphen or em dash also parse), decade headers ignored, max 50 songs per game, at least 25 unique pool items.
+- Cards: 3 rows by 6 columns, one blank per row, drawn from a combined artists-and-titles pool. IDs are a SHA-256 prefix of the cells; duplicates are rejected; a seed makes generation reproducible.
+- Show order is fixed in `lib/live/runOfShow.ts`. One intro song per game: dance-along for game 1, sing-along for game 2. Half-time standings show positions only.
+- Timing (`lib/live/types.ts`): 45 seconds per song by default (15 to 300); album art at 10s, title 15s, artist 20s, scaled to song length; challenge songs run 90 seconds with reveals at 10/20/25s and a default 10-point bonus; hosts extend in 30-second steps.
+- **Wooden spoon:** with three or more teams it goes to the second-lowest team, and to the lowest only with two. Deliberate anti-sandbagging rule, owner-confirmed 18 July 2026; never "fix" it.
+- Live Spotify control needs an active Premium device; without one the show runs in manual host control mode. Auto-advance only runs while `mode === "running"`: a runtime left on `paused` while Spotify kept playing silently stalled auto-skip on 14 August 2026 (fixed in `4278518`).
 
-### Spotify Redirect URI Mismatch
-- Common issue: localhost vs 127.0.0.1
-- Spotify app settings must list **both** URIs if testing locally
-- Production: ensure `SPOTIFY_WEB_REDIRECT_URI` matches your domain exactly
+## Integrations
 
-## Deployment Notes
+- **Spotify:** tokens live in httpOnly cookies, not the database. The redirect URI defaults to `{origin}/api/spotify/callback` (`SPOTIFY_WEB_REDIRECT_URI` overrides it). Register both the `127.0.0.1:3000` and `localhost:3000` callbacks in the Spotify app or local auth fails with a redirect mismatch; production must match the deployed origin exactly. After a scope change, Disconnect then Connect again.
+- **Event feeds per brand** (`lib/eventFeed/`): `anchor_management` (Anchor Management Tools API, key needs `read:events`) or `baronshub`, configured on `brands`; Anchor brands without their own URL and key fall back to the `MANAGEMENT_API_*` env vars. Feeds return an empty list on any error; the event pack must still generate when brand or feed resolution fails, and a failed QR render is skipped silently.
+- Brand logos live in `brand-assets` and default logo paths are confined to `public/`; brand fonts come from the allowlist in `lib/brands/fonts.ts`.
 
-- Build requires `SUPABASE_SERVICE_ROLE_KEY` (used during migration setup)
-- Vercel: set all env vars in project settings
-- DB migrations auto-run on first deploy (see `supabase/migrations/`)
-- Playwright tests can run in CI via `test:e2e` (uses native browser locally; set `BROWSERLESS_URL` in CI)
+## Environment variables
+
+All server-side; none are `NEXT_PUBLIC_`. Next reads `.env.local` only at startup, so restart `npm run dev` after changing them.
+
+| Variable | Purpose |
+|---|---|
+| `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SPOTIFY_WEB_REDIRECT_URI` | Playlists and live control; the redirect URI is an optional override |
+| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Required; routes throw `Missing env var` without them. Project ref `ihyazjaklyhacxixhwww` |
+| `APP_ADMIN_SECRET` | Required in production |
+| `MANAGEMENT_API_BASE_URL`, `MANAGEMENT_API_TOKEN`, `MANAGEMENT_PUBLIC_EVENTS_BASE_URL` | Optional Anchor feed fallback; events site defaults to `https://www.the-anchor.pub` |
+
+## Known gotchas
+
+- `.claude/worktrees/<name>` does not inherit the gitignored `.env.local`. Symlink it in and restart dev, or `/host` shows "Failed to load sessions" and `/api/generate` returns 500 even though the build passes.
+- Diagnose live-show bugs by replaying the session's `session_events` rows before theorising from code; a sudden stop in rows means the host tab lost the lock or was suspended.
+- Host and display each compute reveal phases locally from `progressMs` and `revealConfig` via `lib/live/reveal.ts`. Keep it deterministic; change ratios only in `lib/live/types.ts`.
+- Prep wizard drafts persist in localStorage so work is never lost; do not clear them on navigation.
+- PDF text is sanitised before drawing (pdf-lib's standard fonts cannot encode every character); keep new text paths on it.
+- `ARCHITECTURE.md`, `PRD.md`, `IMPLEMENTATION_PLAN.md` and `docs/architecture/` are stale; trust the code and this file.
