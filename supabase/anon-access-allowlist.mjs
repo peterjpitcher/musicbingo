@@ -30,13 +30,16 @@
  *   privilege on each new table and EXECUTE on each new function. Grants were
  *   clawed back object by object and the next migration re-armed them.
  *
- *   That root cause is already closed here, and it was closed earlier than in the
- *   sibling projects. Migration 20260808170000_drop_dead_tables_and_harden ran
- *   ALTER DEFAULT PRIVILEGES ... REVOKE ALL ... FROM anon, authenticated on
+ *   That root cause was closed here earlier than in the sibling projects, for
+ *   tables and sequences. Migration 20260808170000_drop_dead_tables_and_harden
+ *   ran ALTER DEFAULT PRIVILEGES ... REVOKE ALL ... FROM anon, authenticated on
  *   tables, sequences and functions. The live catalogue agrees: the
  *   `pg_default_acl` rows whose grantor is `postgres`, which is the role
  *   migrations run as, list only postgres and service_role. A new table created
- *   by a migration no longer grants itself to anon.
+ *   by a migration no longer grants itself to anon. A new function still did,
+ *   through PUBLIC: a per-schema default cannot remove the built-in global
+ *   EXECUTE that PUBLIC gets, and anon is a member of PUBLIC. 20260929112318
+ *   revokes that globally for postgres.
  *
  *   Two things that closure does not cover. It cannot stop a later migration
  *   writing an explicit GRANT. And the `supabase_admin` grantor still carries
@@ -158,7 +161,7 @@ export const FORBIDDEN_IN_ALLOWLIST = [
  * @type {readonly string[]}
  */
 export const ANON_REVIEW_NOTES = [
-  'The pg_default_acl rows whose grantor is supabase_admin still grant anon every table privilege and EXECUTE on functions. Migrations run as postgres, whose defaults 20260808170000 narrowed, so ordinary migrations are covered. An object created by supabase_admin would not be. This check is the net under that gap.',
+  'The pg_default_acl rows whose grantor is supabase_admin still grant anon every table privilege and EXECUTE on functions. Migrations run as postgres, whose defaults 20260808170000 narrowed for tables and sequences and 20260929112318 closed for functions (a per-schema revoke cannot remove the EXECUTE that PUBLIC gets built in), so ordinary migrations are covered. An object created by supabase_admin would not be. This check is the net under that gap.',
 ];
 
 /**
