@@ -107,7 +107,7 @@ async function runCommand(params: {
   payload: LiveCommandPayload;
   accessToken: string;
   deviceId?: string;
-}): Promise<{ warnings: string[] }> {
+}): Promise<{ warnings: string[]; debug?: Record<string, unknown> }> {
   const { accessToken, deviceId } = params;
   const done = { warnings: [] as string[] };
 
@@ -116,8 +116,17 @@ async function runCommand(params: {
     if (!trackId) {
       throw new SpotifyLiveError("API_ERROR", "`trackId` is required for play_track.");
     }
-    await playTrackByUri({ accessToken, trackId, deviceId });
-    return done;
+    const played = await playTrackByUri({ accessToken, trackId, deviceId });
+    return {
+      warnings: [],
+      debug: {
+        via: played.via,
+        trackFound: Boolean(played.track),
+        isPlayable: played.track?.isPlayable ?? null,
+        restriction: played.track?.restrictionReason ?? null,
+        relinked: Boolean(played.track?.relinkedFrom),
+      },
+    };
   }
 
   if (params.action === "play_game") {
@@ -234,7 +243,8 @@ function describeFailure(params: {
     return "Spotify is not open on any device. Open the Spotify app on the host laptop, press play once, then try again.";
   }
 
-  if (err.code !== "RESTRICTED" || action === "play_break") return err.message;
+  // Our own checks (no Spotify status) already say exactly what is wrong.
+  if (err.code !== "RESTRICTED" || action === "play_break" || err.httpStatus === null) return err.message;
 
   if (!state?.activeDevice) {
     return PLAY_ACTIONS.has(action)
@@ -320,7 +330,7 @@ export async function POST(request: NextRequest) {
   let devices: SpotifyLiveDevice[] | null = null;
 
   try {
-    let result: { warnings: string[] };
+    let result: { warnings: string[]; debug?: Record<string, unknown> };
     try {
       result = await runCommand({ action, payload, accessToken, deviceId });
     } catch (err) {
@@ -352,18 +362,22 @@ export async function POST(request: NextRequest) {
     if (PLAY_ACTIONS.has(action)) {
       const confirmation = await confirmPlaybackStarted({ accessToken });
       state = confirmation.state ?? (await safePlaybackState(accessToken));
+      const logDetail = JSON.stringify({
+        action,
+        deviceType: state?.activeDevice?.type ?? null,
+        trackLoaded: Boolean(state?.playback),
+        isPlaying: state?.playback?.isPlaying ?? null,
+        usedFallbackDevice,
+        ...result.debug,
+        ...state?.diagnostics,
+      });
       if (!confirmation.confirmed) {
         hostWarning = state?.activeDevice
           ? `Spotify accepted that, but nothing is playing on ${deviceLabel(state.activeDevice)} yet. If there is no music in a few seconds, open the Spotify app on that device and press play.`
           : "Spotify accepted that, but no Spotify device is playing. Open the Spotify app on the host laptop and press play once.";
-        console.warn(
-          `[spotify-live] playback not confirmed ${JSON.stringify({
-            action,
-            deviceType: state?.activeDevice?.type ?? null,
-            trackLoaded: Boolean(state?.playback),
-            usedFallbackDevice,
-          })}`
-        );
+        console.warn(`[spotify-live] playback not confirmed ${logDetail}`);
+      } else {
+        console.info(`[spotify-live] playback confirmed ${logDetail}`);
       }
     } else {
       state = await safePlaybackState(accessToken);
