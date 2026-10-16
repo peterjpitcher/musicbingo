@@ -271,6 +271,9 @@ export function StepGameConfig({
             onChange={(e) => handleIntroUrlChange(e.target.value)}
             onBlur={() => resolveIntroUrl(introSlot.type, introUrl)}
             onPaste={(e) => {
+              // The pasted link replaces the field. Without preventDefault the
+              // browser pastes it a second time and the link is stored doubled.
+              e.preventDefault();
               const pasted = e.clipboardData.getData("text");
               handleIntroUrlChange(pasted);
               setTimeout(() => resolveIntroUrl(introSlot.type, pasted), 0);

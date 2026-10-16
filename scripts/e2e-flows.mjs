@@ -185,6 +185,10 @@ async function installSpotifyLiveMocks(context, options = {}) {
     trackIndex: 0,
     progressMs: 0,
     isPlaying: false,
+    /** Every command payload the host sent, oldest first. */
+    commands: [],
+    /** Optional (payload) => ({ status, body }) | null, to answer as Spotify would when it refuses. */
+    commandOverride: null,
   };
 
   const tracksByGame = {
@@ -265,6 +269,18 @@ async function installSpotifyLiveMocks(context, options = {}) {
     state.commandCalls += 1;
     const payload = route.request().postDataJSON?.() ?? {};
     const action = payload.action;
+    state.commands.push(payload);
+
+    const override = state.commandOverride?.(payload) ?? null;
+    if (override) {
+      await route.fulfill({
+        status: override.status,
+        contentType: "application/json",
+        headers: { "Cache-Control": "no-store" },
+        body: JSON.stringify({ action, ...buildSnapshot(), ...override.body }),
+      });
+      return;
+    }
 
     if (!state.connected) {
       await route.fulfill({
@@ -918,6 +934,77 @@ async function main() {
     });
 
     await flow7Context.close();
+
+    const flow10Context = await browser.newContext();
+    await installAppDataMocks(flow10Context, { sessions: [makeLiveSessionFixture("flow-live-refusals")] });
+    const spotifyFlow10 = await installSpotifyLiveMocks(flow10Context, { canControlPlayback: true });
+    await flow10Context.addInitScript((payload) => {
+      window.localStorage.setItem("music-bingo-live-sessions-v1", JSON.stringify([payload]));
+    }, makeLiveSessionFixture("flow-live-refusals"));
+    const flow10HostPage = await flow10Context.newPage();
+
+    await runFlow(flowResults, "Flow 10: Host sees plain warnings when Spotify refuses or stays silent", async () => {
+      const silentWarning = 'Spotify accepted that, but nothing is playing on "Mock Laptop" yet.';
+      const refusedSkip = 'Nothing is loaded in Spotify on "Mock Laptop", so there is nothing to skip.';
+
+      await flow10HostPage.goto(`${BASE_URL}/host/flow-live-refusals`, { waitUntil: "domcontentloaded" });
+      const playWelcome = flow10HostPage.getByRole("button", { name: /Play Welcome Intro/ });
+      await playWelcome.waitFor({ timeout: 15_000 });
+
+      // 16 October 2026: Spotify accepted the welcome song and nothing played.
+      spotifyFlow10.commandOverride = (payload) =>
+        payload.action === "play_track" ? { status: 200, body: { ok: true, hostWarning: silentWarning } } : null;
+      await playWelcome.click();
+      await flow10HostPage.getByText(silentWarning).waitFor({ timeout: 10_000 });
+
+      // The warning clears itself once Spotify reports music playing.
+      spotifyFlow10.commandOverride = null;
+      spotifyFlow10.isPlaying = true;
+      await flow10HostPage.getByText(silentWarning).waitFor({ state: "detached", timeout: 10_000 });
+
+      // A refused skip shows the explanation, not "control unavailable".
+      spotifyFlow10.commandOverride = (payload) =>
+        payload.action === "next"
+          ? { status: 409, body: { ok: false, error: { code: "RESTRICTED", message: refusedSkip } } }
+          : null;
+      await flow10HostPage.getByTitle("Next", { exact: true }).click();
+      await flow10HostPage.getByText(refusedSkip).waitFor({ timeout: 10_000 });
+      assert.equal(await flow10HostPage.getByText(/playback control unavailable/i).count(), 0);
+
+      // Restart on the welcome screen replays the welcome song as a single
+      // track instead of looking for it inside a game playlist.
+      spotifyFlow10.commandOverride = null;
+      const commandsBefore = spotifyFlow10.commands.length;
+      await flow10HostPage.getByRole("button", { name: "Restart", exact: true }).click();
+      const restartDeadline = Date.now() + 10_000;
+      while (spotifyFlow10.commands.length <= commandsBefore && Date.now() < restartDeadline) {
+        await sleep(100);
+      }
+      assert.deepEqual(spotifyFlow10.commands.at(-1), { action: "play_track", trackId: "2LScqpywMqGcnum6nNaxXX" });
+    });
+
+    await flow10Context.close();
+
+    const flow11Context = await browser.newContext({ permissions: ["clipboard-read", "clipboard-write"] });
+    await installAppDataMocks(flow11Context);
+    await installSpotifyMocks(flow11Context, { initialConnected: false });
+    const flow11Page = await flow11Context.newPage();
+
+    await runFlow(flowResults, "Flow 11: Pasting an intro song link stores it once", async () => {
+      const introUrl = "https://open.spotify.com/track/2sB26pWHOIscSdBP4sBMBN?si=43f9071c2ede487d";
+      await openPrep(flow11Page);
+      await flow11Page.getByRole("button", { name: /Next: Game 1/i }).click();
+      await flow11Page.getByRole("heading", { name: /Game 1/i }).waitFor();
+
+      const introInput = flow11Page.getByPlaceholder("Paste Spotify track URL…");
+      await introInput.click();
+      await flow11Page.evaluate((text) => navigator.clipboard.writeText(text), introUrl);
+      await flow11Page.keyboard.press("ControlOrMeta+V");
+      await sleep(200);
+      assert.equal(await introInput.inputValue(), introUrl, "A pasted intro link should appear once, not doubled");
+    });
+
+    await flow11Context.close();
 
     const flow9Context = await browser.newContext();
     await installAppDataMocks(flow9Context);

@@ -7,7 +7,7 @@ const root = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   test: {
     environment: "node",
-    include: ["lib/**/*.test.ts", "components/**/*.test.ts"],
+    include: ["lib/**/*.test.ts", "components/**/*.test.ts", "app/**/*.test.ts"],
     exclude: [...configDefaults.exclude],
   },
   resolve: {
