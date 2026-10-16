@@ -6,27 +6,32 @@ import { Chrome } from "@/components/motifs/Chrome";
 import { Editable } from "@/components/motifs/Editable";
 
 /**
- * Static default running-order entries (placeholders).
+ * Running-order rows, top level only: guests just need to know what is coming,
+ * so each row is a title with no detail line.
  *
- * The content keys are deliberately out of display order: half-time standings
- * was added after the rest of the show and took the next free key (`ro7`)
- * rather than renumbering, so wording a host had already customised for Quiz
- * Two, Game 2 and Prizes stays attached to the row it was written for.
+ * The content keys are deliberately out of display order: rows added after the
+ * rest of the show (half-time standings `ro7`, the interactive game `ro8`) took
+ * the next free key rather than renumbering, so wording a host had already
+ * customised for Quiz Two, Game 2 and Prizes stays attached to its row.
  */
 const RUN_ORDER = [
-  { n: "01", t: "Quiz · Round One",  s: "Grab your phones — KaraFun mobile quiz", k: "ro1" },
-  { n: "02", t: "Music Bingo · Game 1", s: "Warm up, then 50 songs to dab",       k: "ro2" },
-  { n: "03", t: "The Interval",       s: "Refill at the bar — back in 10",         k: "ro3" },
-  { n: "04", t: "Half-Time Standings", s: "Who's up, who's chasing, no scores",    k: "ro7" },
-  { n: "05", t: "Quiz · Round Two",  s: "Round two of the mobile quiz",            k: "ro4" },
-  { n: "06", t: "Music Bingo · Game 2", s: "Sing-along warm up, then Game 2",      k: "ro5" },
-  { n: "07", t: "Prizes & Winners",  s: "Top table & wooden-spoon prizes",         k: "ro6" },
+  { n: "01", t: "Quiz · Round One", k: "ro1" },
+  { n: "02", t: "Music Bingo · Game 1", k: "ro2" },
+  { n: "03", t: "The Interval", k: "ro3" },
+  { n: "04", t: "Half-Time Standings", k: "ro7" },
+  { n: "05", t: "Interactive Game", k: "ro8" },
+  { n: "06", t: "Quiz · Round Two", k: "ro4" },
+  { n: "07", t: "Music Bingo · Game 2", k: "ro5" },
+  { n: "08", t: "Prizes & Winners", k: "ro6" },
 ] as const;
 
 /**
  * "Tonight's Running Order" screen.
- * Items stagger-animate in from the left using `an-slideL d1…d6` classes; rows
- * past the sixth reuse the last delay rather than landing with no animation.
+ * Rows share the space under the heading evenly (capped at a comfortable
+ * height), so adding a row shrinks them instead of pushing the last ones off
+ * the bottom of the TV, which is what happened with seven rows on
+ * 16 October 2026. Items stagger-animate in from the left using
+ * `an-slideL d1…d6`; rows past the sixth reuse the last delay.
  */
 export function RunningOrder({ brand }: ScreenProps): JSX.Element {
   return (
@@ -51,7 +56,8 @@ export function RunningOrder({ brand }: ScreenProps): JSX.Element {
         style={{
           display: "flex",
           flexDirection: "column",
-          gap: 14,
+          justifyContent: "center",
+          gap: 12,
           marginTop: 24,
         }}
       >
@@ -60,32 +66,31 @@ export function RunningOrder({ brand }: ScreenProps): JSX.Element {
             key={r.k}
             className={`an-slideL d${Math.min(i + 1, 6)}`}
             style={{
+              flex: "1 1 0",
+              minHeight: 0,
+              maxHeight: 112,
               display: "flex",
               alignItems: "center",
               gap: 24,
-              padding: "16px 24px",
+              padding: "0 26px",
               borderRadius: 18,
               background: "rgba(0,0,0,.26)",
               border: "1px solid rgb(var(--brand-accent-rgb) / .4)",
             }}
           >
-            <Ball n={r.n} size={78} />
-            <div className="col" style={{ minWidth: 0 }}>
-              <div
-                style={{
-                  fontFamily: "var(--brand-display)",
-                  fontSize: 42,
-                  lineHeight: 1,
-                  textTransform: "uppercase",
-                  color: "var(--cream)",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                <Editable field={`${r.k}t`} placeholder={r.t} />
-              </div>
-              <div className="muted" style={{ fontSize: 22, marginTop: 6 }}>
-                <Editable field={`${r.k}s`} placeholder={r.s} />
-              </div>
+            <Ball n={r.n} size={62} />
+            <div
+              style={{
+                fontFamily: "var(--brand-display)",
+                fontSize: 46,
+                lineHeight: 1,
+                textTransform: "uppercase",
+                color: "var(--cream)",
+                whiteSpace: "nowrap",
+                minWidth: 0,
+              }}
+            >
+              <Editable field={`${r.k}t`} placeholder={r.t} />
             </div>
           </div>
         ))}
