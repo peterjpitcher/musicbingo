@@ -36,6 +36,12 @@ function stripNoise(input: string): string {
     .trim();
 }
 
+// Spotify puts version labels after a spaced hyphen ("Help! - Remastered 2009",
+// "Waves - Robin Schulz Radio Edit"). Hyphens inside a title have no spaces round them.
+function stripDashSuffix(input: string): string {
+  return input.replace(/\s+-\s+.*$/, "").trim();
+}
+
 function levenshteinDistance(a: string, b: string): number {
   if (a === b) return 0;
   const n = a.length;
@@ -90,7 +96,8 @@ export function stringSimilarity(aRaw: string, bRaw: string): number {
 export function titleSimilarity(input: string, candidate: string): number {
   const direct = stringSimilarity(input, candidate);
   const stripped = stringSimilarity(stripNoise(input), stripNoise(candidate));
-  return Math.max(direct, stripped);
+  const withoutSuffix = stringSimilarity(stripNoise(input), stripDashSuffix(stripNoise(candidate)));
+  return Math.max(direct, stripped, withoutSuffix);
 }
 
 function artistSimilarity(inputArtist: string, candidateArtists: string[]): number {
