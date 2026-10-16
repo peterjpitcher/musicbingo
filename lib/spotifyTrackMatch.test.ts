@@ -76,11 +76,29 @@ describe("scoreTrackCandidate", () => {
       MATCH_ACCEPT_SCORE
     );
   });
+
+  // The "ft" ending a word was read as a featured-artist marker, cutting "Daft Punk"
+  // to "Da" and "Soft Cell" to "So", so each scored 0.73 on its title alone.
+  it.each([
+    ["Daft Punk", "One More Time", { name: "One More Time", artists: ["Daft Punk"] }],
+    ["Soft Cell", "Tainted Love", { name: "Tainted Love", artists: ["Soft Cell"] }],
+    ["Tainted Love", "Soft Cell", { name: "Tainted Love", artists: ["Soft Cell"] }],
+  ])("gives %s – %s full marks", (artist, title, track) => {
+    expect(scoreTrackCandidate({ artist, title }, track)).toBe(1);
+  });
 });
 
 describe("titleSimilarity", () => {
-  it("ignores a featured artist in brackets", () => {
-    expect(titleSimilarity("Valerie", "Valerie (feat. Amy Winehouse)")).toBe(1);
+  it.each(["Valerie (feat. Amy Winehouse)", "Valerie feat. Amy Winehouse", "Valerie ft. Amy Winehouse"])(
+    "ignores the featured artist in %s",
+    (spotifyName) => {
+      expect(titleSimilarity("Valerie", spotifyName)).toBe(1);
+    }
+  );
+
+  // Both titles were cut to "Le", which counted as the same title.
+  it("does not treat Left Outside Alone and Left Behind as the same title", () => {
+    expect(titleSimilarity("Left Outside Alone", "Left Behind")).toBeLessThan(0.5);
   });
 
   it.each([

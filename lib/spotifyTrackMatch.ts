@@ -29,7 +29,8 @@ export function normalizeForMatch(input: string): string {
 function stripNoise(input: string): string {
   return input
     .replace(/\s*\((?:feat\.?|ft\.?|featuring)\b[^)]*\)\s*/gi, " ")
-    .replace(/\s*(?:feat\.?|ft\.?|featuring)\b.+$/i, "")
+    // The marker must start the text or follow whitespace, or "Daft Punk" would be cut to "Da".
+    .replace(/(?:^|\s+)(?:feat\.?|ft\.?|featuring)\b.+$/i, "")
     .replace(/\s*\[[^\]]*]\s*/g, " ")
     .replace(/\s*\([^)]*\)\s*/g, " ")
     .replace(/\s+/g, " ")
