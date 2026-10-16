@@ -1,3 +1,27 @@
+# Fix: Spotify "Restriction violated" on the host controller (16 October 2026)
+
+Reported at 16:36 BST on show day: "Spotify playback control unavailable: Player command failed: Restriction violated (UNKNOWN)".
+
+Evidence (Vercel request logs, `session_events`, `session_runtime_snapshots` for session `ab15ea89`):
+- 16:36:37 Play Welcome Intro returned OK, but Spotify then reported nothing loaded on the active device; two more commands returned OK; the fourth (16:36:56) got Spotify 403 "Restriction violated".
+- By 16:44 Spotify reported no active device at all. The device accepted commands without playing.
+- Spotify sends 403 "Restriction violated" when a command does not fit the player state (pause when paused, skip with nothing loaded). The app labelled every 403 as "control unavailable / Premium".
+- Tonight's break playlist (`37i9dQZF1DX2GKumqRIZ7g`) is Spotify-owned; the Web API returns 404 for it with this app's credentials.
+
+- [x] Map 403 "Restriction violated" to a new `RESTRICTED` code, keep `PREMIUM_REQUIRED` for real Premium errors (`lib/spotifyLive.ts`)
+- [x] Treat pause-when-paused, pause-with-no-device and resume-when-playing as success (`command/route.ts`)
+- [x] No active device: send play commands to the only open Spotify app; name the apps when there are several
+- [x] Confirm playback after play commands; warn the host when Spotify accepted but nothing plays (new host banner, clears itself)
+- [x] Shuffle refusals never block a playlist starting; retried after play, then a warning
+- [x] Break playlist that will not start: pause the game music and explain (Spotify-owned playlists named)
+- [x] Plain-English failure messages from player state; server logs for failures (no device names)
+- [x] Restart on welcome/intro songs replays the single track; elsewhere off the game screens it restarts in place
+- [x] Auto-advance failure banner shows the message, not raw JSON
+- [x] Prep: pasting an intro link no longer stores it twice (`StepGameConfig.tsx`)
+- [x] Tests: 18 library, 11 route (fake Spotify), browser flows 10 and 11; flow 11 fails without the paste fix
+
+---
+
 # Implementation Plan: Intro Songs & Multi-Challenge
 
 Spec: `tasks/spec-intro-songs-and-multi-challenge.md`

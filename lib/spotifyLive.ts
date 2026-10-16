@@ -1,14 +1,37 @@
 import { spotifyApiRequest } from "@/lib/spotifyWeb";
 
-export type SpotifyLiveErrorCode = "NO_ACTIVE_DEVICE" | "PREMIUM_REQUIRED" | "TOKEN_INVALID" | "API_ERROR";
+/**
+ * RESTRICTED is Spotify's 403 "Player command failed: Restriction violated":
+ * the command does not fit the player's current state (pausing when already
+ * paused, skipping with nothing loaded or nothing to skip to, starting a
+ * playlist the app may not play). It is not a Premium or permissions problem.
+ */
+export type SpotifyLiveErrorCode =
+  | "NO_ACTIVE_DEVICE"
+  | "PREMIUM_REQUIRED"
+  | "RESTRICTED"
+  | "TOKEN_INVALID"
+  | "API_ERROR";
 
 export class SpotifyLiveError extends Error {
   readonly code: SpotifyLiveErrorCode;
+  /** HTTP status Spotify returned, when the error came from a Spotify response. */
+  readonly httpStatus: number | null;
+  /** Spotify's own error text and reason, kept for server logs. */
+  readonly spotifyMessage: string | null;
+  readonly spotifyReason: string | null;
 
-  constructor(code: SpotifyLiveErrorCode, message: string) {
+  constructor(
+    code: SpotifyLiveErrorCode,
+    message: string,
+    details?: { httpStatus?: number; spotifyMessage?: string | null; spotifyReason?: string | null }
+  ) {
     super(message);
     this.name = "SpotifyLiveError";
     this.code = code;
+    this.httpStatus = details?.httpStatus ?? null;
+    this.spotifyMessage = details?.spotifyMessage ?? null;
+    this.spotifyReason = details?.spotifyReason ?? null;
   }
 }
 
@@ -49,38 +72,71 @@ function ensureHttpError(response: Response, fallbackMessage: string): never {
   throw new SpotifyLiveError("API_ERROR", `${fallbackMessage} (HTTP ${response.status})`);
 }
 
-async function parseErrorMessage(response: Response): Promise<string> {
+type SpotifyErrorBody = { message: string | null; reason: string | null };
+
+async function parseSpotifyError(response: Response): Promise<SpotifyErrorBody> {
+  // Read the body once as text: a failed .json() would leave nothing to fall back on.
+  const text = await response.text().catch(() => "");
   try {
-    const json = (await response.json()) as { error?: { message?: unknown; reason?: unknown } };
-    const message = asString(json?.error?.message) ?? asString((json as any)?.error_description);
-    const reason = asString(json?.error?.reason);
-    if (message && reason) return `${message} (${reason})`;
-    if (message) return message;
-    if (reason) return reason;
+    const json = JSON.parse(text) as { error?: { message?: unknown; reason?: unknown } };
+    return {
+      message: asString(json?.error?.message) ?? asString((json as any)?.error_description),
+      reason: asString(json?.error?.reason),
+    };
   } catch {
-    const text = await response.text().catch(() => "");
-    if (text.trim()) return text.trim();
+    return { message: asString(text), reason: null };
   }
-  return `Spotify API error (HTTP ${response.status})`;
 }
 
-function mapHttpError(params: { status: number; message: string }): SpotifyLiveError {
+export function mapHttpError(params: {
+  status: number;
+  message: string | null;
+  reason: string | null;
+}): SpotifyLiveError {
+  const details = {
+    httpStatus: params.status,
+    spotifyMessage: params.message,
+    spotifyReason: params.reason,
+  };
+  const spotifyText = [params.message, params.reason && params.reason !== "UNKNOWN" ? params.reason : null]
+    .filter(Boolean)
+    .join(": ");
+
   if (params.status === 401) {
-    return new SpotifyLiveError("TOKEN_INVALID", "Spotify session expired. Reconnect Spotify and try again.");
+    return new SpotifyLiveError(
+      "TOKEN_INVALID",
+      "Spotify session expired. Reconnect Spotify and try again.",
+      details
+    );
   }
   if (params.status === 403) {
+    const premium =
+      params.reason === "PREMIUM_REQUIRED" || /premium/i.test(params.message ?? "");
+    if (premium) {
+      return new SpotifyLiveError(
+        "PREMIUM_REQUIRED",
+        "Spotify Premium is required to control playback from this screen.",
+        details
+      );
+    }
     return new SpotifyLiveError(
-      "PREMIUM_REQUIRED",
-      `Spotify playback control unavailable: ${params.message || "Premium account or playback permissions required."}`
+      "RESTRICTED",
+      `Spotify refused that command in its current state${spotifyText ? ` (${spotifyText})` : ""}.`,
+      details
     );
   }
   if (params.status === 404) {
     return new SpotifyLiveError(
       "NO_ACTIVE_DEVICE",
-      "No active Spotify playback device. Open Spotify on your host device and start playback first."
+      "No active Spotify playback device. Open Spotify on your host device and start playback first.",
+      details
     );
   }
-  return new SpotifyLiveError("API_ERROR", params.message || `Spotify API error (HTTP ${params.status})`);
+  return new SpotifyLiveError(
+    "API_ERROR",
+    params.message || `Spotify API error (HTTP ${params.status})`,
+    details
+  );
 }
 
 function normalizePlaylistId(raw: string): string | null {
@@ -181,12 +237,72 @@ export async function getPlaybackState(accessToken: string): Promise<SpotifyLive
   }
 
   if (!res.ok) {
-    const message = await parseErrorMessage(res);
-    throw mapHttpError({ status: res.status, message });
+    throw mapHttpError({ status: res.status, ...(await parseSpotifyError(res)) });
   }
 
   const json = await res.json().catch(() => ({}));
   return buildStateFromResponse(json);
+}
+
+/**
+ * Spotify apps that are open and signed in, active or not. Needs the
+ * user-read-playback-state scope, which the app already requests.
+ */
+export async function listDevices(accessToken: string): Promise<SpotifyLiveDevice[]> {
+  const res = await spotifyApiRequest({
+    accessToken,
+    url: "https://api.spotify.com/v1/me/player/devices",
+    init: { method: "GET" },
+  });
+
+  if (!res.ok) {
+    throw mapHttpError({ status: res.status, ...(await parseSpotifyError(res)) });
+  }
+
+  const json = (await res.json().catch(() => ({}))) as { devices?: unknown };
+  const raw: unknown[] = Array.isArray(json.devices) ? json.devices : [];
+  return raw
+    .map((device) => parseDevice({ device }))
+    .filter((device): device is SpotifyLiveDevice => device !== null);
+}
+
+/**
+ * The device to send playback to when Spotify has no active device: the one
+ * Spotify app that is open and controllable. With none, or several, there is
+ * no safe guess, so the host is asked to press play on the right one instead.
+ */
+export function pickFallbackDevice(devices: SpotifyLiveDevice[]): SpotifyLiveDevice | null {
+  if (devices.some((device) => device.isActive)) return null;
+  const candidates = devices.filter((device) => device.id && !device.isRestricted);
+  return candidates.length === 1 ? candidates[0] : null;
+}
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Spotify accepts a play command before the device acts on it, and a device
+ * that is asleep or stuck can accept one and never play (16 October 2026: the
+ * welcome song was "sent" three times and nothing played). Re-read the player
+ * a few times so the host is told about silence instead of the screen
+ * implying the music started.
+ */
+export async function confirmPlaybackStarted(params: {
+  accessToken: string;
+  delaysMs?: number[];
+  wait?: (ms: number) => Promise<void>;
+}): Promise<{ confirmed: boolean; state: SpotifyLiveState | null }> {
+  const wait = params.wait ?? sleep;
+  let state: SpotifyLiveState | null = null;
+  for (const delayMs of params.delaysMs ?? [400, 700, 900]) {
+    await wait(delayMs);
+    try {
+      state = await getPlaybackState(params.accessToken);
+    } catch {
+      continue;
+    }
+    if (state.playback?.isPlaying) return { confirmed: true, state };
+  }
+  return { confirmed: false, state };
 }
 
 async function runPlayerCommand(params: {
@@ -220,12 +336,67 @@ async function runPlayerCommand(params: {
   if (res.status === 204 || res.status === 202) return;
 
   if (!res.ok) {
-    const message = await parseErrorMessage(res);
-    throw mapHttpError({ status: res.status, message });
+    throw mapHttpError({ status: res.status, ...(await parseSpotifyError(res)) });
   }
 
   if (res.status >= 200 && res.status < 300) return;
   ensureHttpError(res, `${params.actionLabel} failed`);
+}
+
+/** Spotify-owned editorial and algorithmic playlists all have ids starting 37i9dQZF1. */
+export function isSpotifyOwnedPlaylist(playlistId: string): boolean {
+  const normalized = normalizePlaylistId(playlistId);
+  return Boolean(normalized && normalized.startsWith("37i9dQZF1"));
+}
+
+/**
+ * Set shuffle, then play. Shuffle goes first so a game really starts at its
+ * first track and runs in order. Spotify can refuse the toggle in some states
+ * (while a single intro track is loaded, or on an idle device that the play
+ * command is about to wake); that must not stop the music starting, so a
+ * refusal is retried once the playlist is playing, and a second refusal
+ * becomes a warning for the host instead of a failed command. Only an expired
+ * login stops it, because the play command would fail the same way.
+ */
+async function playWithShuffleState(params: {
+  accessToken: string;
+  deviceId?: string;
+  shuffle: boolean;
+  play: () => Promise<void>;
+}): Promise<{ warnings: string[] }> {
+  const isNonFatal = (err: unknown): boolean =>
+    err instanceof SpotifyLiveError && err.code !== "TOKEN_INVALID";
+  const applyShuffle = () =>
+    setShuffleMode({
+      accessToken: params.accessToken,
+      state: params.shuffle,
+      deviceId: params.deviceId,
+    });
+
+  let shuffleApplied = true;
+  try {
+    await applyShuffle();
+  } catch (err) {
+    if (!isNonFatal(err)) throw err;
+    shuffleApplied = false;
+  }
+
+  await params.play();
+  if (shuffleApplied) return { warnings: [] };
+
+  try {
+    await applyShuffle();
+    return { warnings: [] };
+  } catch (err) {
+    if (!isNonFatal(err)) throw err;
+    return {
+      warnings: [
+        params.shuffle
+          ? "Spotify would not switch shuffle on for this playlist, so it will play in order."
+          : "Spotify would not switch shuffle off. Turn shuffle off in the Spotify app so the songs play in order.",
+      ],
+    };
+  }
 }
 
 export async function startPlaylistPlayback(params: {
@@ -233,56 +404,62 @@ export async function startPlaylistPlayback(params: {
   playlistId: string;
   deviceId?: string;
   shuffle?: boolean;
-}): Promise<void> {
+}): Promise<{ warnings: string[] }> {
   const normalizedPlaylistId = normalizePlaylistId(params.playlistId);
   if (!normalizedPlaylistId) {
     throw new SpotifyLiveError("API_ERROR", "Invalid playlist id for live playback.");
   }
 
   const shuffle = params.shuffle ?? false;
-  await setShuffleMode({
+  return playWithShuffleState({
     accessToken: params.accessToken,
-    state: shuffle,
     deviceId: params.deviceId,
-  });
-
-  await runPlayerCommand({
-    accessToken: params.accessToken,
-    method: "PUT",
-    path: "/me/player/play",
-    query: { device_id: params.deviceId },
-    body: {
-      context_uri: `spotify:playlist:${normalizedPlaylistId}`,
-      position_ms: 0,
-      ...(shuffle ? {} : { offset: { position: 0 } }),
-    },
-    actionLabel: "Start playback",
+    shuffle,
+    play: () =>
+      runPlayerCommand({
+        accessToken: params.accessToken,
+        method: "PUT",
+        path: "/me/player/play",
+        query: { device_id: params.deviceId },
+        body: {
+          context_uri: `spotify:playlist:${normalizedPlaylistId}`,
+          position_ms: 0,
+          ...(shuffle ? {} : { offset: { position: 0 } }),
+        },
+        actionLabel: "Start playback",
+      }),
   });
 }
 
-/** Resume a specific track from position 0 within its playlist context. */
+/** Restart a specific track from position 0 within its playlist, shuffle off. */
 export async function startTrackInPlaylistPlayback(params: {
   accessToken: string;
   playlistId: string;
   trackId: string;
   deviceId?: string;
-}): Promise<void> {
+}): Promise<{ warnings: string[] }> {
   const normalizedPlaylistId = normalizePlaylistId(params.playlistId);
   if (!normalizedPlaylistId) {
     throw new SpotifyLiveError("API_ERROR", "Invalid playlist id for resume.");
   }
 
-  await runPlayerCommand({
+  return playWithShuffleState({
     accessToken: params.accessToken,
-    method: "PUT",
-    path: "/me/player/play",
-    query: { device_id: params.deviceId },
-    body: {
-      context_uri: `spotify:playlist:${normalizedPlaylistId}`,
-      offset: { uri: `spotify:track:${params.trackId}` },
-      position_ms: 0,
-    },
-    actionLabel: "Resume track from beginning",
+    deviceId: params.deviceId,
+    shuffle: false,
+    play: () =>
+      runPlayerCommand({
+        accessToken: params.accessToken,
+        method: "PUT",
+        path: "/me/player/play",
+        query: { device_id: params.deviceId },
+        body: {
+          context_uri: `spotify:playlist:${normalizedPlaylistId}`,
+          offset: { uri: `spotify:track:${params.trackId}` },
+          position_ms: 0,
+        },
+        actionLabel: "Resume track from beginning",
+      }),
   });
 }
 
