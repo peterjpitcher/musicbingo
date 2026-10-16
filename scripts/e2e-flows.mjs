@@ -1025,6 +1025,43 @@ async function main() {
 
     await flow12Context.close();
 
+    const preShowSession = {
+      ...makeLiveSessionFixture("flow-live-preshow"),
+      breakPlaylistId: "https://open.spotify.com/playlist/flowbreakmix",
+    };
+    const flow13Context = await browser.newContext();
+    await installAppDataMocks(flow13Context, { sessions: [preShowSession] });
+    const spotifyFlow13 = await installSpotifyLiveMocks(flow13Context, { canControlPlayback: true });
+    await flow13Context.addInitScript((payload) => {
+      window.localStorage.setItem("music-bingo-live-sessions-v1", JSON.stringify([payload]));
+    }, preShowSession);
+    const flow13HostPage = await flow13Context.newPage();
+
+    await runFlow(flowResults, "Flow 13: Pre-show music plays on Welcome until the welcome song", async () => {
+      await flow13HostPage.goto(`${BASE_URL}/host/flow-live-preshow`, { waitUntil: "domcontentloaded" });
+      const playWelcome = flow13HostPage.getByRole("button", { name: /Play Welcome Intro/ });
+      await playWelcome.waitFor({ timeout: 15_000 });
+
+      const deadline = Date.now() + 10_000;
+      while (!spotifyFlow13.commands.some((c) => c.action === "play_break") && Date.now() < deadline) {
+        await sleep(100);
+      }
+      const preShow = spotifyFlow13.commands.find((c) => c.action === "play_break");
+      assert.ok(preShow, "Opening the host page on Welcome should start the pre-show music");
+      assert.equal(preShow.playlistId, preShowSession.breakPlaylistId);
+      assert.equal(spotifyFlow13.commands.filter((c) => c.action === "play_break").length, 1, "Pre-show music starts once");
+      await flow13HostPage.getByText(/Pre-show music/).first().waitFor({ timeout: 5_000 });
+
+      await playWelcome.click();
+      const welcomeDeadline = Date.now() + 10_000;
+      while (spotifyFlow13.commands.at(-1)?.action !== "play_track" && Date.now() < welcomeDeadline) {
+        await sleep(100);
+      }
+      assert.equal(spotifyFlow13.commands.at(-1)?.action, "play_track", "Play Welcome Intro replaces the pre-show music");
+    });
+
+    await flow13Context.close();
+
     const flow9Context = await browser.newContext();
     await installAppDataMocks(flow9Context);
     await installSpotifyMocks(flow9Context, { initialConnected: false });
