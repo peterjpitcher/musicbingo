@@ -1006,6 +1006,25 @@ async function main() {
 
     await flow11Context.close();
 
+    const flow12Context = await browser.newContext();
+    await installAppDataMocks(flow12Context);
+    await installSpotifyMocks(flow12Context, { initialConnected: false });
+    const flow12Page = await flow12Context.newPage();
+
+    await runFlow(flowResults, "Flow 12: Prep warns when the break playlist is made by Spotify", async () => {
+      const warning = flow12Page.getByText("This playlist is made by Spotify.");
+      await openPrep(flow12Page);
+      const breakInput = flow12Page.getByPlaceholder("https://open.spotify.com/playlist/...");
+
+      await breakInput.fill("https://open.spotify.com/playlist/37i9dQZF1DX2GKumqRIZ7g?si=822166ce9fc44b5e");
+      await warning.waitFor({ timeout: 5_000 });
+
+      await breakInput.fill("https://open.spotify.com/playlist/5xlpL99DNK4YeFOpiD5P59");
+      await warning.waitFor({ state: "detached", timeout: 5_000 });
+    });
+
+    await flow12Context.close();
+
     const flow9Context = await browser.newContext();
     await installAppDataMocks(flow9Context);
     await installSpotifyMocks(flow9Context, { initialConnected: false });
