@@ -60,15 +60,59 @@ describe("startPlaylistPlayback", () => {
     });
   });
 
-  it("keeps break playlists shuffled when requested", async () => {
+  it("shuffles break playlists and starts them at a random song", async () => {
+    mockedSpotifyApiRequest.mockImplementation(async (params) =>
+      params.url.includes("/playlists/playlist123?fields=tracks.total")
+        ? Response.json({ tracks: { total: 111 } })
+        : new Response(null, { status: 204 })
+    );
+
     await startPlaylistPlayback({ accessToken: "token", playlistId: "playlist123", shuffle: true });
 
-    expect(mockedSpotifyApiRequest).toHaveBeenCalledTimes(2);
-    expect(mockedSpotifyApiRequest.mock.calls[0]?.[0].url).toContain("/me/player/shuffle");
-    expect(mockedSpotifyApiRequest.mock.calls[0]?.[0].url).toContain("state=true");
+    const urls = mockedSpotifyApiRequest.mock.calls.map((call) => call[0].url);
+    expect(urls).toHaveLength(3);
+    expect(urls[0]).toContain("/me/player/shuffle");
+    expect(urls[0]).toContain("state=true");
+    expect(urls[2]).toContain("/me/player/play");
 
-    const playBody = JSON.parse(String(mockedSpotifyApiRequest.mock.calls[1]?.[0].init?.body));
-    expect(playBody).toEqual({
+    const playBody = JSON.parse(String(mockedSpotifyApiRequest.mock.calls[2]?.[0].init?.body));
+    expect(playBody.context_uri).toBe("spotify:playlist:playlist123");
+    expect(playBody.position_ms).toBe(0);
+    expect(Number.isInteger(playBody.offset.position)).toBe(true);
+    expect(playBody.offset.position).toBeGreaterThanOrEqual(0);
+    expect(playBody.offset.position).toBeLessThan(111);
+  });
+
+  it("starts a Spotify-owned break playlist within its first ten songs", async () => {
+    mockedSpotifyApiRequest.mockImplementation(async (params) =>
+      params.url.includes("/playlists/")
+        ? Response.json({ error: { status: 404, message: "Resource not found" } }, { status: 404 })
+        : new Response(null, { status: 204 })
+    );
+
+    await startPlaylistPlayback({ accessToken: "token", playlistId: "37i9dQZF1DX2GKumqRIZ7g", shuffle: true });
+
+    const play = mockedSpotifyApiRequest.mock.calls.find((call) => call[0].url.includes("/me/player/play"));
+    const playBody = JSON.parse(String(play?.[0].init?.body));
+    expect(playBody.offset.position).toBeGreaterThanOrEqual(0);
+    expect(playBody.offset.position).toBeLessThan(10);
+  });
+
+  it("starts the break playlist from the top when Spotify refuses the random song", async () => {
+    let plays = 0;
+    mockedSpotifyApiRequest.mockImplementation(async (params) => {
+      if (params.url.includes("/me/player/play")) {
+        plays += 1;
+        return plays === 1 ? restrictionViolated() : new Response(null, { status: 204 });
+      }
+      return new Response(null, { status: 204 });
+    });
+
+    await startPlaylistPlayback({ accessToken: "token", playlistId: "playlist123", shuffle: true });
+
+    const playCalls = mockedSpotifyApiRequest.mock.calls.filter((call) => call[0].url.includes("/me/player/play"));
+    expect(playCalls).toHaveLength(2);
+    expect(JSON.parse(String(playCalls[1]?.[0].init?.body))).toEqual({
       context_uri: "spotify:playlist:playlist123",
       position_ms: 0,
     });

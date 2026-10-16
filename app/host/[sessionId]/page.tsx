@@ -214,6 +214,10 @@ export default function HostSessionControllerPage() {
   // Its own banner, so the success notices callers set cannot overwrite it,
   // and it clears itself as soon as a status poll sees music playing.
   const [playbackWarning, setPlaybackWarning] = useState<string>("");
+  // Whether Spotify was playing at the first status check after this page
+  // loaded (null until then). Decides the one-off pre-show music start.
+  const [statusAtLoad, setStatusAtLoad] = useState<{ isPlaying: boolean } | null>(null);
+  const preShowCheckedRef = useRef(false);
   const [isController, setIsController] = useState<boolean>(false);
   const [spotifyDisconnected, setSpotifyDisconnected] = useState<boolean>(false);
   const [lockOwnerLabel, setLockOwnerLabel] = useState<string>("");
@@ -804,6 +808,7 @@ export default function HostSessionControllerPage() {
       const data = (await res.json()) as LiveStatusResponse;
       applyStatusSnapshot(data);
       if (data.playback?.isPlaying) setPlaybackWarning("");
+      setStatusAtLoad((prev) => prev ?? { isPlaying: Boolean(data.playback?.isPlaying) });
 
       // --- Recover a stale "paused" mode from real playback ---
       // See shouldRecoverRunningMode: the engine below only runs in "running"
@@ -1026,6 +1031,31 @@ export default function HostSessionControllerPage() {
     },
     [applyStatusSnapshot, commitRuntime]
   );
+
+  // Pre-show music: before the welcome song, the Welcome screen plays the
+  // break playlist on shuffle as background music while guests arrive. Play
+  // Welcome Intro replaces it with the welcome song.
+  const startPreShowMusic = useCallback(async (): Promise<void> => {
+    const playlistId = session?.breakPlaylistId;
+    if (!playlistId || spotifyDisconnectedRef.current) return;
+    const ok = await sendCommand("play_break", { playlistId }, { modeOnSuccess: "idle" });
+    if (ok) {
+      setNoticeVariant("success");
+      setNotice("Pre-show music: the break playlist is playing on shuffle until you press Play Welcome Intro.");
+    }
+  }, [sendCommand, session]);
+
+  // Start the pre-show music once per page load: after the first Spotify
+  // status, in the controlling tab, and only on the Welcome screen with
+  // nothing playing, so reloading the host page mid-song never cuts it off.
+  useEffect(() => {
+    if (preShowCheckedRef.current || !statusAtLoad || !isController || !session) return;
+    preShowCheckedRef.current = true;
+    const current = runtimeRef.current;
+    const screenId = normalizeScreenId(current.screenId, deriveScreenId(current));
+    if (screenId !== "welcome" || current.mode !== "idle" || statusAtLoad.isPlaying) return;
+    void startPreShowMusic();
+  }, [isController, session, startPreShowMusic, statusAtLoad]);
 
   async function startGame(gameNumber: 1 | 2) {
     if (!session || !isController) return;
@@ -1490,7 +1520,11 @@ export default function HostSessionControllerPage() {
     if (currentId === "standings" && runtimeRef.current.spotifyControlAvailable) {
       void sendCommand("pause", undefined, { modeOnSuccess: "idle" });
     }
+    // Back on Welcome with nothing playing: the pre-show music comes back on.
+    const startPreShow =
+      id === "welcome" && currentId !== "welcome" && !runtimeRef.current.currentTrack?.isPlaying;
     commitRuntime((prev) => ({ ...prev, screenId: id }));
+    if (startPreShow) void startPreShowMusic();
   }
 
   function stepScreen(delta: 1 | -1): void {
@@ -2046,7 +2080,7 @@ export default function HostSessionControllerPage() {
                 claimCount={runtime.playedTracks?.length ?? 0}
                 claimActive={runtime.screenId === "claim"}
                 onEnd={() => showClosingScreen("winner-entry")}
-                onReset={() =>
+                onReset={() => {
                   commitRuntime((prev) => ({
                     ...prev,
                     mode: "idle",
@@ -2066,8 +2100,11 @@ export default function HostSessionControllerPage() {
                     introPlayed: false,
                     extensionMs: 0,
                     freePlay: false,
-                  }))
-                }
+                  }));
+                  // A reset puts the show back before doors, so the
+                  // pre-show music starts again.
+                  void startPreShowMusic();
+                }}
               />
 
               {/* Content panel */}

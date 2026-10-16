@@ -65,6 +65,7 @@ export type SpotifyLiveState = {
     contextUri: string | null;
     disallows: string[];
     volumePercent: number | null;
+    shuffle: boolean | null;
   };
 };
 
@@ -221,6 +222,7 @@ function buildStateFromResponse(json: unknown): SpotifyLiveState {
           ? Object.keys(disallowsRaw).filter((key) => disallowsRaw[key] === true)
           : [],
       volumePercent: asNumber(raw.device?.volume_percent),
+      shuffle: typeof raw.shuffle_state === "boolean" ? raw.shuffle_state : null,
     },
   };
 }
@@ -410,24 +412,59 @@ export async function startPlaylistPlayback(params: {
   }
 
   const shuffle = params.shuffle ?? false;
+  const playFrom = (position: number | null) =>
+    runPlayerCommand({
+      accessToken: params.accessToken,
+      method: "PUT",
+      path: "/me/player/play",
+      query: { device_id: params.deviceId },
+      body: {
+        context_uri: `spotify:playlist:${normalizedPlaylistId}`,
+        position_ms: 0,
+        ...(position === null ? {} : { offset: { position } }),
+      },
+      actionLabel: "Start playback",
+    });
+
   return playWithShuffleState({
     accessToken: params.accessToken,
     deviceId: params.deviceId,
     shuffle,
-    play: () =>
-      runPlayerCommand({
-        accessToken: params.accessToken,
-        method: "PUT",
-        path: "/me/player/play",
-        query: { device_id: params.deviceId },
-        body: {
-          context_uri: `spotify:playlist:${normalizedPlaylistId}`,
-          position_ms: 0,
-          ...(shuffle ? {} : { offset: { position: 0 } }),
-        },
-        actionLabel: "Start playback",
-      }),
+    play: async () => {
+      if (!shuffle) return playFrom(0);
+      // Shuffle mixes what comes next, but Spotify can still open every break
+      // on the playlist's first song, so start at a random one. Spotify-owned
+      // playlists will not report their length to this app, so those start
+      // somewhere in their first ten songs.
+      const total = await playlistTrackCount(params.accessToken, normalizedPlaylistId);
+      const position = Math.floor(Math.random() * Math.max(1, total ?? 10));
+      try {
+        await playFrom(position);
+      } catch (err) {
+        if (!(err instanceof SpotifyLiveError) || err.code === "NO_ACTIVE_DEVICE" || err.code === "TOKEN_INVALID") {
+          throw err;
+        }
+        await playFrom(null);
+      }
+    },
   });
+}
+
+/** Number of songs in a playlist, or null when Spotify will not say (Spotify-owned playlists). */
+async function playlistTrackCount(accessToken: string, playlistId: string): Promise<number | null> {
+  try {
+    const res = await spotifyApiRequest({
+      accessToken,
+      url: `https://api.spotify.com/v1/playlists/${encodeURIComponent(playlistId)}?fields=tracks.total`,
+      init: { method: "GET" },
+    });
+    if (!res.ok) return null;
+    const json = (await res.json().catch(() => null)) as { tracks?: { total?: unknown } } | null;
+    const total = asNumber(json?.tracks?.total);
+    return total !== null && total > 0 ? total : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Restart a specific track from position 0 within its playlist, shuffle off. */

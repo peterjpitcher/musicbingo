@@ -52,6 +52,11 @@ class FakeSpotify {
     if (method === "GET" && path === "/me/player/devices") {
       return Response.json({ devices: this.devices });
     }
+    if (method === "GET" && path.startsWith("/playlists/")) {
+      return path.includes("37i9dQZF1")
+        ? Response.json({ error: { status: 404, message: "Resource not found" } }, { status: 404 })
+        : Response.json({ tracks: { total: 40 } });
+    }
     if (method === "GET" && path.startsWith("/tracks/")) {
       const id = path.replace("/tracks/", "");
       return Response.json({
@@ -340,6 +345,26 @@ describe("POST /api/spotify/live/command", () => {
     expect(res.status).toBe(409);
     expect(data.error.message).toMatch(/not available on this Spotify account/);
     expect(spotify.calls.some((call) => call.path === "/me/player/play")).toBe(false);
+  });
+
+  it("shuffles the break playlist before starting it at a random song", async () => {
+    spotify.devices = [laptop()];
+    spotify.trackId = "game-song";
+    spotify.isPlaying = true;
+
+    const res = await POST(command({ action: "play_break", playlistId: "https://open.spotify.com/playlist/breakmix" }));
+    const data = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(data.ok).toBe(true);
+    const shuffleIndex = spotify.calls.findIndex((call) => call.path === "/me/player/shuffle");
+    const playIndex = spotify.calls.findIndex((call) => call.path === "/me/player/play");
+    expect(shuffleIndex).toBeGreaterThanOrEqual(0);
+    expect(shuffleIndex).toBeLessThan(playIndex);
+    const play = spotify.calls[playIndex];
+    expect(play?.body.context_uri).toBe("spotify:playlist:breakmix");
+    expect(play?.body.offset.position).toBeGreaterThanOrEqual(0);
+    expect(play?.body.offset.position).toBeLessThan(40);
   });
 
   it("starts a game normally and confirms it is playing", async () => {
