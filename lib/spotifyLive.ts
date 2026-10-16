@@ -59,6 +59,13 @@ export type SpotifyLiveState = {
   activeDevice: SpotifyLiveDevice | null;
   playback: SpotifyLivePlayback | null;
   warnings: string[];
+  /** Extra player detail for server logs only; never sent to the browser. */
+  diagnostics?: {
+    currentlyPlayingType: string | null;
+    contextUri: string | null;
+    disallows: string[];
+    volumePercent: number | null;
+  };
 };
 
 function asString(value: unknown): string | null {
@@ -199,11 +206,22 @@ function buildStateFromResponse(json: unknown): SpotifyLiveState {
     warnings.push("No currently playing track detected.");
   }
 
+  const raw = (json && typeof json === "object" ? json : {}) as any;
+  const disallowsRaw = raw.actions?.disallows;
   return {
     canControlPlayback: Boolean(activeDevice && !activeDevice.isRestricted),
     activeDevice,
     playback,
     warnings,
+    diagnostics: {
+      currentlyPlayingType: asString(raw.currently_playing_type),
+      contextUri: asString(raw.context?.uri),
+      disallows:
+        disallowsRaw && typeof disallowsRaw === "object"
+          ? Object.keys(disallowsRaw).filter((key) => disallowsRaw[key] === true)
+          : [],
+      volumePercent: asNumber(raw.device?.volume_percent),
+    },
   };
 }
 
@@ -461,22 +479,92 @@ export async function setShuffleMode(params: {
   });
 }
 
+export type AccountTrack = {
+  /** The id this account can play: Spotify swaps in a relinked copy when the original is not available. */
+  id: string;
+  albumUri: string | null;
+  isPlayable: boolean | null;
+  restrictionReason: string | null;
+  relinkedFrom: string | null;
+};
+
+/** Look a track up as the signed-in account sees it, so playback uses a version that account can play. */
+export async function resolveTrackForAccount(accessToken: string, trackId: string): Promise<AccountTrack | null> {
+  const res = await spotifyApiRequest({
+    accessToken,
+    url: `https://api.spotify.com/v1/tracks/${encodeURIComponent(trackId)}?market=from_token`,
+    init: { method: "GET" },
+  });
+  if (!res.ok) return null;
+  const json = (await res.json().catch(() => null)) as any;
+  const id = asString(json?.id);
+  if (!id) return null;
+  return {
+    id,
+    albumUri: asString(json?.album?.uri),
+    isPlayable: typeof json?.is_playable === "boolean" ? json.is_playable : null,
+    restrictionReason: asString(json?.restrictions?.reason),
+    relinkedFrom: asString(json?.linked_from?.id),
+  };
+}
+
+/**
+ * Play one song (welcome or intro). On 16 October 2026 the host Mac's Spotify
+ * app stopped dead every time it was sent a bare one-track list, while
+ * playlist starts worked, so the song is started inside its album instead,
+ * the same way playlists are started. The bare track list is only a fallback
+ * for when the album cannot be used.
+ */
 export async function playTrackByUri(params: {
   accessToken: string;
   trackId: string;
   deviceId?: string;
-}): Promise<void> {
+}): Promise<{ track: AccountTrack | null; via: "album" | "uris" }> {
+  const track = await resolveTrackForAccount(params.accessToken, params.trackId).catch(() => null);
+  if (track && track.isPlayable === false) {
+    throw new SpotifyLiveError(
+      "RESTRICTED",
+      `That song is not available on this Spotify account${track.restrictionReason ? ` (${track.restrictionReason})` : ""}. Choose a different song.`
+    );
+  }
+  const trackUri = `spotify:track:${track?.id ?? params.trackId}`;
+
+  if (track?.albumUri) {
+    try {
+      await runPlayerCommand({
+        accessToken: params.accessToken,
+        method: "PUT",
+        path: "/me/player/play",
+        query: { device_id: params.deviceId },
+        body: {
+          context_uri: track.albumUri,
+          offset: { uri: trackUri },
+          position_ms: 0,
+        },
+        actionLabel: "Play single track",
+      });
+      return { track, via: "album" };
+    } catch (err) {
+      // A missing device or expired login fails the same way below; only
+      // fall back when Spotify turned down the album itself.
+      if (!(err instanceof SpotifyLiveError) || err.code === "NO_ACTIVE_DEVICE" || err.code === "TOKEN_INVALID") {
+        throw err;
+      }
+    }
+  }
+
   await runPlayerCommand({
     accessToken: params.accessToken,
     method: "PUT",
     path: "/me/player/play",
     query: { device_id: params.deviceId },
     body: {
-      uris: [`spotify:track:${params.trackId}`],
+      uris: [trackUri],
       position_ms: 0,
     },
     actionLabel: "Play single track",
   });
+  return { track, via: "uris" };
 }
 
 export async function pausePlayback(params: { accessToken: string; deviceId?: string }): Promise<void> {

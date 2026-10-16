@@ -31,6 +31,10 @@ class FakeSpotify {
   isPlaying = false;
   /** A device that accepts commands but never actually plays (asleep or stuck). */
   stuck = false;
+  /** Tracks this account cannot play. */
+  unavailableTracks = new Set<string>();
+  /** Albums Spotify refuses to start, to exercise the bare-track fallback. */
+  refusedAlbums = false;
   calls: Array<{ method: string; path: string; deviceId: string | null; body: any }> = [];
 
   get active(): FakeDevice | null {
@@ -47,6 +51,15 @@ class FakeSpotify {
 
     if (method === "GET" && path === "/me/player/devices") {
       return Response.json({ devices: this.devices });
+    }
+    if (method === "GET" && path.startsWith("/tracks/")) {
+      const id = path.replace("/tracks/", "");
+      return Response.json({
+        id,
+        album: { uri: `spotify:album:album-of-${id}` },
+        is_playable: !this.unavailableTracks.has(id),
+        ...(this.unavailableTracks.has(id) ? { restrictions: { reason: "market" } } : {}),
+      });
     }
     if (method === "GET" && path === "/me/player") {
       if (!this.active) return new Response(null, { status: 204 });
@@ -92,6 +105,17 @@ class FakeSpotify {
       }
       if (typeof body.context_uri === "string" && body.context_uri.startsWith("spotify:playlist:37i9dQZF1")) {
         return refuse();
+      }
+      if (typeof body.context_uri === "string" && body.context_uri.startsWith("spotify:album:")) {
+        if (this.refusedAlbums) return refuse();
+        if (this.stuck) {
+          this.trackId = null;
+          this.isPlaying = false;
+          return ok();
+        }
+        this.trackId = String(body.offset?.uri ?? "").replace("spotify:track:", "");
+        this.isPlaying = true;
+        return ok();
       }
       if (this.stuck) {
         this.trackId = null;
@@ -272,6 +296,50 @@ describe("POST /api/spotify/live/command", () => {
     expect(data.error.message).toMatch(/Game music is paused/);
     expect(spotify.calls.some((call) => call.path === "/me/player/pause")).toBe(true);
     expect(spotify.isPlaying).toBe(false);
+  });
+
+  it("plays a single song inside its album rather than as a bare track list", async () => {
+    spotify.devices = [laptop()];
+
+    const res = await POST(command({ action: "play_track", trackId: "welcome" }));
+    const data = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(data.playback.trackId).toBe("welcome");
+    expect(data.hostWarning).toBeNull();
+    const lookup = spotify.calls.find((call) => call.path === "/tracks/welcome");
+    expect(lookup).toBeDefined();
+    const play = spotify.calls.find((call) => call.path === "/me/player/play");
+    expect(play?.body).toEqual({
+      context_uri: "spotify:album:album-of-welcome",
+      offset: { uri: "spotify:track:welcome" },
+      position_ms: 0,
+    });
+  });
+
+  it("falls back to the bare track when Spotify refuses the album", async () => {
+    spotify.devices = [laptop()];
+    spotify.refusedAlbums = true;
+
+    const res = await POST(command({ action: "play_track", trackId: "welcome" }));
+    const data = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(data.playback.trackId).toBe("welcome");
+    const plays = spotify.calls.filter((call) => call.path === "/me/player/play");
+    expect(plays.at(-1)?.body).toEqual({ uris: ["spotify:track:welcome"], position_ms: 0 });
+  });
+
+  it("says when the account cannot play the song instead of sending it", async () => {
+    spotify.devices = [laptop()];
+    spotify.unavailableTracks.add("welcome");
+
+    const res = await POST(command({ action: "play_track", trackId: "welcome" }));
+    const data = await res.json();
+
+    expect(res.status).toBe(409);
+    expect(data.error.message).toMatch(/not available on this Spotify account/);
+    expect(spotify.calls.some((call) => call.path === "/me/player/play")).toBe(false);
   });
 
   it("starts a game normally and confirms it is playing", async () => {
