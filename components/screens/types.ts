@@ -15,4 +15,11 @@ export type ScreenProps = {
   brand: BrandConfig;
   runtime?: LiveRuntimeState | null;
   variant?: ScreenVariant;
+  /**
+   * The playing song's position from the TV's steady clock
+   * (lib/live/displayClock). When given, screens show this instead of
+   * counting up from each host save themselves, which made the TV countdown
+   * jump back and forth on 16 October 2026. The host preview leaves it unset.
+   */
+  progressMs?: number;
 };
