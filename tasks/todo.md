@@ -1,3 +1,15 @@
+# Spotify matcher: "ft" inside a word (16 October 2026)
+
+Branch `fix/spotify-matcher-feat-boundary`, based on `fix/spotify-matcher-dash-suffix` (not merged yet, so the matcher only exists in `lib/spotifyTrackMatch.ts` there). Complexity 1 (XS): one regex and its tests, no schema change.
+
+- [x] Trailing featured-artist pattern in `stripNoise` needs the start of the text or whitespace before feat/ft/featuring
+- [x] Unit tests: Daft Punk, Soft Cell (both line orders), Left Outside Alone against Left Behind; "feat.", "ft." and "(feat. ...)" still stripped
+- [x] New tests fail before the fix (0.728 instead of 1; Left Outside Alone against Left Behind 1 instead of 0.389) and pass after it
+- [x] Replay of every saved list line (700 lines, 7 sessions) through the old and new `stripNoise`: only "Daft Punk - One More Time" (24 April, artist) and "Tainted Love - Soft Cell" (28 May, title) change; the other 698 are byte-identical
+- [x] Live Spotify search (market GB) for those two: same track picked before and after (`0DiWol3AO6WpXZgp0goxAV`, `0cGG2EouYCEEC3xfa0tDFV`), score 0.728 to 1.000; Daft Punk's nearest rival, "One More Time" by Jbizz, scored 0.650 before. All 542 unique songs not replayed live, to keep load off the shared Spotify app
+- [x] lint, typecheck, test:unit (Europe/London and UTC, 184 tests), build
+- [ ] Parked, not on this branch: `stripTrackNoise` in `app/api/generate/route.ts` (event pack ordering) has the same regex
+
 # Spotify matcher: version suffixes (16 October 2026)
 
 Branch `fix/spotify-matcher-dash-suffix`. Complexity 2 (S): one route, one new lib module and its tests, no schema change.
