@@ -3,7 +3,6 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   confirmPlaybackStarted,
   getPlaybackState,
-  isSpotifyOwnedPlaylist,
   listDevices,
   pausePlayback,
   pickFallbackDevice,
@@ -18,6 +17,7 @@ import {
   type SpotifyLiveDevice,
   type SpotifyLiveState,
 } from "@/lib/spotifyLive";
+import { isSpotifyOwnedPlaylist } from "@/lib/spotifyPlaylistId";
 import {
   SPOTIFY_COOKIE_ACCESS,
   getOrRefreshAccessToken,

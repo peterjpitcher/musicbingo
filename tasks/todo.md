@@ -19,6 +19,8 @@ Evidence (Vercel request logs, `session_events`, `session_runtime_snapshots` for
 - [x] Auto-advance failure banner shows the message, not raw JSON
 - [x] Prep: pasting an intro link no longer stores it twice (`StepGameConfig.tsx`)
 - [x] Tests: 18 library, 11 route (fake Spotify), browser flows 10 and 11; flow 11 fails without the paste fix
+- [x] Follow-up (owner approved): prep warns when the break playlist is Spotify-owned, with the steps to make an owned copy; playlist id parsing moved to `lib/spotifyPlaylistId.ts`; browser flow 12
+- [ ] Owner to copy tonight's break playlist in the Spotify app (computer use is blocked for Spotify, and the Web API returns 404 for Spotify-owned playlists), then switch session `ab15ea89` to the copy
 
 ---
 

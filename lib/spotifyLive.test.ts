@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { spotifyApiRequest } from "@/lib/spotifyWeb";
 import {
   confirmPlaybackStarted,
-  isSpotifyOwnedPlaylist,
   listDevices,
   mapHttpError,
   pausePlayback,
@@ -263,13 +262,5 @@ describe("confirmPlaybackStarted", () => {
     expect(result.confirmed).toBe(false);
     expect(result.state?.activeDevice).toBeNull();
     expect(mockedSpotifyApiRequest).toHaveBeenCalledTimes(3);
-  });
-});
-
-describe("isSpotifyOwnedPlaylist", () => {
-  it("recognises Spotify-owned playlists by id or link", () => {
-    expect(isSpotifyOwnedPlaylist("https://open.spotify.com/playlist/37i9dQZF1DX2GKumqRIZ7g?si=abc")).toBe(true);
-    expect(isSpotifyOwnedPlaylist("37i9dQZF1DX2GKumqRIZ7g")).toBe(true);
-    expect(isSpotifyOwnedPlaylist("https://open.spotify.com/playlist/5xlpL99DNK4YeFOpiD5P59")).toBe(false);
   });
 });

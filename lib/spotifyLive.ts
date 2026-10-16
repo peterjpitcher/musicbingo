@@ -1,3 +1,4 @@
+import { normalizePlaylistId } from "@/lib/spotifyPlaylistId";
 import { spotifyApiRequest } from "@/lib/spotifyWeb";
 
 /**
@@ -137,20 +138,6 @@ export function mapHttpError(params: {
     params.message || `Spotify API error (HTTP ${params.status})`,
     details
   );
-}
-
-function normalizePlaylistId(raw: string): string | null {
-  const trimmed = raw.trim();
-  if (!trimmed) return null;
-
-  const uriMatch = trimmed.match(/^spotify:playlist:([a-zA-Z0-9]+)$/);
-  if (uriMatch) return uriMatch[1] ?? null;
-
-  const urlMatch = trimmed.match(/open\.spotify\.com\/playlist\/([a-zA-Z0-9]+)/i);
-  if (urlMatch) return urlMatch[1] ?? null;
-
-  if (/^[a-zA-Z0-9]+$/.test(trimmed)) return trimmed;
-  return null;
 }
 
 function parseDevice(json: unknown): SpotifyLiveDevice | null {
@@ -341,12 +328,6 @@ async function runPlayerCommand(params: {
 
   if (res.status >= 200 && res.status < 300) return;
   ensureHttpError(res, `${params.actionLabel} failed`);
-}
-
-/** Spotify-owned editorial and algorithmic playlists all have ids starting 37i9dQZF1. */
-export function isSpotifyOwnedPlaylist(playlistId: string): boolean {
-  const normalized = normalizePlaylistId(playlistId);
-  return Boolean(normalized && normalized.startsWith("37i9dQZF1"));
 }
 
 /**
