@@ -13,6 +13,7 @@ import type { BrandConfig } from "@/lib/brands/types";
 import { matchChallengeSong } from "@/lib/live/challenge";
 import { getContent, type ContentKey } from "@/lib/live/content";
 import { deriveScreenId } from "@/lib/live/deriveScreen";
+import { isNewerRuntime, nextProgressAnchor, progressAt, type ProgressAnchor } from "@/lib/live/displayClock";
 import { computeRevealState } from "@/lib/live/reveal";
 import { normalizeScreenId, type ScreenId } from "@/lib/live/runOfShow";
 import {
@@ -32,32 +33,6 @@ type DisplaySnapshot = {
   runtime: LiveRuntimeState;
   brand: BrandConfig | null;
 };
-
-function useInterpolatedProgress(runtime: LiveRuntimeState): number {
-  const serverProgress = runtime.currentTrack?.progressMs ?? 0;
-  const isPlaying = runtime.currentTrack?.isPlaying ?? false;
-  const trackId = runtime.currentTrack?.trackId ?? null;
-  const updatedAt = runtime.updatedAtMs;
-  const anchor = useMemo(
-    () => ({ progress: serverProgress, updatedAt, trackId }),
-    [serverProgress, updatedAt, trackId]
-  );
-  const [tick, setTick] = useState(0);
-  const [lastAnchor, setLastAnchor] = useState(anchor);
-
-  if (anchor !== lastAnchor) {
-    setLastAnchor(anchor);
-    setTick(0);
-  }
-
-  useEffect(() => {
-    if (!isPlaying || !trackId) return;
-    const id = window.setInterval(() => setTick((value) => value + 1), 1000);
-    return () => window.clearInterval(id);
-  }, [isPlaying, trackId, anchor]);
-
-  return isPlaying ? anchor.progress + tick * 1000 : anchor.progress;
-}
 
 function useStageScale(): number {
   const [scale, setScale] = useState(1);
@@ -88,6 +63,10 @@ export default function PrivateDisplayPage() {
   const [error, setError] = useState("");
   const [connectionWarning, setConnectionWarning] = useState("");
   const hasSnapshotRef = useRef(false);
+  const lastAppliedUpdatedAtRef = useRef<number | null>(null);
+  // The TV's song clock: re-anchored when a new host save arrives, counted
+  // up locally in between (see lib/live/displayClock).
+  const [songClock, setSongClock] = useState<{ anchor: ProgressAnchor; now: number } | null>(null);
   const scale = useStageScale();
 
   useEffect(() => {
@@ -116,7 +95,29 @@ export default function PrivateDisplayPage() {
         failedPolls = 0;
         hasSnapshotRef.current = true;
         setSession(data.session);
-        setRuntime(data.runtime);
+        // A slow network can store an older host save after a newer one;
+        // never let the TV step back to it.
+        const incomingUpdatedAt = data.runtime?.updatedAtMs ?? 0;
+        const previousUpdatedAt = lastAppliedUpdatedAtRef.current;
+        if (isNewerRuntime(incomingUpdatedAt, previousUpdatedAt)) {
+          lastAppliedUpdatedAtRef.current = incomingUpdatedAt;
+          setRuntime(data.runtime);
+          // Re-anchor only on a new save. Re-reading the same save while the
+          // host is briefly silent must not drag the clock back to it.
+          if (incomingUpdatedAt !== previousUpdatedAt) {
+            const nowMs = Date.now();
+            const track = data.runtime?.currentTrack ?? null;
+            setSongClock((previous) => ({
+              anchor: nextProgressAnchor({
+                previous: previous?.anchor ?? null,
+                incoming: { trackId: track?.trackId ?? null, progressMs: track?.progressMs ?? 0 },
+                isPlaying: Boolean(track?.isPlaying),
+                nowMs,
+              }),
+              now: nowMs,
+            }));
+          }
+        }
         setBrand(data.brand);
         setError("");
         setConnectionWarning("");
@@ -143,7 +144,19 @@ export default function PrivateDisplayPage() {
     };
   }, [runtime.mode, sessionId]);
 
-  const interpolatedProgress = useInterpolatedProgress(runtime);
+  const songIsPlaying = runtime.currentTrack?.isPlaying ?? false;
+  const songTrackId = runtime.currentTrack?.trackId ?? null;
+  useEffect(() => {
+    if (!songIsPlaying || !songTrackId) return;
+    const id = window.setInterval(
+      () => setSongClock((current) => (current ? { ...current, now: Date.now() } : current)),
+      250
+    );
+    return () => window.clearInterval(id);
+  }, [songIsPlaying, songTrackId]);
+  const interpolatedProgress = songClock
+    ? progressAt(songClock.anchor, songIsPlaying, songClock.now)
+    : runtime.currentTrack?.progressMs ?? 0;
   const activeGame = runtime.activeGameNumber
     ? session?.games.find((game) => game.gameNumber === runtime.activeGameNumber) ?? null
     : null;
@@ -217,7 +230,7 @@ export default function PrivateDisplayPage() {
           >
             <div className="stage">
               <div className="screen-wrap in" key={screenId}>
-                {renderScreen({ brand: effectiveBrand, runtime: screenRuntime })}
+                {renderScreen({ brand: effectiveBrand, runtime: screenRuntime, progressMs: interpolatedProgress })}
                 <ScoreToastOverlay toast={screenRuntime.scoreToast} />
               </div>
             </div>

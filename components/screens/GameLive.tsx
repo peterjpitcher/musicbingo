@@ -119,6 +119,7 @@ export function GameLive({
   brand,
   runtime,
   game = 1,
+  progressMs,
 }: ScreenProps & { game?: 1 | 2 }): JSX.Element {
   const themeField = game === 1 ? "g1theme" : "g2theme";
   const themePH = game === 1 ? "Pop Anthems" : "Throwback Bangers";
@@ -158,7 +159,9 @@ export function GameLive({
    * (interpolated) progress. Falls back to the static design value when there
    * is no live track yet.
    */
-  const liveProgressMs = useLiveProgressMs(liveRuntime);
+  const ownProgressMs = useLiveProgressMs(liveRuntime);
+  const liveProgressMs =
+    progressMs !== undefined && liveRuntime?.currentTrack ? progressMs : ownProgressMs;
   const playsInFull = Boolean(track && liveRuntime?.freePlay);
   const isChallenge = Boolean(track && liveRuntime?.isChallengeSong);
   const baseRevealConfig = isChallenge
