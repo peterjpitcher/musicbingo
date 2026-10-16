@@ -25,6 +25,10 @@ export interface NowPlayingPanelProps {
   welcomeIntroActive?: boolean;
   welcomeIntroDisabled?: boolean;
   onWelcomeIntro?: () => void;
+  /** Welcome screen only: go back to the pre-show music (the break playlist on shuffle). */
+  onPreShow?: () => void;
+  preShowDisabled?: boolean;
+  preShowDisabledReason?: string;
   onFree: () => void;
   onExtend: () => void;
   onSkip: () => void;
@@ -49,6 +53,9 @@ export function NowPlayingPanel({
   welcomeIntroActive = false,
   welcomeIntroDisabled = false,
   onWelcomeIntro,
+  onPreShow,
+  preShowDisabled = false,
+  preShowDisabledReason,
   onFree,
   onExtend,
   onSkip,
@@ -204,6 +211,24 @@ export function NowPlayingPanel({
           {freePlay ? 'Free Play ON' : 'Free Play'}
         </button>
       </div>
+
+      {/* Welcome screen: back to the pre-show music at any point before the show starts */}
+      {welcomeIntroActive && onPreShow && (
+        <div className="btn-row" style={{ marginTop: 10 }}>
+          <button
+            className="hbtn grow"
+            onClick={onPreShow}
+            disabled={preShowDisabled}
+            title={
+              preShowDisabled
+                ? preShowDisabledReason
+                : 'Plays the break playlist on shuffle until you press Play Welcome Intro'
+            }
+          >
+            ♫ Pre-Show Music
+          </button>
+        </div>
+      )}
     </div>
   );
 }

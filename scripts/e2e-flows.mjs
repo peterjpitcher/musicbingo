@@ -1037,27 +1037,40 @@ async function main() {
     }, preShowSession);
     const flow13HostPage = await flow13Context.newPage();
 
-    await runFlow(flowResults, "Flow 13: Pre-show music plays on Welcome until the welcome song", async () => {
+    await runFlow(flowResults, "Flow 13: Pre-show music starts only from its button and gives way to the welcome song", async () => {
+      const waitForLast = async (action, message) => {
+        const deadline = Date.now() + 10_000;
+        while (spotifyFlow13.commands.at(-1)?.action !== action && Date.now() < deadline) {
+          await sleep(100);
+        }
+        assert.equal(spotifyFlow13.commands.at(-1)?.action, action, message);
+      };
+
       await flow13HostPage.goto(`${BASE_URL}/host/flow-live-preshow`, { waitUntil: "domcontentloaded" });
       const playWelcome = flow13HostPage.getByRole("button", { name: /Play Welcome Intro/ });
+      const preShow = flow13HostPage.getByRole("button", { name: /Pre-Show Music/ });
       await playWelcome.waitFor({ timeout: 15_000 });
+      await preShow.waitFor({ timeout: 15_000 });
 
-      const deadline = Date.now() + 10_000;
-      while (!spotifyFlow13.commands.some((c) => c.action === "play_break") && Date.now() < deadline) {
-        await sleep(100);
-      }
-      const preShow = spotifyFlow13.commands.find((c) => c.action === "play_break");
-      assert.ok(preShow, "Opening the host page on Welcome should start the pre-show music");
-      assert.equal(preShow.playlistId, preShowSession.breakPlaylistId);
-      assert.equal(spotifyFlow13.commands.filter((c) => c.action === "play_break").length, 1, "Pre-show music starts once");
+      // The owner starts the music: nothing plays by itself on load.
+      await sleep(4_000);
+      assert.equal(
+        spotifyFlow13.commands.filter((c) => c.action === "play_break").length,
+        0,
+        "Opening the host page must not start the break music by itself"
+      );
+
+      await preShow.click();
+      await waitForLast("play_break", "Pre-Show Music starts the break playlist");
+      assert.equal(spotifyFlow13.commands.at(-1)?.playlistId, preShowSession.breakPlaylistId);
       await flow13HostPage.getByText(/Pre-show music/).first().waitFor({ timeout: 5_000 });
 
       await playWelcome.click();
-      const welcomeDeadline = Date.now() + 10_000;
-      while (spotifyFlow13.commands.at(-1)?.action !== "play_track" && Date.now() < welcomeDeadline) {
-        await sleep(100);
-      }
-      assert.equal(spotifyFlow13.commands.at(-1)?.action, "play_track", "Play Welcome Intro replaces the pre-show music");
+      await waitForLast("play_track", "Play Welcome Intro replaces the pre-show music");
+
+      // And back again whenever the host wants.
+      await preShow.click();
+      await waitForLast("play_break", "Pre-Show Music goes back to the break playlist");
     });
 
     await flow13Context.close();
