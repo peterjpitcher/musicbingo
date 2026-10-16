@@ -1,3 +1,14 @@
+# Spotify matcher: version suffixes (16 October 2026)
+
+Branch `fix/spotify-matcher-dash-suffix`. Complexity 2 (S): one route, one new lib module and its tests, no schema change.
+
+- [x] Move the matcher from `app/api/spotify/create-playlist/route.ts` into `lib/spotifyTrackMatch.ts` unchanged (functions byte-identical; replaying the 14 August lists changes 0 picks)
+- [x] `titleSimilarity` also compares against the Spotify title with its " - <suffix>" removed, keeping the existing comparisons
+- [x] Unit tests: Valerie (Version Revisited), Help! (Remastered 2009), Waves (Radio Edit), Grease, title-first lines, hyphens inside titles, Steve Winwood guard
+- [x] Replay of the 14 August lists against live Spotify search (market GB): 100 of 100 found (was 99); 4 other songs move to the better-known recording of the same song
+- [x] Popularity tie-break built and tested on its own branch, `fix/spotify-matcher-popularity-tiebreak`; not on this branch (26 changed picks on the same lists, one of them a live "On the Road Again")
+- [x] lint, typecheck, test:unit, build
+
 # Implementation Plan: Intro Songs & Multi-Challenge
 
 Spec: `tasks/spec-intro-songs-and-multi-challenge.md`
