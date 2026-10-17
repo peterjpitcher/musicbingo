@@ -25,6 +25,35 @@ export function Winners(props: ScreenProps): React.ReactElement {
   const spoonPrize = get("spoonPrize", "Bottle of house wine");
   const revealCount = Math.max(0, runtime?.winnersRevealCount ?? 0);
   const visibleScoredTeams = scoredTeams.slice(0, Math.min(revealCount, scoredTeams.length));
+  // Eight or nine teams fill the table at full size. Beyond that rows shrink, so
+  // the whole table stays on the TV: at twelve or more teams it used to run
+  // off the top and bottom (found 16 October 2026). Sized from all scored
+  // teams, not just those revealed, so rows keep one size as the host reveals.
+  const density = Math.max(0.4, Math.min(1, 8.5 / Math.max(scoredTeams.length, 1)));
+  const px = (size: number): number => Math.round(size * density);
+  // Long team names wrap onto two lines, so row heights cannot be predicted
+  // from the team count alone. Measure the list and scale it down just enough
+  // to sit between the heading and the footer. Transforms do not change
+  // layout size, so measuring the scaled list cannot feed back on itself.
+  const areaRef = React.useRef<HTMLDivElement>(null);
+  const listRef = React.useRef<HTMLDivElement>(null);
+  const [fit, setFit] = React.useState(1);
+  React.useLayoutEffect(() => {
+    const area = areaRef.current;
+    const list = listRef.current;
+    if (!area || !list) return;
+    const measure = () => {
+      const needed = list.scrollHeight;
+      const available = area.clientHeight;
+      setFit(needed > 0 && available > 0 ? Math.min(1, available / needed) : 1);
+    };
+    measure();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    observer?.observe(area);
+    observer?.observe(list);
+    void document.fonts?.ready.then(measure).catch(() => {});
+    return () => observer?.disconnect();
+  }, [hasScoredTeams]);
 
   return (
     <div
@@ -51,11 +80,11 @@ export function Winners(props: ScreenProps): React.ReactElement {
       </div>
       {hasScoredTeams ? (
         <div
+          ref={areaRef}
           className="fill"
           style={{
             display: "flex",
             flexDirection: "column",
-            gap: 10,
             justifyContent: "center",
             position: "relative",
             zIndex: 2,
@@ -66,6 +95,16 @@ export function Winners(props: ScreenProps): React.ReactElement {
             marginRight: "auto",
           }}
         >
+          <div
+            ref={listRef}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: px(10),
+              transform: fit < 1 ? `scale(${fit})` : undefined,
+              transformOrigin: "center",
+            }}
+          >
           {visibleScoredTeams.map((team, index) => {
             const rank = scoredTeams.length - index;
             const isWinner = index === winnerIndex;
@@ -81,7 +120,7 @@ export function Winners(props: ScreenProps): React.ReactElement {
                   gridTemplateColumns: "110px minmax(0, 1fr) 190px minmax(220px, .65fr)",
                   alignItems: "center",
                   gap: 22,
-                  padding: isWinner ? "20px 26px" : "15px 22px",
+                  padding: isWinner ? `${px(20)}px 26px` : `${px(15)}px 22px`,
                   borderRadius: 18,
                   background: isWinner
                     ? "linear-gradient(180deg, rgb(var(--brand-accent-rgb) / .92), rgb(var(--ink-rgb) / .55))"
@@ -95,7 +134,7 @@ export function Winners(props: ScreenProps): React.ReactElement {
                 <div
                   style={{
                     fontFamily: "var(--brand-display)",
-                    fontSize: isWinner ? 58 : 44,
+                    fontSize: px(isWinner ? 58 : 44),
                     lineHeight: .9,
                     color: isWinner ? "#fff6dd" : "var(--brand-accent-light)",
                   }}
@@ -104,7 +143,7 @@ export function Winners(props: ScreenProps): React.ReactElement {
                 </div>
                 <div
                   style={{
-                    fontSize: isWinner ? 48 : 36,
+                    fontSize: px(isWinner ? 48 : 36),
                     fontWeight: 900,
                     lineHeight: 1,
                     overflowWrap: "anywhere",
@@ -116,7 +155,7 @@ export function Winners(props: ScreenProps): React.ReactElement {
                 <div
                   style={{
                     fontFamily: "var(--brand-display)",
-                    fontSize: isWinner ? 56 : 42,
+                    fontSize: px(isWinner ? 56 : 42),
                     lineHeight: .9,
                     textAlign: "right",
                     color: isWinner ? "#fff6dd" : "var(--brand-accent-light)",
@@ -126,7 +165,7 @@ export function Winners(props: ScreenProps): React.ReactElement {
                 </div>
                 <div
                   style={{
-                    fontSize: isWinner ? 25 : 20,
+                    fontSize: Math.max(16, px(isWinner ? 25 : 20)),
                     fontWeight: 800,
                     color: prize ? "var(--cream)" : "rgb(var(--cream-rgb) / .34)",
                     textAlign: "right",
@@ -138,6 +177,7 @@ export function Winners(props: ScreenProps): React.ReactElement {
               </div>
             );
           })}
+          </div>
         </div>
       ) : (
         <div

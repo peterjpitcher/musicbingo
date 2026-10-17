@@ -131,6 +131,8 @@ type LiveStatusResponse = {
 type LiveCommandResponse = LiveStatusResponse & {
   ok?: boolean;
   action?: string;
+  /** A problem the host should see even though the command went through. */
+  hostWarning?: string | null;
 };
 
 function makeTabId(): string {
@@ -208,6 +210,10 @@ export default function HostSessionControllerPage() {
   const [runtimeSyncStatus, setRuntimeSyncStatus] = useState<"synced" | "syncing" | "offline">("synced");
   const pollFailCountRef = useRef<number>(0);
   const [error, setError] = useState<string>("");
+  // Set when Spotify accepted a play command but nothing started playing.
+  // Its own banner, so the success notices callers set cannot overwrite it,
+  // and it clears itself as soon as a status poll sees music playing.
+  const [playbackWarning, setPlaybackWarning] = useState<string>("");
   const [isController, setIsController] = useState<boolean>(false);
   const [spotifyDisconnected, setSpotifyDisconnected] = useState<boolean>(false);
   const [lockOwnerLabel, setLockOwnerLabel] = useState<string>("");
@@ -797,6 +803,7 @@ export default function HostSessionControllerPage() {
       pollFailCountRef.current = 0;
       const data = (await res.json()) as LiveStatusResponse;
       applyStatusSnapshot(data);
+      if (data.playback?.isPlaying) setPlaybackWarning("");
 
       // --- Recover a stale "paused" mode from real playback ---
       // See shouldRecoverRunningMode: the engine below only runs in "running"
@@ -897,9 +904,14 @@ export default function HostSessionControllerPage() {
           } else {
             advanceFailCountRef.current += 1;
             if (advanceFailCountRef.current >= 3) {
-              const nextError = await nextRes
-                .text()
-                .catch(() => "Failed to advance to next song.");
+              // The route answers with JSON for Spotify refusals and plain
+              // text otherwise; show the message, never the raw body.
+              const nextBody = await nextRes.text().catch(() => "");
+              let nextError = nextBody.trim();
+              try {
+                const parsed = JSON.parse(nextBody) as LiveCommandResponse;
+                if (typeof parsed?.error?.message === "string") nextError = parsed.error.message;
+              } catch {}
               setError(
                 `${nextError || "Failed to advance to next song."} Retrying automatically.`
               );
@@ -971,6 +983,7 @@ export default function HostSessionControllerPage() {
     ): Promise<boolean> => {
       setCommandBusy(true);
       setError("");
+      setPlaybackWarning("");
       try {
         const res = await fetch("/api/spotify/live/command", {
           method: "POST",
@@ -1000,6 +1013,9 @@ export default function HostSessionControllerPage() {
           return false;
         }
         applyStatusSnapshot(data, { mode: opts?.modeOnSuccess });
+        if (typeof data.hostWarning === "string" && data.hostWarning) {
+          setPlaybackWarning(data.hostWarning);
+        }
         return data.ok !== false;
       } catch (err: any) {
         setError(err?.message ?? "Live command failed.");
@@ -1010,6 +1026,20 @@ export default function HostSessionControllerPage() {
     },
     [applyStatusSnapshot, commitRuntime]
   );
+
+  // Pre-show music: the host's Pre-Show Music button on the Welcome screen
+  // plays the break playlist on shuffle as background music while guests
+  // arrive. It never starts by itself (owner's call, 16 October 2026); Play
+  // Welcome Intro replaces it with the welcome song.
+  const startPreShowMusic = useCallback(async (): Promise<void> => {
+    const playlistId = session?.breakPlaylistId;
+    if (!playlistId || spotifyDisconnectedRef.current) return;
+    const ok = await sendCommand("play_break", { playlistId }, { modeOnSuccess: "idle" });
+    if (ok) {
+      setNoticeVariant("success");
+      setNotice("Pre-show music: the break playlist is playing on shuffle until you press Play Welcome Intro.");
+    }
+  }, [sendCommand, session]);
 
   async function startGame(gameNumber: 1 | 2) {
     if (!session || !isController) return;
@@ -1307,16 +1337,38 @@ export default function HostSessionControllerPage() {
   }
 
   function restartSong() {
-    const trackId = runtimeRef.current.currentTrack?.trackId ?? null;
-    const gamePlaylistId = runtimeRef.current.activeGameNumber
-      ? session?.games.find((g) => g.gameNumber === runtimeRef.current.activeGameNumber)?.playlistId ?? null
+    const current = runtimeRef.current;
+    const screenId = normalizeScreenId(current.screenId, deriveScreenId(current));
+    const trackId = current.currentTrack?.trackId ?? null;
+    const gamePlaylistId = current.activeGameNumber
+      ? session?.games.find((g) => g.gameNumber === current.activeGameNumber)?.playlistId ?? null
       : null;
+    // The welcome and intro songs play on their own, not from a game
+    // playlist, so restart them as single tracks. Restarting them inside the
+    // game playlist asks Spotify for a song that playlist may not hold, which
+    // it refuses ("Restriction violated").
+    if (screenId === "welcome" && !current.isIntroSong) {
+      void playWelcomeSong();
+      return;
+    }
     commitRuntime((prev) => ({
       ...prev,
       extensionMs: 0,
       revealState: { showAlbum: false, showTitle: false, showArtist: false, shouldAdvance: false },
       advanceTriggeredForTrackId: null,
     }));
+    if (current.isIntroSong && trackId) {
+      void sendCommand("play_track", { trackId });
+      return;
+    }
+    // Off the game screens (break, standings and so on) the song belongs to
+    // whatever Spotify is playing, so restart it where it is, without
+    // switching the show into running mode.
+    const onGameScreen = screenId === "game1" || screenId === "game2" || screenId === "claim";
+    if (!onGameScreen && trackId) {
+      void sendCommand("seek", { positionMs: 0 });
+      return;
+    }
     void sendCommand(
       "resume_from_track",
       {
@@ -1612,10 +1664,10 @@ export default function HostSessionControllerPage() {
     await sendCommand("pause");
   };
 
-  // Disable Play when no welcome song is set, or Spotify control is unavailable
-  // (mirrors how the transport buttons gate on spotifyControlAvailable/disconnected).
-  const welcomeSongPlayDisabled =
-    spotifyDisconnected || !runtime.spotifyControlAvailable;
+  // Disable Play only when Spotify is disconnected. With no active device the
+  // command route sends the song to the one Spotify app that is open, or says
+  // which app to press play in, so the button must stay usable to do that.
+  const welcomeSongPlayDisabled = spotifyDisconnected;
 
   // Prefer the resolved track's labels; fall back to the live content keys.
   const welcomeSong = runtime.welcomeSong ?? DEFAULT_WELCOME_SONG;
@@ -1807,6 +1859,13 @@ export default function HostSessionControllerPage() {
                 <button type="button" className="hbtn" onClick={() => setNotice("")}>✕</button>
               </div>
             ) : null}
+            {playbackWarning ? (
+              <div className="banner banner--warn" style={{ marginBottom: 0 }} role="status">
+                <span className="bi">⚠</span>
+                <div className="bx"><p>{playbackWarning}</p></div>
+                <button type="button" className="hbtn" onClick={() => setPlaybackWarning("")}>✕</button>
+              </div>
+            ) : null}
             {error ? (
               <div className="banner banner--danger" style={{ marginBottom: 0 }}>
                 <span className="bi">⚠</span>
@@ -1959,6 +2018,13 @@ export default function HostSessionControllerPage() {
                 welcomeIntroActive={isWelcomeScreen}
                 welcomeIntroDisabled={welcomeSongPlayDisabled}
                 onWelcomeIntro={() => void playWelcomeSong()}
+                onPreShow={() => void startPreShowMusic()}
+                preShowDisabled={spotifyDisconnected || !session?.breakPlaylistId}
+                preShowDisabledReason={
+                  spotifyDisconnected
+                    ? "Reconnect Spotify first."
+                    : "Add a break playlist to this game in Event Setup to use pre-show music."
+                }
                 onFree={() => commitRuntime((prev) => ({ ...prev, freePlay: !prev.freePlay }))}
                 onExtend={() =>
                   commitRuntime((prev) => ({
@@ -2001,7 +2067,7 @@ export default function HostSessionControllerPage() {
                 claimCount={runtime.playedTracks?.length ?? 0}
                 claimActive={runtime.screenId === "claim"}
                 onEnd={() => showClosingScreen("winner-entry")}
-                onReset={() =>
+                onReset={() => {
                   commitRuntime((prev) => ({
                     ...prev,
                     mode: "idle",
@@ -2021,8 +2087,8 @@ export default function HostSessionControllerPage() {
                     introPlayed: false,
                     extensionMs: 0,
                     freePlay: false,
-                  }))
-                }
+                  }));
+                }}
               />
 
               {/* Content panel */}

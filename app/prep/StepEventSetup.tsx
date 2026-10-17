@@ -4,6 +4,7 @@ import { BrandSelector } from "@/components/brand/BrandSelector";
 import { Button } from "@/components/ui/Button";
 import { parseRevealConfigInputs } from "@/lib/live/timing";
 import { MAX_SONG_PLAY_MS, MIN_SONG_PLAY_MS } from "@/lib/live/types";
+import { isSpotifyOwnedPlaylist } from "@/lib/spotifyPlaylistId";
 
 type StepEventSetupProps = {
   eventDate: string;
@@ -116,6 +117,13 @@ export function StepEventSetup({
             placeholder="https://open.spotify.com/playlist/..."
           />
           <span className="help">Spotify switches to this playlist during breaks, then restarts the last song when you resume</span>
+          {isSpotifyOwnedPlaylist(breakPlaylistId) && (
+            <span className="help warn" role="status">
+              This playlist is made by Spotify. Spotify does not let this app use its own playlists, so the break music may not start.
+              In Spotify, open the playlist, click the three dots, choose Add to other playlist, then New playlist, and paste the new
+              playlist&apos;s link here.
+            </span>
+          )}
         </div>
       </div>
 
