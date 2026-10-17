@@ -174,8 +174,8 @@ export function StepGenerateConnect({
           <b>Spotify</b>
           <p>
             {spotifyConnected
-              ? "Connected — playback &amp; playlist creation ready"
-              : "Connect your Spotify account to build playlists &amp; control playback"}
+              ? "Connected: playback & playlist creation ready"
+              : "Connect your Spotify account to build playlists & control playback"}
           </p>
         </div>
         {spotifyConnected ? (
@@ -220,7 +220,7 @@ export function StepGenerateConnect({
                     </span>
                   ));
                 })()
-              : "Search Spotify &amp; build a shuffled playlist per game"}
+              : "Search Spotify & build a shuffled playlist per game"}
           </p>
         </div>
         {playlistsCreated ? (

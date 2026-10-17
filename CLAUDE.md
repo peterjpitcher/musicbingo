@@ -85,6 +85,6 @@ All server-side; none are `NEXT_PUBLIC_`. Next reads `.env.local` only at startu
 - `.claude/worktrees/<name>` does not inherit the gitignored `.env.local`. Symlink it in and restart dev, or `/host` shows "Failed to load sessions" and `/api/generate` returns 500 even though the build passes.
 - Diagnose live-show bugs by replaying the session's `session_events` rows before theorising from code; a sudden stop in rows means the host tab lost the lock or was suspended.
 - Host and display each compute reveal phases locally from `progressMs` and `revealConfig` via `lib/live/reveal.ts`. Keep it deterministic; change ratios only in `lib/live/types.ts`.
-- Prep wizard drafts persist in localStorage so work is never lost; do not clear them on navigation.
+- Prep wizard drafts persist in localStorage so work is never lost; do not clear them on navigation. Drafts also keep the playlists already made, with a signature of the songs, themes, date and intro songs they were built from (`playlistInputSignature` in `lib/prepDraft.ts`); editing a saved game reattaches its playlists the same way. Changing any of those inputs discards the playlists, so sign only after anything that fills inputs in (the Create button's intro lookup discarded fresh playlists on 16 October 2026).
 - PDF text is sanitised before drawing (pdf-lib's standard fonts cannot encode every character); keep new text paths on it.
 - `ARCHITECTURE.md`, `PRD.md`, `IMPLEMENTATION_PLAN.md` and `docs/architecture/` are stale; trust the code and this file.

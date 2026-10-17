@@ -1,3 +1,27 @@
+# Fix: prep loses its Spotify playlists, so the game cannot be saved (17 October 2026)
+
+Reported 16 October: on /prep the Save Live Session button stayed locked after playlists were made.
+
+Evidence (Vercel request logs, `live_sessions`):
+- 16:07:32 two intro-song lookups, 16:07:33 create-playlist 200, then no save; 16:11 host console, back to /prep; Save locked.
+- Intro links typed while Spotify was disconnected are looked up when Create is pressed. The lookup changes the intro songs, the page compares the new playlists against the inputs captured before the lookup, sees a mismatch and discards them at once.
+- Separately, created playlists live only in memory: leaving or refreshing /prep drops them (the draft does not keep them), editing a saved game never loads its playlists, and Connect/Disconnect half-clear them (Save locked with no Create button).
+- The 16 October game was saved at 18:27 after a second Create, so the show itself was unaffected.
+
+- [x] Browser flow 14 reproduces the 16:07 click (intro link pending, connect, create) and fails on current code (playlist links never stay visible); without the intro link it fails later, at the reload
+- [x] Signature of the playlist inputs taken after the intro lookup, from the resolved songs; key order no longer matters
+- [x] Playlists kept in the prep draft with their signature and restored on reload (dropped if the songs changed)
+- [x] Editing a saved game loads its playlists; changing songs, themes, date or intro songs still discards them
+- [x] Connect/Disconnect leave created playlists alone
+- [x] "&amp;" shown literally on the Spotify and Playlists rows (the only JavaScript strings with entities in the app)
+- [x] Unit tests for the draft playlists and signature; lint, typecheck, unit 246/246 (London and UTC, after merging main), py 7/7, e2e 14/14, build. Flow 10 (host playback banner, code not touched here) timed out once in four full runs
+- [x] PR #19
+- [ ] Merge and confirm the production deploy
+
+Not tested against real Spotify: the browser flows mock the Spotify routes, so real playlist creation was not repeated.
+
+---
+
 # Event pack order: "ft" inside a word (17 October 2026)
 
 Branch `fix/event-pack-order-feat-boundary`, cut from `main` at `eee0609` while the matcher fix (`fix/spotify-matcher-feat-boundary`, `cc809aa`) and `fix/spotify-matcher-dash-suffix` beneath it were unmerged. Both reached `main` in PR #10 (`5ad5b27`, 08:48 BST) during this work, and `main` was merged in. Complexity 2 (S): one route, one new lib module and its tests, no schema change.
