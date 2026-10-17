@@ -16,9 +16,14 @@ Evidence (Vercel request logs, `live_sessions`):
 - [x] "&amp;" shown literally on the Spotify and Playlists rows (the only JavaScript strings with entities in the app)
 - [x] Unit tests for the draft playlists and signature; lint, typecheck, unit 246/246 (London and UTC, after merging main), py 7/7, e2e 14/14, build. Flow 10 (host playback banner, code not touched here) timed out once in four full runs
 - [x] PR #19
-- [ ] Merge and confirm the production deploy
+- [x] Merged (`99bc6c4`); production deployment `dpl_FzrptsSKN7Y2jHGe4XG7N18huDxq` Ready and serving musicbingo.orangejelly.co.uk, live bundle has the new text, no runtime errors
 
 Not tested against real Spotify: the browser flows mock the Spotify routes, so real playlist creation was not repeated.
+
+Follow-up from the Codex review of PR #19 (both findings checked against code and data first):
+- [x] Unmatched songs kept with the draft, so the Resolve rows survive a reload. Songs already resolved are left out, because Resolve adds the track without checking and a second Resolve would add it twice. 2 of 18 saved games had unmatched songs
+- [x] Playlists with an id but no Spotify link stay listed and count as made (only the Open link needs the URL). None of the 18 saved games lacks a link; the create route allows it
+- [x] Browser flow 15 (two unmatched songs, link-less game 2, resolve one, reload) fails on `99bc6c4` and passes after; unit tests for the unmatched-song list; lint, typecheck, unit 247/247 (London and UTC), py 7/7, e2e 15/15, build
 
 ---
 

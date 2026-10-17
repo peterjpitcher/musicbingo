@@ -19,7 +19,7 @@ type SpotifyPlaylistResult = {
 type PlaylistResult = {
   gameNumber: 1 | 2;
   playlistId: string;
-  playlistUrl: string;
+  playlistUrl: string | null;
   addedCount: number;
   totalSongs: number;
   notFoundSongs: Array<{ artist: string; title: string }>;

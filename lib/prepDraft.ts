@@ -24,6 +24,9 @@ export const CHALLENGE_ENTRY_COUNT = 5;
 
 export type ChallengeEntry = { value: string; type: "sing-along" | "dance-along" };
 
+/** A song Spotify search could not match, still waiting for a Resolve link. */
+export type PrepDraftMissingSong = { artist: string; title: string };
+
 /** A Spotify playlist made for one game, as kept by a draft or a saved game. */
 export type PrepDraftPlaylist = {
   gameNumber: 1 | 2;
@@ -33,6 +36,8 @@ export type PrepDraftPlaylist = {
   playlistUrl: string | null;
   totalSongs: number;
   addedCount: number;
+  /** Empty for saved games, which do not record unmatched songs. */
+  notFound: PrepDraftMissingSong[];
 };
 
 /**
@@ -158,6 +163,16 @@ function count(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 ? Math.trunc(value) : 0;
 }
 
+function sanitizeMissingSongs(input: unknown): PrepDraftMissingSong[] {
+  if (!Array.isArray(input)) return [];
+  return input.flatMap((item) => {
+    if (!isObject(item)) return [];
+    const artist = str(item.artist);
+    const title = str(item.title);
+    return artist && title ? [{ artist, title }] : [];
+  });
+}
+
 /**
  * Validate playlists from a draft or a saved game: one per game number, each
  * with a playlist id. Returns null when there is no signature or no playlist.
@@ -179,6 +194,7 @@ export function sanitizePrepDraftPlaylists(input: unknown): PrepDraftPlaylists |
       playlistUrl: str(item.playlistUrl) || null,
       totalSongs: count(item.totalSongs),
       addedCount: count(item.addedCount),
+      notFound: sanitizeMissingSongs(item.notFound),
     });
   }
   return games.length > 0 ? { signature: input.signature, games } : null;

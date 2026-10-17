@@ -1162,6 +1162,99 @@ async function main() {
 
     await flow14Context.close();
 
+    const flow15Context = await browser.newContext();
+    await installAppDataMocks(flow15Context);
+    await installSpotifyMocks(flow15Context, { initialConnected: true });
+    // Registered after installSpotifyMocks, so it takes precedence: game 1 has
+    // two unmatched songs, game 2's playlist comes back without a link.
+    await flow15Context.route("**/api/spotify/create-playlist", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        headers: { "Cache-Control": "no-store" },
+        body: JSON.stringify({
+          playlists: [
+            {
+              gameNumber: 1,
+              theme: "General 70's to 2010's",
+              playlistId: "mock-game-1",
+              playlistName: "Music Bingo Game 1",
+              playlistUrl: "https://open.spotify.com/playlist/mock-game-1",
+              totalSongs: 26,
+              addedCount: 24,
+              notFoundCount: 2,
+              notFound: [
+                { artist: "FlowA Artist 25", title: "FlowA Song 25" },
+                { artist: "FlowA Artist 26", title: "FlowA Song 26" },
+              ],
+            },
+            {
+              gameNumber: 2,
+              theme: "General 70's to 2010's",
+              playlistId: "mock-game-2",
+              playlistName: "Music Bingo Game 2",
+              playlistUrl: null,
+              totalSongs: 26,
+              addedCount: 26,
+              notFoundCount: 0,
+              notFound: [],
+            },
+          ],
+        }),
+      });
+    });
+    const resolveCalls = [];
+    await flow15Context.route("**/api/spotify/playlist/*/resolve-missing", async (route) => {
+      const { resolutions } = route.request().postDataJSON();
+      resolveCalls.push(...resolutions);
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        headers: { "Cache-Control": "no-store" },
+        body: JSON.stringify({
+          resolved: resolutions.map(({ artist, title }) => ({ artist, title, trackId: "flowresolved1" })),
+          failed: [],
+        }),
+      });
+    });
+    const flow15Page = await flow15Context.newPage();
+
+    await runFlow(flowResults, "Flow 15: Unmatched songs and link-less playlists survive a reload", async () => {
+      const saveButton = flow15Page.getByRole("button", { name: "Save Live Session" });
+      const missingRow = (n) => flow15Page.locator(".nf-row", { hasText: `FlowA Artist ${n} – FlowA Song ${n}` });
+
+      await fillPrepWizardToGenerate(flow15Page, songListA, songListB);
+      const createButton = flow15Page.getByRole("button", { name: "Create Spotify Playlists" });
+      await waitUntilEnabled(createButton);
+      await createButton.click();
+      await flow15Page.getByText(/2 song\(s\) not found/).waitFor({ timeout: 10_000 });
+      await flow15Page.getByText("Game 2: ✓ 26/26 tracks").waitFor();
+      assert.equal(await saveButton.isDisabled(), false, "Save should unlock even when one playlist has no link");
+      assert.equal(
+        await flow15Page.getByRole("button", { name: "Generate Event Pack" }).isDisabled(),
+        false,
+        "A playlist without a link still counts as made"
+      );
+
+      await flow15Page.getByLabel("Spotify link for FlowA Artist 25 – FlowA Song 25").fill("https://open.spotify.com/track/flowresolved1");
+      await missingRow(25).getByRole("button", { name: "Resolve" }).click();
+      await missingRow(25).getByText("✓ Matched").waitFor({ timeout: 10_000 });
+      assert.equal(resolveCalls.length, 1, "Resolve should add the song once");
+
+      await sleep(700);
+      await flow15Page.reload({ waitUntil: "networkidle" });
+      await flow15Page.getByText(/Restored your unsaved prep draft/i).waitFor({ timeout: 10_000 });
+      // The song still missing comes back with its Resolve box; the one already
+      // added does not, so it cannot be added a second time.
+      await flow15Page.getByText(/1 song\(s\) not found/).waitFor({ timeout: 10_000 });
+      assert.equal(await missingRow(26).count(), 1, "The unresolved song should still be listed after a reload");
+      assert.equal(await missingRow(25).count(), 0, "A resolved song must not be offered again after a reload");
+      await flow15Page.getByText("Game 2: ✓ 26/26 tracks").waitFor();
+      await waitUntilEnabled(saveButton);
+    });
+
+    await flow15Context.close();
+
     const flow9Context = await browser.newContext();
     await installAppDataMocks(flow9Context);
     await installSpotifyMocks(flow9Context, { initialConnected: false });
