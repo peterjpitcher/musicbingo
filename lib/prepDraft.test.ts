@@ -82,7 +82,8 @@ function makeDraft(): PrepDraftV1 {
           playlistName: "Music Bingo Game 1 - July 18th 2026 (80s)",
           playlistUrl: "https://open.spotify.com/playlist/pl-1",
           totalSongs: 2,
-          addedCount: 2,
+          addedCount: 1,
+          notFound: [{ artist: "Queen", title: "Under Pressure" }],
         },
         {
           gameNumber: 2,
@@ -92,6 +93,7 @@ function makeDraft(): PrepDraftV1 {
           playlistUrl: "https://open.spotify.com/playlist/pl-2",
           totalSongs: 1,
           addedCount: 1,
+          notFound: [],
         },
       ],
     },
@@ -204,7 +206,7 @@ test("sanitizePrepDraftPlaylists keeps one playlist per game and needs an id and
   expect(saved).toEqual({
     signature: "sig-1",
     games: [
-      { gameNumber: 1, theme: "80s", playlistId: "pl-1", playlistName: "G1", playlistUrl: null, totalSongs: 26, addedCount: 25 },
+      { gameNumber: 1, theme: "80s", playlistId: "pl-1", playlistName: "G1", playlistUrl: null, totalSongs: 26, addedCount: 25, notFound: [] },
     ],
   });
   expect(sanitizePrepDraftPlaylists({ signature: "", games: makeDraft().playlists!.games })).toBeNull();
@@ -213,15 +215,35 @@ test("sanitizePrepDraftPlaylists keeps one playlist per game and needs an id and
 });
 
 test("sanitizePrepDraftPlaylists reads the playlist fields of a saved game and ignores the rest", () => {
+  // Saved games record no unmatched songs.
+  const { notFound: _notFound, ...playlistFields } = makeDraft().playlists!.games[0];
   const savedGame = {
-    ...makeDraft().playlists!.games[0],
+    ...playlistFields,
     challengeSongs: [{ artist: "ABBA", title: "Waterloo", type: "dance-along" }],
     introSongs: [],
     challengeBonusPoints: 10,
   };
   expect(sanitizePrepDraftPlaylists({ signature: "sig-1", games: [savedGame] })?.games).toEqual([
-    makeDraft().playlists!.games[0],
+    { ...playlistFields, notFound: [] },
   ]);
+});
+
+test("sanitizePrepDraftPlaylists keeps unmatched songs and drops incomplete ones", () => {
+  const saved = sanitizePrepDraftPlaylists({
+    signature: "sig-1",
+    games: [
+      {
+        ...makeDraft().playlists!.games[0],
+        notFound: [
+          { artist: "Queen", title: "Under Pressure" },
+          { artist: "", title: "No Artist" },
+          { artist: "No Title" },
+          "junk",
+        ],
+      },
+    ],
+  });
+  expect(saved?.games[0].notFound).toEqual([{ artist: "Queen", title: "Under Pressure" }]);
 });
 
 test("playlistInputSignature ignores intro song key order and surrounding whitespace", () => {

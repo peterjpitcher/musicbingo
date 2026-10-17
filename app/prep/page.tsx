@@ -67,7 +67,8 @@ type SpotifyPlaylistResult = {
 type PlaylistPhaseResult = {
   gameNumber: 1 | 2;
   playlistId: string;
-  playlistUrl: string;
+  // Spotify may omit the link; the playlist still counts as made.
+  playlistUrl: string | null;
   addedCount: number;
   totalSongs: number;
   notFoundSongs: Array<{ artist: string; title: string }>;
@@ -146,38 +147,46 @@ function playlistStateFromSaved(saved: PrepDraftPlaylists): {
   playlistResults: PlaylistPhaseResult[];
 } {
   return {
-    spotifyResult: saved.games.map((game) => ({ ...game, notFoundCount: 0, notFound: [] })),
-    playlistResults: saved.games.flatMap((game) =>
-      game.playlistUrl
-        ? [{
-            gameNumber: game.gameNumber,
-            playlistId: game.playlistId,
-            playlistUrl: game.playlistUrl,
-            addedCount: game.addedCount,
-            totalSongs: game.totalSongs,
-            notFoundSongs: [],
-          }]
-        : []
-    ),
+    spotifyResult: saved.games.map((game) => ({ ...game, notFoundCount: game.notFound.length })),
+    playlistResults: saved.games.map((game) => ({
+      gameNumber: game.gameNumber,
+      playlistId: game.playlistId,
+      playlistUrl: game.playlistUrl,
+      addedCount: game.addedCount,
+      totalSongs: game.totalSongs,
+      notFoundSongs: game.notFound,
+    })),
   };
+}
+
+/** Identifies an unmatched song, as the Resolve rows do. */
+function missingSongKey(gameNumber: number, song: { artist: string; title: string }): string {
+  return `${gameNumber}:${song.artist}:${song.title}`;
 }
 
 /** The playlists worth keeping in the draft: those made for the current inputs. */
 function savedPlaylistsFromState(
   signature: string | null,
   spotifyResult: SpotifyPlaylistResult[] | null,
-  playlistResults: PlaylistPhaseResult[] | null
+  playlistResults: PlaylistPhaseResult[] | null,
+  resolvedMissing: string[]
 ): PrepDraftPlaylists | null {
   if (!signature || !spotifyResult) return null;
   return sanitizePrepDraftPlaylists({
     signature,
     games: spotifyResult.map((result) => {
-      // Refresh updates the counts on playlistResults; keep the latest ones.
-      const counts = playlistResults?.find((p) => p.gameNumber === result.gameNumber);
+      // Refresh updates counts and clears unmatched songs on playlistResults,
+      // which is what the page shows; keep that version.
+      const shown = playlistResults?.find((p) => p.gameNumber === result.gameNumber);
       return {
         ...result,
-        totalSongs: counts?.totalSongs ?? result.totalSongs,
-        addedCount: counts?.addedCount ?? result.addedCount,
+        totalSongs: shown?.totalSongs ?? result.totalSongs,
+        addedCount: shown?.addedCount ?? result.addedCount,
+        // Songs already resolved are left out: Resolve adds the track without
+        // checking, so offering one again after a reload could add it twice.
+        notFound: (shown?.notFoundSongs ?? result.notFound).filter(
+          (song) => !resolvedMissing.includes(missingSongKey(result.gameNumber, song))
+        ),
       };
     }),
   });
@@ -261,6 +270,8 @@ function PrepPageInner() {
   // Signature of the inputs the current playlists were built from; null when none.
   // Kept in state (not a ref) so a restore lands in the same render as the form.
   const [playlistSignature, setPlaylistSignature] = useState<string | null>(null);
+  // Unmatched songs resolved this visit (missingSongKey), left out of the draft.
+  const [resolvedMissing, setResolvedMissing] = useState<string[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const pendingAutoSave = useRef(false);
   const saveLiveSessionRef = useRef<() => Promise<void>>();
@@ -382,7 +393,7 @@ function PrepPageInner() {
       game2ChallengeBonusPointsInput,
       game2IntroUrl,
       game2IntroSongs,
-      playlists: savedPlaylistsFromState(playlistSignature, spotifyResult, playlistResults),
+      playlists: savedPlaylistsFromState(playlistSignature, spotifyResult, playlistResults, resolvedMissing),
     }),
     [
       albumRevealSecondsInput,
@@ -407,6 +418,7 @@ function PrepPageInner() {
       liveSessionNameDirty,
       playlistResults,
       playlistSignature,
+      resolvedMissing,
       selectedBrandId,
       songPlaySecondsInput,
       spotifyResult,
@@ -420,15 +432,17 @@ function PrepPageInner() {
     setPlaylistResults(null);
     setPlaylistsCreated(false);
     setPlaylistSignature(null);
+    setResolvedMissing([]);
   }, []);
 
   /** Reattach playlists made earlier, kept by the draft or the saved game. */
   const attachPlaylists = useCallback((saved: PrepDraftPlaylists): void => {
     const restored = playlistStateFromSaved(saved);
     setSpotifyResult(restored.spotifyResult);
-    setPlaylistResults(restored.playlistResults.length > 0 ? restored.playlistResults : null);
-    setPlaylistsCreated(restored.playlistResults.length > 0);
+    setPlaylistResults(restored.playlistResults);
+    setPlaylistsCreated(true);
     setPlaylistSignature(saved.signature);
+    setResolvedMissing([]);
   }, []);
 
   function resetRevealTimingDefaults() {
@@ -1255,8 +1269,8 @@ function PrepPageInner() {
 
       setPlaylistSignature(createdSignature);
       const mapped: PlaylistPhaseResult[] = created
-        .filter((r): r is SpotifyPlaylistResult & { playlistId: string; playlistUrl: string } =>
-          r.playlistId !== null && r.playlistUrl !== null && (r.gameNumber === 1 || r.gameNumber === 2)
+        .filter((r): r is SpotifyPlaylistResult & { playlistId: string } =>
+          r.playlistId !== null && (r.gameNumber === 1 || r.gameNumber === 2)
         )
         .map((r) => ({
           gameNumber: r.gameNumber as 1 | 2,
@@ -1349,6 +1363,7 @@ function PrepPageInner() {
       const resolved = (data as any)?.resolved ?? [];
       const failed = (data as any)?.failed ?? [];
       if (resolved.length > 0 && resolved[0]?.trackId) {
+        setResolvedMissing((prev) => [...prev, missingSongKey(opts.gameNumber, opts)]);
         return { ok: true, trackId: resolved[0].trackId as string };
       }
       const failMsg = failed[0]?.error ?? "Track not found on Spotify.";
