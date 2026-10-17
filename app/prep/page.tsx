@@ -30,9 +30,12 @@ import { parseSongListText } from "@/lib/parser";
 import {
   clearPrepDraft,
   makeEmptyChallengeEntries,
+  playlistInputSignature as signPlaylistInputs,
   readPrepDraft,
+  sanitizePrepDraftPlaylists,
   writePrepDraft,
   type ChallengeEntry,
+  type PrepDraftPlaylists,
   type PrepDraftV1,
 } from "@/lib/prepDraft";
 import { parseSpotifyTrackUrl } from "@/lib/spotifyTrackUrl";
@@ -131,6 +134,55 @@ function normaliseIntroSongsForSignature(songs: IntroSong[]): IntroSong[] {
   return [...songs].sort((a, b) => a.type.localeCompare(b.type));
 }
 
+/** The intro songs a saved game restores into one slot, and the link shown for it. */
+function savedIntro(game: LiveGameConfig | undefined, type: IntroSong["type"]): { songs: IntroSong[]; url: string } {
+  const songs = game ? getIntroSongs(game) : [];
+  return { songs, url: songs.find((s) => s.type === type)?.spotifyUrl ?? songs[0]?.spotifyUrl ?? "" };
+}
+
+/** The wizard's playlist state, rebuilt from playlists kept by a draft or a saved game. */
+function playlistStateFromSaved(saved: PrepDraftPlaylists): {
+  spotifyResult: SpotifyPlaylistResult[];
+  playlistResults: PlaylistPhaseResult[];
+} {
+  return {
+    spotifyResult: saved.games.map((game) => ({ ...game, notFoundCount: 0, notFound: [] })),
+    playlistResults: saved.games.flatMap((game) =>
+      game.playlistUrl
+        ? [{
+            gameNumber: game.gameNumber,
+            playlistId: game.playlistId,
+            playlistUrl: game.playlistUrl,
+            addedCount: game.addedCount,
+            totalSongs: game.totalSongs,
+            notFoundSongs: [],
+          }]
+        : []
+    ),
+  };
+}
+
+/** The playlists worth keeping in the draft: those made for the current inputs. */
+function savedPlaylistsFromState(
+  signature: string | null,
+  spotifyResult: SpotifyPlaylistResult[] | null,
+  playlistResults: PlaylistPhaseResult[] | null
+): PrepDraftPlaylists | null {
+  if (!signature || !spotifyResult) return null;
+  return sanitizePrepDraftPlaylists({
+    signature,
+    games: spotifyResult.map((result) => {
+      // Refresh updates the counts on playlistResults; keep the latest ones.
+      const counts = playlistResults?.find((p) => p.gameNumber === result.gameNumber);
+      return {
+        ...result,
+        totalSongs: counts?.totalSongs ?? result.totalSongs,
+        addedCount: counts?.addedCount ?? result.addedCount,
+      };
+    }),
+  });
+}
+
 function draftSavedAtDisplay(draft: PrepDraftV1): string {
   const savedAt = draft.savedAt ? new Date(draft.savedAt) : null;
   return savedAt && !Number.isNaN(savedAt.getTime()) ? savedAt.toLocaleString("en-GB") : "";
@@ -206,6 +258,9 @@ function PrepPageInner() {
   const [liveSessionNotice, setLiveSessionNotice] = useState<string>("");
   const [playlistResults, setPlaylistResults] = useState<PlaylistPhaseResult[] | null>(null);
   const [playlistsCreated, setPlaylistsCreated] = useState(false);
+  // Signature of the inputs the current playlists were built from; null when none.
+  // Kept in state (not a ref) so a restore lands in the same render as the form.
+  const [playlistSignature, setPlaylistSignature] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const pendingAutoSave = useRef(false);
   const saveLiveSessionRef = useRef<() => Promise<void>>();
@@ -228,16 +283,16 @@ function PrepPageInner() {
   const normalSongSeconds = Number(songPlaySecondsInput);
   const playlistInputSignature = useMemo(
     () =>
-      JSON.stringify({
-        eventDate: eventDate.trim(),
-        game1Theme: game1Theme.trim(),
-        game2Theme: game2Theme.trim(),
+      signPlaylistInputs({
+        eventDate,
+        game1Theme,
+        game2Theme,
         game1SongsText,
         game2SongsText,
-        game1IntroUrl: game1IntroUrl.trim(),
-        game2IntroUrl: game2IntroUrl.trim(),
-        game1IntroSongs: normaliseIntroSongsForSignature(game1IntroSongs),
-        game2IntroSongs: normaliseIntroSongsForSignature(game2IntroSongs),
+        game1IntroUrl,
+        game2IntroUrl,
+        game1IntroSongs,
+        game2IntroSongs,
       }),
     [
       eventDate,
@@ -298,7 +353,6 @@ function PrepPageInner() {
       titleRevealSecondsInput,
     ]
   );
-  const playlistSignatureRef = useRef<string | null>(null);
   const formSignatureRef = useRef<string>(formInputSignature);
 
   const draftPayload = useMemo<PrepDraftV1>(
@@ -328,6 +382,7 @@ function PrepPageInner() {
       game2ChallengeBonusPointsInput,
       game2IntroUrl,
       game2IntroSongs,
+      playlists: savedPlaylistsFromState(playlistSignature, spotifyResult, playlistResults),
     }),
     [
       albumRevealSecondsInput,
@@ -350,11 +405,31 @@ function PrepPageInner() {
       game2Theme,
       liveSessionName,
       liveSessionNameDirty,
+      playlistResults,
+      playlistSignature,
       selectedBrandId,
       songPlaySecondsInput,
+      spotifyResult,
       titleRevealSecondsInput,
     ]
   );
+
+  /** Forget this prep's playlists; they stay in Spotify. */
+  const clearPlaylists = useCallback((): void => {
+    setSpotifyResult(null);
+    setPlaylistResults(null);
+    setPlaylistsCreated(false);
+    setPlaylistSignature(null);
+  }, []);
+
+  /** Reattach playlists made earlier, kept by the draft or the saved game. */
+  const attachPlaylists = useCallback((saved: PrepDraftPlaylists): void => {
+    const restored = playlistStateFromSaved(saved);
+    setSpotifyResult(restored.spotifyResult);
+    setPlaylistResults(restored.playlistResults.length > 0 ? restored.playlistResults : null);
+    setPlaylistsCreated(restored.playlistResults.length > 0);
+    setPlaylistSignature(saved.signature);
+  }, []);
 
   function resetRevealTimingDefaults() {
     const revealConfig = DEFAULT_REVEAL_CONFIG;
@@ -433,7 +508,10 @@ function PrepPageInner() {
     );
     setGame2IntroUrl(draft.game2IntroUrl);
     setGame2IntroSongs(draft.game2IntroSongs);
-  }, []);
+    // Playlists made before a reload come back too; the signature check drops
+    // them if the restored songs no longer match.
+    if (draft.playlists) attachPlaylists(draft.playlists);
+  }, [attachPlaylists]);
 
   // Hydrate wizard state when ?session=<id> is present (edit mode)
   useEffect(() => {
@@ -462,9 +540,26 @@ function PrepPageInner() {
         const games = Array.isArray(loaded.games) ? loaded.games : [];
         const findGame = (n: 1 | 2): LiveGameConfig | undefined =>
           games.find((g) => g?.gameNumber === n);
+        const game1 = findGame(1);
+        const game2 = findGame(2);
+        const game1Intro = savedIntro(game1, "dance-along");
+        const game2Intro = savedIntro(game2, "sing-along");
+        // The playlist inputs are restored exactly as signed for the saved
+        // playlists below, so those stay attached until one of them changes.
+        const restoredPlaylistInputs = {
+          eventDate: loaded.eventDateInput || todayIso(),
+          game1Theme: pd.game1Theme || DEFAULT_GAME_THEME,
+          game2Theme: pd.game2Theme || DEFAULT_GAME_THEME,
+          game1SongsText: pd.game1SongsText || "",
+          game2SongsText: pd.game2SongsText || "",
+          game1IntroUrl: game1Intro.url,
+          game2IntroUrl: game2Intro.url,
+          game1IntroSongs: game1Intro.songs,
+          game2IntroSongs: game2Intro.songs,
+        };
 
         // Hydrate step-0 fields
-        if (loaded.eventDateInput) setEventDate(loaded.eventDateInput);
+        setEventDate(restoredPlaylistInputs.eventDate);
         if (typeof pd.cardCount === "number") setCountInput(String(pd.cardCount));
         if (loaded.revealConfig) {
           setSongPlaySecondsInput(formatSecondsInput(loaded.revealConfig.nextMs));
@@ -480,38 +575,38 @@ function PrepPageInner() {
         if (loaded.brandId != null) setSelectedBrandId(loaded.brandId);
 
         // Hydrate step-1 fields
-        if (pd.game1Theme) setGame1Theme(pd.game1Theme);
-        if (pd.game1SongsText) setGame1SongsText(pd.game1SongsText);
-        const game1 = findGame(1);
+        setGame1Theme(restoredPlaylistInputs.game1Theme);
+        setGame1SongsText(restoredPlaylistInputs.game1SongsText);
         if (game1) {
           const entries = challengeEntriesFromGame(game1);
           if (entries.some((c) => c.value)) setGame1ChallengeSongs(entries);
           setGame1ChallengeBonusPointsInput(
             String(sanitizeChallengeBonusPoints(game1.challengeBonusPoints ?? pd.game1ChallengeBonusPoints))
           );
-          const intros = getIntroSongs(game1);
-          if (intros.length > 0) {
-            setGame1IntroSongs(intros);
-            setGame1IntroUrl(intros.find((s) => s.type === "dance-along")?.spotifyUrl ?? intros[0]?.spotifyUrl ?? "");
-          }
         }
+        setGame1IntroSongs(restoredPlaylistInputs.game1IntroSongs);
+        setGame1IntroUrl(restoredPlaylistInputs.game1IntroUrl);
 
         // Hydrate step-2 fields
-        if (pd.game2Theme) setGame2Theme(pd.game2Theme);
-        if (pd.game2SongsText) setGame2SongsText(pd.game2SongsText);
-        const game2 = findGame(2);
+        setGame2Theme(restoredPlaylistInputs.game2Theme);
+        setGame2SongsText(restoredPlaylistInputs.game2SongsText);
         if (game2) {
           const entries = challengeEntriesFromGame(game2);
           if (entries.some((c) => c.value)) setGame2ChallengeSongs(entries);
           setGame2ChallengeBonusPointsInput(
             String(sanitizeChallengeBonusPoints(game2.challengeBonusPoints ?? pd.game2ChallengeBonusPoints))
           );
-          const intros = getIntroSongs(game2);
-          if (intros.length > 0) {
-            setGame2IntroSongs(intros);
-            setGame2IntroUrl(intros.find((s) => s.type === "sing-along")?.spotifyUrl ?? intros[0]?.spotifyUrl ?? "");
-          }
         }
+        setGame2IntroSongs(restoredPlaylistInputs.game2IntroSongs);
+        setGame2IntroUrl(restoredPlaylistInputs.game2IntroUrl);
+
+        // The saved game's playlists come back with it, so it can be edited and
+        // saved again without making new ones.
+        const savedPlaylists = sanitizePrepDraftPlaylists({
+          signature: signPlaylistInputs(restoredPlaylistInputs),
+          games,
+        });
+        if (savedPlaylists) attachPlaylists(savedPlaylists);
 
         // Preserve the session id so save overwrites the same record
         setEditingSessionId(loaded.id);
@@ -543,7 +638,7 @@ function PrepPageInner() {
 
     return () => { cancelled = true; };
   // Run once on mount when the param is present
-  }, [applyDraftToState, editSessionParam]);
+  }, [applyDraftToState, attachPlaylists, editSessionParam]);
 
   // Restore an unsaved prep draft (new-game mode; edit mode restores its own
   // per-session draft after server hydration above). A draft exists whenever
@@ -605,25 +700,14 @@ function PrepPageInner() {
     setQrNotice("");
   }, [formInputSignature]);
 
+  // Playlists belong to the inputs they were built from: changing the songs,
+  // themes, date or intro songs discards them (they stay in Spotify).
   useEffect(() => {
-    const hasPlaylistArtifacts = playlistsCreated || Boolean(playlistResults) || Boolean(spotifyResult);
-    if (!hasPlaylistArtifacts) {
-      playlistSignatureRef.current = null;
-      return;
-    }
-
-    if (
-      playlistSignatureRef.current
-      && playlistSignatureRef.current !== playlistInputSignature
-    ) {
-      setSpotifyResult(null);
-      setPlaylistResults(null);
-      setPlaylistsCreated(false);
-      setLiveSessionNotice("");
-      pendingAutoSave.current = false;
-      playlistSignatureRef.current = null;
-    }
-  }, [playlistInputSignature, playlistResults, playlistsCreated, spotifyResult]);
+    if (playlistSignature === null || playlistSignature === playlistInputSignature) return;
+    clearPlaylists();
+    setLiveSessionNotice("");
+    pendingAutoSave.current = false;
+  }, [clearPlaylists, playlistInputSignature, playlistSignature]);
 
   // Auto-select first challenge song & prune stale selections for Game 1
   useEffect(() => {
@@ -950,7 +1034,9 @@ function PrepPageInner() {
 
   async function connectSpotify(opts: { clearError?: boolean } = {}): Promise<boolean> {
     const clearError = opts.clearError ?? true;
-    if (clearError) { setError(""); setSpotifyResult(null); }
+    // Playlists already made stay attached: they exist in Spotify whatever the
+    // connection, and dropping only some of their state locked Save.
+    if (clearError) setError("");
     setSpotifyConnecting(true);
     try {
       const w = window.open("/api/spotify/authorize", "spotify_auth", "popup,width=520,height=720");
@@ -1003,7 +1089,6 @@ function PrepPageInner() {
 
   async function disconnectSpotify() {
     setError("");
-    setSpotifyResult(null);
     setSpotifyConnecting(true);
     try {
       await fetch("/api/spotify/disconnect", { method: "POST" });
@@ -1090,9 +1175,11 @@ function PrepPageInner() {
     };
   }
 
-  async function createSpotifyPlaylists(opts: { form?: FormData; clearError?: boolean } = {}) {
+  async function createSpotifyPlaylists(
+    opts: { form?: FormData; clearError?: boolean } = {}
+  ): Promise<SpotifyPlaylistResult[] | null> {
     const clearError = opts.clearError ?? true;
-    if (clearError) { setError(""); setSpotifyResult(null); }
+    if (clearError) { setError(""); clearPlaylists(); }
     setSpotifyCreating(true);
     try {
       const form = opts.form ?? buildBaseFormData();
@@ -1128,8 +1215,10 @@ function PrepPageInner() {
             )
         : [];
       setSpotifyResult(playlists);
+      return playlists;
     } catch (err: any) {
       setError(err?.message ?? "Failed to create Spotify playlists.");
+      return null;
     } finally {
       setSpotifyCreating(false);
     }
@@ -1138,44 +1227,48 @@ function PrepPageInner() {
   async function handleCreatePlaylists() {
     setError("");
     setQrNotice("");
-    setSpotifyResult(null);
+    clearPlaylists();
     setLiveSessionNotice("");
     setBusy(true);
     try {
-      const signatureAtCreate = playlistInputSignature;
       if (!spotifyConnected) {
         const ok = await connectSpotify({ clearError: false });
         if (!ok) return;
       }
       const resolvedIntroSongs = await resolvePendingIntroSongs();
-      const form = buildBaseFormData(resolvedIntroSongs);
-      await createSpotifyPlaylists({ form, clearError: false });
-
-      const latestResult = await new Promise<SpotifyPlaylistResult[] | null>((resolve) => {
-        setSpotifyResult((prev) => {
-          resolve(prev);
-          return prev;
-        });
+      // Sign after the intro lookup, using the songs it filled in. Signed
+      // before it, the inputs stopped matching as soon as the lookup landed and
+      // the new playlists were discarded at once (16 October 2026).
+      const createdSignature = signPlaylistInputs({
+        eventDate,
+        game1Theme,
+        game2Theme,
+        game1SongsText,
+        game2SongsText,
+        game1IntroUrl,
+        game2IntroUrl,
+        ...resolvedIntroSongs,
       });
+      const form = buildBaseFormData(resolvedIntroSongs);
+      const created = await createSpotifyPlaylists({ form, clearError: false });
+      if (!created?.length) return;
 
-      if (latestResult && latestResult.length > 0) {
-        const mapped: PlaylistPhaseResult[] = latestResult
-          .filter((r): r is SpotifyPlaylistResult & { playlistId: string; playlistUrl: string } =>
-            r.playlistId !== null && r.playlistUrl !== null && (r.gameNumber === 1 || r.gameNumber === 2)
-          )
-          .map((r) => ({
-            gameNumber: r.gameNumber as 1 | 2,
-            playlistId: r.playlistId,
-            playlistUrl: r.playlistUrl,
-            addedCount: r.addedCount,
-            totalSongs: r.totalSongs,
-            notFoundSongs: r.notFound,
-          }));
-        if (mapped.length > 0) {
-          playlistSignatureRef.current = signatureAtCreate;
-          setPlaylistResults(mapped);
-          setPlaylistsCreated(true);
-        }
+      setPlaylistSignature(createdSignature);
+      const mapped: PlaylistPhaseResult[] = created
+        .filter((r): r is SpotifyPlaylistResult & { playlistId: string; playlistUrl: string } =>
+          r.playlistId !== null && r.playlistUrl !== null && (r.gameNumber === 1 || r.gameNumber === 2)
+        )
+        .map((r) => ({
+          gameNumber: r.gameNumber as 1 | 2,
+          playlistId: r.playlistId,
+          playlistUrl: r.playlistUrl,
+          addedCount: r.addedCount,
+          totalSongs: r.totalSongs,
+          notFoundSongs: r.notFound,
+        }));
+      if (mapped.length > 0) {
+        setPlaylistResults(mapped);
+        setPlaylistsCreated(true);
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to create playlists.";

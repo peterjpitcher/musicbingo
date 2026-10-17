@@ -1075,6 +1075,93 @@ async function main() {
 
     await flow13Context.close();
 
+    const flow14Context = await browser.newContext();
+    await installAppDataMocks(flow14Context);
+    const spotifyFlow14 = await installSpotifyMocks(flow14Context, { initialConnected: false });
+    await flow14Context.route("**/api/spotify/track/*", async (route) => {
+      const trackId = decodeURIComponent(new URL(route.request().url()).pathname.split("/").at(-1) ?? "");
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        headers: { "Cache-Control": "no-store" },
+        body: JSON.stringify({ trackId, title: "Flow Intro Song", artist: "Flow Intro Artist" }),
+      });
+    });
+    const flow14Page = await flow14Context.newPage();
+
+    await runFlow(flowResults, "Flow 14: Playlists stay attached after an intro lookup, a reload and when editing", async () => {
+      const saveButton = flow14Page.getByRole("button", { name: "Save Live Session" });
+      const playlistLinks = flow14Page.locator('a[href^="https://open.spotify.com/playlist/"]');
+
+      await openPrep(flow14Page);
+      await flow14Page.getByRole("button", { name: /Next: Game 1/i }).click();
+      await flow14Page.getByRole("heading", { name: /Game 1/i }).waitFor();
+      await fillCurrentGameStep(flow14Page, songListA);
+      // Typed while Spotify is disconnected, so the link is only looked up when
+      // Create is pressed: the 16 October path that discarded the new playlists.
+      await flow14Page.getByPlaceholder("Paste Spotify track URL…").fill("https://open.spotify.com/track/2sB26pWHOIscSdBP4sBMBN");
+      await waitUntilEnabled(flow14Page.getByRole("button", { name: /Next: Game 2/i }));
+      await flow14Page.getByRole("button", { name: /Next: Game 2/i }).click();
+      await flow14Page.getByRole("heading", { name: /Game 2/i }).waitFor();
+      await fillCurrentGameStep(flow14Page, songListB);
+      await waitUntilEnabled(flow14Page.getByRole("button", { name: /Next: Generate/i }));
+      await flow14Page.getByRole("button", { name: /Next: Generate/i }).click();
+      await flow14Page.getByRole("heading", { name: /Generate/i }).waitFor();
+
+      await flow14Page.getByRole("button", { name: "Connect Spotify" }).click();
+      await flow14Page.getByRole("button", { name: "Disconnect" }).waitFor({ timeout: 10_000 });
+      const createButton = flow14Page.getByRole("button", { name: "Create Spotify Playlists" });
+      await waitUntilEnabled(createButton);
+      await createButton.click();
+      await playlistLinks.first().waitFor({ timeout: 10_000 });
+      await sleep(500);
+      assert.equal(spotifyFlow14.createCalls, 1, "Playlists should be created once");
+      assert.equal(await playlistLinks.count(), 2, "Both playlists should stay listed after the intro lookup");
+      assert.equal(await saveButton.isDisabled(), false, "Save should unlock once both playlists exist");
+
+      // Leaving or refreshing the page must not throw the playlists away.
+      await sleep(700);
+      await flow14Page.reload({ waitUntil: "networkidle" });
+      await flow14Page.getByText(/Restored your unsaved prep draft/i).waitFor({ timeout: 10_000 });
+      await flow14Page.getByRole("heading", { name: /Generate/i }).waitFor();
+      await waitUntilEnabled(saveButton);
+      assert.equal(await playlistLinks.count(), 2, "Both playlists should come back after a reload");
+
+      const [saveRequest] = await Promise.all([
+        flow14Page.waitForRequest((req) => new URL(req.url()).pathname === "/api/sessions" && req.method() === "PUT"),
+        saveButton.click(),
+      ]);
+      const saved = saveRequest.postDataJSON();
+      assert.deepEqual(saved.games.map((game) => game.playlistId), ["mock-game-1", "mock-game-2"]);
+      await flow14Page.getByText(/Saved live session/).waitFor({ timeout: 10_000 });
+
+      // Editing the saved game brings its playlists back, so it can be saved again.
+      await flow14Page.goto(`${BASE_URL}/prep?session=${encodeURIComponent(saved.id)}`, { waitUntil: "networkidle" });
+      await flow14Page.getByRole("heading", { name: "Event Setup" }).waitFor();
+      await waitUntilEnabled(flow14Page.getByRole("button", { name: /Next: Game 1/i }));
+      await flow14Page.getByRole("button", { name: /Next: Game 1/i }).click();
+      await waitUntilEnabled(flow14Page.getByRole("button", { name: /Next: Game 2/i }));
+      await flow14Page.getByRole("button", { name: /Next: Game 2/i }).click();
+      await waitUntilEnabled(flow14Page.getByRole("button", { name: /Next: Generate/i }));
+      await flow14Page.getByRole("button", { name: /Next: Generate/i }).click();
+      await flow14Page.getByRole("heading", { name: /Generate/i }).waitFor();
+      await waitUntilEnabled(saveButton);
+      assert.equal(await playlistLinks.count(), 2, "A saved game's playlists should load when editing it");
+      assert.equal(spotifyFlow14.createCalls, 1, "Editing a saved game must not need new playlists");
+
+      // Changing the songs still discards playlists built from the old list.
+      await flow14Page.getByRole("button", { name: /Back/ }).click();
+      await flow14Page.getByRole("heading", { name: /Game 2/i }).waitFor();
+      await flow14Page.locator("textarea").fill(`${songListB}\nFlowB Artist 27 - FlowB Song 27`);
+      await flow14Page.locator("text=27 songs").first().waitFor();
+      await flow14Page.getByRole("button", { name: /Next: Generate/i }).click();
+      await flow14Page.getByRole("heading", { name: /Generate/i }).waitFor();
+      await createButton.waitFor({ timeout: 10_000 });
+      assert.equal(await saveButton.isDisabled(), true, "Save should lock again once the songs change");
+    });
+
+    await flow14Context.close();
+
     const flow9Context = await browser.newContext();
     await installAppDataMocks(flow9Context);
     await installSpotifyMocks(flow9Context, { initialConnected: false });

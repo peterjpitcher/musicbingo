@@ -5,7 +5,8 @@ import type { IntroSong } from "@/lib/live/types";
  * Autosaved draft of the /prep wizard, stored in localStorage so a refresh,
  * crash, or accidental navigation never loses typed prep. The draft is a
  * device-local safety net only: the live session itself is still saved to the
- * server via upsertLiveSession once both Spotify playlists exist.
+ * server via upsertLiveSession once both Spotify playlists exist. Playlists
+ * already made are kept with the draft too, so a reload does not force new ones.
  */
 
 export const PREP_DRAFT_STORAGE_KEY = "music-bingo-prep-draft-v1";
@@ -22,6 +23,64 @@ export function prepDraftStorageKey(scope?: string | null): string {
 export const CHALLENGE_ENTRY_COUNT = 5;
 
 export type ChallengeEntry = { value: string; type: "sing-along" | "dance-along" };
+
+/** A Spotify playlist made for one game, as kept by a draft or a saved game. */
+export type PrepDraftPlaylist = {
+  gameNumber: 1 | 2;
+  theme: string;
+  playlistId: string;
+  playlistName: string;
+  playlistUrl: string | null;
+  totalSongs: number;
+  addedCount: number;
+};
+
+/**
+ * Playlists plus the signature of the inputs they were built from
+ * (playlistInputSignature). The wizard only keeps them while it still matches.
+ */
+export type PrepDraftPlaylists = {
+  signature: string;
+  games: PrepDraftPlaylist[];
+};
+
+/** Everything a game's Spotify playlist is built from. */
+export type PlaylistInputs = {
+  eventDate: string;
+  game1Theme: string;
+  game2Theme: string;
+  game1SongsText: string;
+  game2SongsText: string;
+  game1IntroUrl: string;
+  game2IntroUrl: string;
+  game1IntroSongs: IntroSong[];
+  game2IntroSongs: IntroSong[];
+};
+
+/** Fixed field and slot order, so the same intro songs always sign the same. */
+function canonicalIntroSongs(songs: IntroSong[]): IntroSong[] {
+  return songs
+    .map(({ type, spotifyUrl, trackId, artist, title }) => ({ type, spotifyUrl, trackId, artist, title }))
+    .sort((a, b) => a.type.localeCompare(b.type));
+}
+
+/**
+ * Fingerprint of the playlist inputs. Playlists made from one fingerprint are
+ * discarded once the inputs stop matching it, since they no longer fit the songs.
+ */
+export function playlistInputSignature(inputs: PlaylistInputs): string {
+  return JSON.stringify({
+    eventDate: inputs.eventDate.trim(),
+    game1Theme: inputs.game1Theme.trim(),
+    game2Theme: inputs.game2Theme.trim(),
+    game1SongsText: inputs.game1SongsText,
+    game2SongsText: inputs.game2SongsText,
+    game1IntroUrl: inputs.game1IntroUrl.trim(),
+    game2IntroUrl: inputs.game2IntroUrl.trim(),
+    game1IntroSongs: canonicalIntroSongs(inputs.game1IntroSongs),
+    game2IntroSongs: canonicalIntroSongs(inputs.game2IntroSongs),
+  });
+}
 
 export type PrepDraftV1 = {
   version: 1;
@@ -49,6 +108,8 @@ export type PrepDraftV1 = {
   game2ChallengeBonusPointsInput: string;
   game2IntroUrl: string;
   game2IntroSongs: IntroSong[];
+  /** Absent from drafts written before playlists were kept. */
+  playlists: PrepDraftPlaylists | null;
 };
 
 export function makeEmptyChallengeEntries(): ChallengeEntry[] {
@@ -93,6 +154,36 @@ function sanitizeIntroSongs(input: unknown): IntroSong[] {
   return songs;
 }
 
+function count(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? Math.trunc(value) : 0;
+}
+
+/**
+ * Validate playlists from a draft or a saved game: one per game number, each
+ * with a playlist id. Returns null when there is no signature or no playlist.
+ */
+export function sanitizePrepDraftPlaylists(input: unknown): PrepDraftPlaylists | null {
+  if (!isObject(input) || typeof input.signature !== "string" || !input.signature) return null;
+  if (!Array.isArray(input.games)) return null;
+  const games: PrepDraftPlaylist[] = [];
+  for (const item of input.games) {
+    if (!isObject(item)) continue;
+    const gameNumber = item.gameNumber === 1 || item.gameNumber === 2 ? item.gameNumber : null;
+    const playlistId = str(item.playlistId).trim();
+    if (!gameNumber || !playlistId || games.some((game) => game.gameNumber === gameNumber)) continue;
+    games.push({
+      gameNumber,
+      theme: str(item.theme),
+      playlistId,
+      playlistName: str(item.playlistName),
+      playlistUrl: str(item.playlistUrl) || null,
+      totalSongs: count(item.totalSongs),
+      addedCount: count(item.addedCount),
+    });
+  }
+  return games.length > 0 ? { signature: input.signature, games } : null;
+}
+
 export function sanitizePrepDraft(input: unknown): PrepDraftV1 | null {
   if (!isObject(input) || input.version !== 1) return null;
   const currentStepRaw = typeof input.currentStep === "number" ? Math.trunc(input.currentStep) : 0;
@@ -122,6 +213,7 @@ export function sanitizePrepDraft(input: unknown): PrepDraftV1 | null {
     game2ChallengeBonusPointsInput: str(input.game2ChallengeBonusPointsInput),
     game2IntroUrl: str(input.game2IntroUrl),
     game2IntroSongs: sanitizeIntroSongs(input.game2IntroSongs),
+    playlists: sanitizePrepDraftPlaylists(input.playlists),
   };
 }
 

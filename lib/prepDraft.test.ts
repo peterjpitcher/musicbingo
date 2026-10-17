@@ -5,9 +5,12 @@ import {
   PREP_DRAFT_STORAGE_KEY,
   clearPrepDraft,
   makeEmptyChallengeEntries,
+  playlistInputSignature,
   readPrepDraft,
   sanitizePrepDraft,
+  sanitizePrepDraftPlaylists,
   writePrepDraft,
+  type PlaylistInputs,
   type PrepDraftV1,
 } from "@/lib/prepDraft";
 
@@ -68,6 +71,43 @@ function makeDraft(): PrepDraftV1 {
     game2ChallengeSongs: makeEmptyChallengeEntries(),
     game2ChallengeBonusPointsInput: "10",
     game2IntroUrl: "",
+    game2IntroSongs: [],
+    playlists: {
+      signature: "sig-1",
+      games: [
+        {
+          gameNumber: 1,
+          theme: "80s",
+          playlistId: "pl-1",
+          playlistName: "Music Bingo Game 1 - July 18th 2026 (80s)",
+          playlistUrl: "https://open.spotify.com/playlist/pl-1",
+          totalSongs: 2,
+          addedCount: 2,
+        },
+        {
+          gameNumber: 2,
+          theme: "90s",
+          playlistId: "pl-2",
+          playlistName: "Music Bingo Game 2 - July 18th 2026 (90s)",
+          playlistUrl: "https://open.spotify.com/playlist/pl-2",
+          totalSongs: 1,
+          addedCount: 1,
+        },
+      ],
+    },
+  };
+}
+
+function makePlaylistInputs(): PlaylistInputs {
+  return {
+    eventDate: "2026-10-16",
+    game1Theme: "Killer Party Anthems",
+    game2Theme: "Halloween Howlers",
+    game1SongsText: "ABBA - Waterloo",
+    game2SongsText: "Oasis - Wonderwall",
+    game1IntroUrl: "https://open.spotify.com/track/abc123",
+    game2IntroUrl: "",
+    game1IntroSongs: [],
     game2IntroSongs: [],
   };
 }
@@ -143,6 +183,78 @@ test("sanitizePrepDraft drops malformed intro songs and clamps the step", () => 
   expect(draft!.game1IntroSongs).toEqual([
     { type: "dance-along", spotifyUrl: "url", trackId: "id", artist: "A", title: "T" },
   ]);
+});
+
+test("drafts written before playlists were kept restore with no playlists", () => {
+  const { playlists: _playlists, ...oldDraft } = makeDraft();
+  expect(sanitizePrepDraft(oldDraft)?.playlists).toBeNull();
+});
+
+test("sanitizePrepDraftPlaylists keeps one playlist per game and needs an id and a signature", () => {
+  const saved = sanitizePrepDraftPlaylists({
+    signature: "sig-1",
+    games: [
+      { gameNumber: 1, theme: "80s", playlistId: "pl-1", playlistName: "G1", playlistUrl: "", totalSongs: 26, addedCount: 25 },
+      { gameNumber: 1, theme: "80s", playlistId: "pl-1-again", playlistName: "G1", playlistUrl: null, totalSongs: 1, addedCount: 1 },
+      { gameNumber: 2, theme: "90s", playlistId: "", playlistName: "G2", playlistUrl: null, totalSongs: 1, addedCount: 1 },
+      { gameNumber: 3, theme: "00s", playlistId: "pl-3", playlistName: "G3", playlistUrl: null, totalSongs: 1, addedCount: 1 },
+      "junk",
+    ],
+  });
+  expect(saved).toEqual({
+    signature: "sig-1",
+    games: [
+      { gameNumber: 1, theme: "80s", playlistId: "pl-1", playlistName: "G1", playlistUrl: null, totalSongs: 26, addedCount: 25 },
+    ],
+  });
+  expect(sanitizePrepDraftPlaylists({ signature: "", games: makeDraft().playlists!.games })).toBeNull();
+  expect(sanitizePrepDraftPlaylists({ signature: "sig-1", games: [] })).toBeNull();
+  expect(sanitizePrepDraftPlaylists(null)).toBeNull();
+});
+
+test("sanitizePrepDraftPlaylists reads the playlist fields of a saved game and ignores the rest", () => {
+  const savedGame = {
+    ...makeDraft().playlists!.games[0],
+    challengeSongs: [{ artist: "ABBA", title: "Waterloo", type: "dance-along" }],
+    introSongs: [],
+    challengeBonusPoints: 10,
+  };
+  expect(sanitizePrepDraftPlaylists({ signature: "sig-1", games: [savedGame] })?.games).toEqual([
+    makeDraft().playlists!.games[0],
+  ]);
+});
+
+test("playlistInputSignature ignores intro song key order and surrounding whitespace", () => {
+  const resolved = {
+    type: "dance-along" as const,
+    spotifyUrl: "https://open.spotify.com/track/abc123",
+    trackId: "abc123",
+    artist: "ABBA",
+    title: "Waterloo",
+  };
+  // Saved games come back from Postgres JSONB with their keys reordered.
+  const reordered = { title: "Waterloo", artist: "ABBA", trackId: "abc123", type: "dance-along" as const, spotifyUrl: "https://open.spotify.com/track/abc123" };
+  const base = { ...makePlaylistInputs(), game1IntroSongs: [resolved] };
+
+  expect(playlistInputSignature({ ...base, game1IntroSongs: [reordered] })).toBe(playlistInputSignature(base));
+  expect(
+    playlistInputSignature({ ...base, eventDate: " 2026-10-16 ", game1Theme: "Killer Party Anthems  " })
+  ).toBe(playlistInputSignature(base));
+});
+
+test("playlistInputSignature changes when the songs or the intro songs change", () => {
+  const base = makePlaylistInputs();
+  const signature = playlistInputSignature(base);
+
+  expect(playlistInputSignature({ ...base, game2SongsText: "Oasis - Wonderwall\nBlur - Song 2" })).not.toBe(signature);
+  expect(
+    playlistInputSignature({
+      ...base,
+      game1IntroSongs: [
+        { type: "dance-along", spotifyUrl: base.game1IntroUrl, trackId: "abc123", artist: "ABBA", title: "Waterloo" },
+      ],
+    })
+  ).not.toBe(signature);
 });
 
 test("storage helpers are safe when window is unavailable", () => {
