@@ -1,3 +1,28 @@
+# Spotify matcher: "ft" inside a word (16 October 2026)
+
+Branch `fix/spotify-matcher-feat-boundary`, based on `fix/spotify-matcher-dash-suffix` (not merged yet, so the matcher only exists in `lib/spotifyTrackMatch.ts` there). Complexity 1 (XS): one regex and its tests, no schema change.
+
+- [x] Trailing featured-artist pattern in `stripNoise` needs the start of the text or whitespace before feat/ft/featuring
+- [x] Unit tests: Daft Punk, Soft Cell (both line orders), Left Outside Alone against Left Behind; "feat.", "ft." and "(feat. ...)" still stripped
+- [x] New tests fail before the fix (0.728 instead of 1; Left Outside Alone against Left Behind 1 instead of 0.389) and pass after it
+- [x] Replay of every saved list line (700 lines, 7 sessions) through the old and new `stripNoise`: only "Daft Punk - One More Time" (24 April, artist) and "Tainted Love - Soft Cell" (28 May, title) change; the other 698 are byte-identical
+- [x] Live Spotify search (market GB) for those two: same track picked before and after (`0DiWol3AO6WpXZgp0goxAV`, `0cGG2EouYCEEC3xfa0tDFV`), score 0.728 to 1.000; Daft Punk's nearest rival, "One More Time" by Jbizz, scored 0.650 before. All 542 unique songs not replayed live, to keep load off the shared Spotify app
+- [x] lint, typecheck, test:unit (Europe/London and UTC, 184 tests), build
+- [ ] Parked, not on this branch: `stripTrackNoise` in `app/api/generate/route.ts` (event pack ordering) has the same regex
+
+# Spotify matcher: version suffixes (16 October 2026)
+
+Branch `fix/spotify-matcher-dash-suffix`. Complexity 2 (S): one route, one new lib module and its tests, no schema change.
+
+- [x] Move the matcher from `app/api/spotify/create-playlist/route.ts` into `lib/spotifyTrackMatch.ts` unchanged (functions byte-identical; replaying the 14 August lists changes 0 picks)
+- [x] `titleSimilarity` also compares against the Spotify title with its " - <suffix>" removed, keeping the existing comparisons
+- [x] Unit tests: Valerie (Version Revisited), Help! (Remastered 2009), Waves (Radio Edit), Grease, title-first lines, hyphens inside titles, Steve Winwood guard
+- [x] Replay of the 14 August lists against live Spotify search (market GB): 100 of 100 found (was 99); 4 other songs move to the better-known recording of the same song
+- [x] Popularity tie-break built and tested on its own branch, `fix/spotify-matcher-popularity-tiebreak`; not on this branch (26 changed picks on the same lists, one of them a live "On the Road Again")
+- [x] lint, typecheck, test:unit, build
+
+---
+
 # Fix: Spotify "Restriction violated" on the host controller (16 October 2026)
 
 Reported at 16:36 BST on show day: "Spotify playback control unavailable: Player command failed: Restriction violated (UNKNOWN)".
