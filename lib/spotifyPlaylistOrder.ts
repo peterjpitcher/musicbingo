@@ -23,7 +23,8 @@ function normalizeTrackText(value: string): string {
 export function stripTrackNoise(value: string): string {
   return value
     .replace(/\s*\((?:feat\.?|ft\.?|featuring)\b[^)]*\)\s*/gi, " ")
-    .replace(/\s*(?:feat\.?|ft\.?|featuring)\b.+$/i, "")
+    // The marker must start the text or follow whitespace, or "Daft Punk" would be cut to "Da".
+    .replace(/(?:^|\s+)(?:feat\.?|ft\.?|featuring)\b.+$/i, "")
     .replace(/\s*\[[^\]]*]\s*/g, " ")
     .replace(/\s*\([^)]*\)\s*/g, " ")
     .replace(/\s+/g, " ")
@@ -45,7 +46,7 @@ function tokenOverlapScore(a: string, b: string): number {
   return union ? intersection / union : 0;
 }
 
-function trackTextScore(input: string, candidate: string): number {
+export function trackTextScore(input: string, candidate: string): number {
   const inputNorm = normalizeTrackText(input);
   const candidateNorm = normalizeTrackText(candidate);
   if (!inputNorm || !candidateNorm) return 0;

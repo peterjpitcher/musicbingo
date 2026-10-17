@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { sortSongsBySpotifyOrder, stripTrackNoise, type SpotifyTrack } from "@/lib/spotifyPlaylistOrder";
+import {
+  sortSongsBySpotifyOrder,
+  stripTrackNoise,
+  trackTextScore,
+  type SpotifyTrack,
+} from "@/lib/spotifyPlaylistOrder";
 import type { Song } from "@/lib/types";
 
 const ANASTACIA: Song = { artist: "Anastacia", title: "Left Outside Alone" };
@@ -33,5 +38,25 @@ describe("sortSongsBySpotifyOrder", () => {
 describe("stripTrackNoise", () => {
   it.each(["Song feat. X", "Song ft. X", "Song (feat. X)"])("strips the featured artist from %s", (input) => {
     expect(stripTrackNoise(input)).toBe("Song");
+  });
+
+  // "ft" ending a word was read as a featured-artist marker, cutting "Daft Punk" to "Da".
+  it.each(["Daft Punk", "Soft Cell", "Left Outside Alone"])("leaves %s whole", (input) => {
+    expect(stripTrackNoise(input)).toBe(input);
+  });
+});
+
+describe("trackTextScore", () => {
+  // The stubs left by that cut ("da", "so", "le") counted as part of unrelated names.
+  it.each([
+    ["Daft Punk", "David Bowie"],
+    ["Soft Cell", "Mark Ronson"],
+    ["Left Outside Alone", "Let It Be"],
+  ])("does not match %s with %s", (input, candidate) => {
+    expect(trackTextScore(input, candidate)).toBe(0);
+  });
+
+  it("does not treat Left Outside Alone and Left Behind as the same title", () => {
+    expect(trackTextScore("Left Outside Alone", "Left Behind")).toBeLessThan(0.5);
   });
 });
