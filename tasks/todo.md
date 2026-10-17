@@ -1,3 +1,15 @@
+# Event pack order: "ft" inside a word (17 October 2026)
+
+Branch `fix/event-pack-order-feat-boundary`, cut from `main` at `eee0609` while the matcher fix (`fix/spotify-matcher-feat-boundary`, `cc809aa`) and `fix/spotify-matcher-dash-suffix` beneath it were unmerged. Both reached `main` in PR #10 (`5ad5b27`, 08:48 BST) during this work, and `main` was merged in. Complexity 2 (S): one route, one new lib module and its tests, no schema change.
+
+- [x] Move the ordering helpers from `app/api/generate/route.ts` into `lib/spotifyPlaylistOrder.ts` unchanged (function bodies byte-identical), with tests pinning the current order
+- [x] Trailing featured-artist pattern in `stripTrackNoise` needs the start of the text or whitespace before feat/ft/featuring (same line as `cc809aa`)
+- [x] Unit tests: Daft Punk, Soft Cell and Left Outside Alone stay whole; "Song feat. X", "Song ft. X" and "Song (feat. X)" still stripped; the stubs no longer partly match "David Bowie", "Mark Ronson" or "Let It Be"; Left Outside Alone against Left Behind is no longer the same title
+- [x] New tests fail before the fix ("Da", "So", "Le"; partial matches at 0.85; Left Behind at 0.95) and pass after it
+- [x] Replay of every saved list (814 lines, 800 songs, 8 sessions, read only) through the old and new `stripTrackNoise`: 3 of 1,600 artist and title fields change, "Daft Punk - One More Time" (24 April, artist), "Tainted Love - Soft Cell" (28 May, title) and "Soft Cell – Tainted Love" (16 October, artist; saved after the matcher's 700-line count). Against the other songs in the same list, the best false score falls from at most 0.552 to at most 0.130 (the sort accepts at 0.72), so none could take another song's place there. Spotify's own playlist names not replayed: sessions store only the playlist id, and the playlists are private
+- [x] lint, typecheck, test:unit (Europe/London and UTC, 241 tests), build, on the merged branch
+- [x] test:e2e, all 13 flows: flow 3 downloads a real event pack through the moved code (no Spotify tokens there, so it takes the list-order path; the matching itself is covered by the unit tests)
+
 # Spotify matcher: "ft" inside a word (16 October 2026)
 
 Branch `fix/spotify-matcher-feat-boundary`, based on `fix/spotify-matcher-dash-suffix` (not merged yet, so the matcher only exists in `lib/spotifyTrackMatch.ts` there). Complexity 1 (XS): one regex and its tests, no schema change.
@@ -8,7 +20,7 @@ Branch `fix/spotify-matcher-feat-boundary`, based on `fix/spotify-matcher-dash-s
 - [x] Replay of every saved list line (700 lines, 7 sessions) through the old and new `stripNoise`: only "Daft Punk - One More Time" (24 April, artist) and "Tainted Love - Soft Cell" (28 May, title) change; the other 698 are byte-identical
 - [x] Live Spotify search (market GB) for those two: same track picked before and after (`0DiWol3AO6WpXZgp0goxAV`, `0cGG2EouYCEEC3xfa0tDFV`), score 0.728 to 1.000; Daft Punk's nearest rival, "One More Time" by Jbizz, scored 0.650 before. All 542 unique songs not replayed live, to keep load off the shared Spotify app
 - [x] lint, typecheck, test:unit (Europe/London and UTC, 184 tests), build
-- [ ] Parked, not on this branch: `stripTrackNoise` in `app/api/generate/route.ts` (event pack ordering) has the same regex
+- [x] Parked, not on this branch: `stripTrackNoise` in `app/api/generate/route.ts` (event pack ordering) has the same regex. Fixed on `fix/event-pack-order-feat-boundary` (17 October 2026)
 
 # Spotify matcher: version suffixes (16 October 2026)
 
