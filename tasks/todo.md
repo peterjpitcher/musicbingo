@@ -1,3 +1,16 @@
+# Housekeeping: addresses and the London and UTC test pair (6 November 2026)
+
+Spec M-1 and M-2 (`tasks/2026-11-06-anchor-nights-standard-spec.md`).
+
+- [x] Main checkout fast-forwarded to `origin/main` (`1c3da88`); `tasks/lessons.md` kept untracked
+- [x] Production addresses checked live: `musicbingo.orangejelly.co.uk` and `music-bingo.vercel.app` answer (307 to `/host`); `musicbingo-iota.vercel.app` returns 404
+- [x] CLAUDE.md and README.md name the two live addresses and the Vercel project `oj-music-bingo`; README's Spotify callback list drops the retired address
+- [x] `npm test` (Europe/London) and `npm run test:utc` (UTC); CI and `verify` call them
+- [x] Node 24 already pinned: `.nvmrc` 24, `engines` 24.x, CI reads `.nvmrc` (no change needed)
+- [x] Lint, typecheck, unit 247/247 under London and UTC, build
+
+---
+
 # Fix: prep loses its Spotify playlists, so the game cannot be saved (17 October 2026)
 
 Reported 16 October: on /prep the Save Live Session button stayed locked after playlists were made.
