@@ -63,7 +63,7 @@ export function ContentPanel({ get, set, collapsed, onToggle }: ContentPanelProp
 
         <div className="ed-two">
           <Row field="reviewQrUrl" label="Review QR URL" ph="https://g.page/r/..." get={get} set={set} />
-          <Row field="bookQrUrl" label="Book again QR URL" ph="https://orangejelly.co.uk/events/..." get={get} set={set} />
+          <Row field="bookQrUrl" label="Book again QR URL" ph="https://www.the-anchor.pub/whats-on" get={get} set={set} />
         </div>
 
         {/* Game themes side-by-side */}
