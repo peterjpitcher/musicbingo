@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { buildFitSteps, useFitStep } from "@anchor-nights/kit/tv";
+import { buildFitSteps, layoutFits, measureLayout, useFitStep } from "@anchor-nights/kit/tv";
 
 import type { ScreenProps } from "@/components/screens/types";
 import type { LiveRuntimeState } from "@/lib/live/types";
@@ -17,8 +17,14 @@ import { Ball } from "@/components/motifs/Ball";
 import { Eq } from "@/components/motifs/Eq";
 import { Chrome } from "@/components/motifs/Chrome";
 import { AlbumArt } from "@/components/screens/AlbumArt";
-import { fitsInCanvas } from "@/lib/tvFit";
 import { TV_TYPE } from "@/lib/tvType";
+
+/**
+ * Whether the info column's text fits. Since kit 2.0.1 measureLayout reads the
+ * element's own layout pixels, so this is right at any Stage scale and also
+ * fails a centred column whose content spills above its top.
+ */
+const infoFits = (element: HTMLElement): boolean => layoutFits(measureLayout(element));
 
 /**
  * Smoothly interpolates the playing track's `progressMs` between the ~2s server
@@ -187,14 +193,14 @@ export function GameLive({
     : 0;
   const nextLabel = hasLiveCountdown ? formatCountdown(remainingMs) : "0:08";
 
-  // Fit the title and artist to the info column (kit useFitStep, measured in
-  // canvas pixels so the Stage's scale does not skew it).
+  // Fit the title and artist to the info column (kit useFitStep and
+  // measureLayout, which measure in canvas pixels inside the Stage).
   const infoRef = useRef<HTMLDivElement | null>(null);
   const fitSteps = isChallenge ? CHALLENGE_FIT_STEPS : TRACK_FIT_STEPS;
   const fitStep = useFitStep(
     infoRef,
     fitSteps.length,
-    fitsInCanvas,
+    infoFits,
     `${isChallenge ? "challenge" : "track"}|${titleText}|${artistText}`,
   );
   const { title: titleFontSize, artist: artistFontSize } = fitSteps[Math.min(fitStep, fitSteps.length - 1)];
