@@ -28,3 +28,54 @@ node_modules/
 
 # Local Node.js compile cache
 node-compile-cache/
+
+# ---- Workspace ignore baseline: rules this file was missing (6 November 2026) ----
+# Private data (traffic figures, Search Console or Keyword Planner exports, client
+# numbers) lives in private/ or a raw/ folder and is never committed.
+# Dependencies
+.pnp
+.pnp.js
+
+# Build output
+/out/
+next-env.d.ts
+
+# Tests
+/coverage/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+.playwright-mcp/
+.eslintcache
+
+# Environment and secrets (templates stay tracked)
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Logs and editor or OS noise
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.swp
+*.swo
+*.bak
+Thumbs.db
+.idea/
+
+# Agent tooling
+.worktrees/
+tasks/claude-audit-backups/
+graphify-out/
+
+# Local private data: never committed
+private/
+**/raw/
+
+# Env templates stay tracked
+!.env.example
+!.env.*.example
