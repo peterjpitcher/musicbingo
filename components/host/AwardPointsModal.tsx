@@ -29,7 +29,7 @@ export function AwardPointsModal({
   onAddTeam,
   onRemoveTeam,
   onAward,
-}: AwardPointsModalProps): JSX.Element | null {
+}: AwardPointsModalProps): React.JSX.Element | null {
   const [teamName, setTeamName] = useState("");
   const [bonusInputsByTeam, setBonusInputsByTeam] = useState<Record<string, string>>({});
   const sortedTeams = useMemo(
@@ -113,7 +113,7 @@ function TeamScoreRow({
   onBonusInput: (value: string) => void;
   onAward: (team: LiveTeamScore, points: number, label: string) => void;
   onRemoveTeam: (teamId: string) => void;
-}): JSX.Element {
+}): React.JSX.Element {
   const bonusPoints = Number.parseInt(bonusInput, 10);
   const canAwardBonus = Number.isFinite(bonusPoints) && bonusPoints > 0;
 

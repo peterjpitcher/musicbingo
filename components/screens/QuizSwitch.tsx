@@ -20,7 +20,7 @@ export type QuizSwitchProps = ScreenProps & {
  * The `round` prop mirrors the source's `screenKey` parameter: `"One"` → `q1`,
  * `"Two"` → `q2`.
  */
-export function QuizSwitch({ brand, round = "One" }: QuizSwitchProps): JSX.Element {
+export function QuizSwitch({ brand, round = "One" }: QuizSwitchProps): React.JSX.Element {
   /* Derive the field-name prefix exactly as the source did with its `screenKey` arg. */
   const screenKey = round === "One" ? "q1" : "q2";
 

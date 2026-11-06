@@ -26,7 +26,7 @@ export function Qr({
   size = 320,
   light = "#F6EFDD",
   dark = "#04130C",
-}: QrProps): JSX.Element {
+}: QrProps): React.JSX.Element {
   const [svg, setSvg] = useState<string | null>(null);
 
   useEffect(() => {

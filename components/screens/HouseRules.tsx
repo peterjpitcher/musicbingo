@@ -37,7 +37,7 @@ const RULES = [
  * Each rule card is individually editable via its `hrNt` (title) and `hrNs`
  * (subtitle) field keys, matching the source placeholders exactly.
  */
-export function HouseRules({ brand }: ScreenProps): JSX.Element {
+export function HouseRules({ brand }: ScreenProps): React.JSX.Element {
   return (
     <div
       className="screen grain vignette"

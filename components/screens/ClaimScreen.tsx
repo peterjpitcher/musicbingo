@@ -34,7 +34,7 @@ function scrollDurationSeconds(count: number): number {
   return Math.max(42, count * 4);
 }
 
-export function ClaimScreen({ brand, runtime }: ScreenProps): JSX.Element {
+export function ClaimScreen({ brand, runtime }: ScreenProps): React.JSX.Element {
   const played: PlayedTrack[] = runtime?.playedTracks ?? [];
   const count = played.length;
   const shouldScroll = count >= SCROLL_START_COUNT;

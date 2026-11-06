@@ -19,7 +19,7 @@ import { Editable } from "@/components/motifs/Editable";
  * fallback is rendered instead.
  */
 /** Hero image or wordmark fallback — shared across all three Title variants. */
-function TitleHero({ brand, max }: { brand: BrandConfig; max: number }): JSX.Element {
+function TitleHero({ brand, max }: { brand: BrandConfig; max: number }): React.JSX.Element {
   if (brand.event_logo_url) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
@@ -49,7 +49,7 @@ function TitleHero({ brand, max }: { brand: BrandConfig; max: number }): JSX.Ele
   );
 }
 
-export function Title({ brand, variant = "A" }: ScreenProps): JSX.Element {
+export function Title({ brand, variant = "A" }: ScreenProps): React.JSX.Element {
   /* ── Variant B: marquee-framed card ─────────────────────── */
   if (variant === "B") {
     return (

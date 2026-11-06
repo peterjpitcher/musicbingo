@@ -9,7 +9,7 @@ export type EditableProps = {
   /** Shown via CSS ::before when the element is empty. */
   placeholder?: string;
   /** HTML element to render; defaults to "span". */
-  as?: keyof JSX.IntrinsicElements;
+  as?: keyof React.JSX.IntrinsicElements;
   className?: string;
   style?: React.CSSProperties;
 };
@@ -29,7 +29,7 @@ export function Editable({
   as = "span",
   className = "",
   style,
-}: EditableProps): JSX.Element {
+}: EditableProps): React.JSX.Element {
   const { editing, get, set } = useEdit();
   const ref = useRef<HTMLElement>(null);
   const value = get(field, placeholder);

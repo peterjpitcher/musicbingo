@@ -15,7 +15,7 @@ import { NowPlaying } from "@/components/screens/NowPlaying";
  * Variant B: split-panel — text left, spinning vinyl right.
  * Variant C: marquee-framed card centred on a sunburst.
  */
-export function Welcome({ brand, runtime, variant = "A" }: ScreenProps): JSX.Element {
+export function Welcome({ brand, runtime, variant = "A" }: ScreenProps): React.JSX.Element {
   // The "Now Playing" pill only appears once the host has actually played the
   // welcome song — i.e. it is the live, currently-playing track. In design /
   // preview contexts (no runtime) we keep showing it so the layout stays
