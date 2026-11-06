@@ -21,7 +21,7 @@ export function StepIndicator({
         const canNavigate = Boolean(onStepClick) && (canNavigateToStep?.(i) ?? true);
         const circleClass = [
           "w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold border-2 transition-colors",
-          canNavigate ? "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold focus-visible:ring-offset-2 focus-visible:ring-offset-ink" : "",
+          canNavigate ? "cursor-pointer focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-gold focus-visible:ring-offset-2 focus-visible:ring-offset-ink" : "",
           done || active
             ? "bg-brand-gold border-brand-gold-light text-ink"
             : "bg-black/25 border-white/20 text-cream/50",
