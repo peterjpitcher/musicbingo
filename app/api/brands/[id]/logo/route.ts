@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getBrand, updateBrand } from "@/lib/brands/brandRepo";
 import { uploadBrandLogo, type LogoSlot } from "@/lib/brands/brandStorage";
-import { hasAdminAccess } from "@/lib/live/access";
+import { requireStaff } from "@/lib/auth/routeGuard";
 import { reportError } from "@/lib/reportError";
 
 type RouteParams = { params: Promise<{ id: string }> };
@@ -18,11 +18,10 @@ function isLogoSlot(value: string | null): value is LogoSlot {
   return value === "logo-dark" || value === "logo-light" || value === "event-logo";
 }
 
-export async function POST(request: NextRequest, { params }: RouteParams): Promise<NextResponse> {
+export async function POST(request: NextRequest, { params }: RouteParams): Promise<Response> {
   try {
-    if (!hasAdminAccess(request)) {
-      return NextResponse.json({ error: "Admin access required." }, { status: 401 });
-    }
+    const gate = await requireStaff(request);
+    if (!gate.ok) return gate.response;
     const { id } = await params;
     const brand = await getBrand(id);
     if (!brand) return NextResponse.json({ error: "Brand not found" }, { status: 404 });

@@ -20,7 +20,7 @@ import {
 } from "@/lib/brands/fonts";
 import { refreshBrandList, type BrandWithUrls } from "@/lib/brands/brandList";
 import type { BrandConfig, BrandInput } from "@/lib/brands/types";
-import { assertAdminUnlocked } from "@/lib/live/adminGuard";
+import { assertSignedIn } from "@/lib/live/signInGuard";
 import { buttonClass } from "@anchor-nights/kit/ui";
 
 /**
@@ -94,8 +94,8 @@ function BrandsEditor(): React.ReactElement {
   // Always goes back to the server: this is the editor, so it must not serve a
   // list another page cached. The result refreshes the shared cache too, so any
   // selector mounted elsewhere picks up an edit without its own request.
-  // refreshBrandList calls assertAdminUnlocked and rethrows, so a lapsed cookie
-  // still bounces to the unlock page.
+  // refreshBrandList calls assertSignedIn and rethrows, so an ended sign-in
+  // still bounces to the sign-in page.
   const refreshBrands = useCallback(async (): Promise<BrandWithUrls[]> => {
     const data = await refreshBrandList();
     setBrands(data);
@@ -177,7 +177,7 @@ function BrandsEditor(): React.ReactElement {
         method: "POST",
         body: formData,
       });
-      assertAdminUnlocked(res);
+      assertSignedIn(res);
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error((data as { error?: string }).error || `Failed to upload ${slot}.`);

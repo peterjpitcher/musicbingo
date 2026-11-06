@@ -1,4 +1,4 @@
-import { getSupabaseClient } from "@/lib/supabase";
+import { getSupabaseClient } from "@/lib/supabase/service";
 import { validateLiveSession } from "@/lib/live/validate";
 import { validateRuntimeState } from "@/lib/live/storage";
 import type { LiveRuntimeState, LiveSessionV1 } from "@/lib/live/types";

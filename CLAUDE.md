@@ -8,11 +8,11 @@ A single-operator internal tool for running Music Bingo nights at The Anchor (th
 
 ## Stack, where it differs from the workspace default
 
-- **Next.js 16.4.1** (not 15), React 19.2, TypeScript 5.5, no middleware. Node 24 (`.nvmrc`, matching the Vercel project's Node.js 24.x).
+- **Next.js 16.4.1** (not 15), React 19.2, TypeScript 5.5. `proxy.ts` (Next 16's middleware) is the kit's sign-in adapter. Node 24 (`.nvmrc`, matching the Vercel project's Node.js 24.x).
 - Tailwind 4 with the shared kit `@anchor-nights/kit` (git tag in `package.json`, TypeScript source, so `transpilePackages`). `app/globals.css` imports the kit's `tokens.css`: The Anchor's look (DM Serif Display, Outfit, Clicker Script; deep green, cream, gold). The TV and the host console use the night register; prep, the games list, venue and admin pages add `theme-desk`. No `tailwind.config.ts`.
-- Kit pieces in use: `ui` (Button, `buttonClass`, Card, Banner, `fieldClass`, AnchorLogo), `tv` (Stage, `useWakeLock`, `useFitStep`), `qr` (the QR guard), `errors` (`reportError`) and `env` (build checks). Prefer them to local copies.
-- TV screens sit on the kit Stage (a 1920 by 1080 canvas scaled to the TV), so their text sizes are canvas pixels from `lib/tvType.ts` (the kit's TV sizes at 1080p), never below 32px. The kit's vh-based TV tokens would scale twice there. Fit text with `useFitStep` and `fitsInCanvas` (`lib/tvFit.ts`), not the kit's `measureLayout`, which misjudges a scaled Stage.
-- **No user auth, no Supabase Auth, no server actions.** Every route uses the service-role client (`lib/supabase.ts`); mutations are API route handlers; RLS is on with `anon` and `authenticated` revoked. The workspace auth, RLS-policy and audit-log rules do not apply; the admin secret gates access (below).
+- Kit pieces in use: `ui` (Button, `buttonClass`, Card, Banner, `fieldClass`, AnchorLogo), `tv` (Stage, `useWakeLock`, `useFitStep`, `measureLayout`, `layoutFits`), `qr` (the QR guard), `errors` (`reportError`), `env` (build checks) and `auth` (staff sign-in: server actions, screens, proxy, security headers and SQL templates). Prefer them to local copies.
+- TV screens sit on the kit Stage (a 1920 by 1080 canvas scaled to the TV), so their text sizes are canvas pixels from `lib/tvType.ts` (the kit's TV sizes at 1080p), never below 32px. The kit's vh-based TV tokens would scale twice there. Fit text with `useFitStep` and `(el) => layoutFits(measureLayout(el))` from the kit (since v2.0.1 it reads layout pixels, so it is right at any Stage scale). Any vh or vw of the app's own inside the Stage is `calc(n * var(--anchor-vh, 1vh))`; never read `var(--text-tv-*)` in app CSS.
+- **Staff sign-in is Supabase Auth through `@anchor-nights/kit/auth`** (the workspace auth standard, spec M-8): invite-only accounts, roles `admin`, `host` and `pending`. Game data is still read and written only by API route handlers with the service-role client (`lib/supabase/service.ts`); RLS is on, `anon` reaches nothing, and `authenticated` reaches only `profiles` and `auth_audit` (read only, behind the restrictive `active_staff_gate` policy, which also sits on every game table, where `authenticated` has no grant at all). Server actions exist only for the kit's sign-in and staff screens (`app/auth/actions.ts`, `app/admin/actions.ts`). See Access model.
 - Tests: **Vitest**, **Playwright** flows (`scripts/e2e-flows.mjs`) and **pytest** for the legacy Python module; not Jest. ESLint 9 flat config, `no-explicit-any` off.
 
 ## Commands
@@ -25,24 +25,33 @@ npm test                      # vitest run with TZ=Europe/London (the business z
 npm run test:utc              # the same suite with TZ=UTC (the serverless runtime); keep both green
 npm run test:unit             # vitest run in the machine's own zone
 npm run test:py               # python3 -m pytest -q (Python 3.11+)
-npm run test:e2e              # Playwright; boots its own server on 127.0.0.1:3100
+npm run test:e2e              # Playwright; boots its own server on 127.0.0.1:3100 and a stand-in Supabase Auth on :54399
+npm run check:anon-access     # what the public key can reach; needs SUPABASE_DB_URL, skips without it
 npm run verify                # lint, typecheck, test, test:utc, test:py, test:e2e, build
 ```
 
 - The wrapper passes `--localstorage-file=.next/node-localstorage.json` via `NODE_OPTIONS` so Node's Web Storage API works server-side. Use the npm scripts, not `npx next`.
-- E2E mocks Spotify and the app's own APIs, so it needs no credentials, only Chromium (`npx playwright install chromium`).
+- E2E mocks Spotify and the app's own APIs, and signs in through the real `/login`, server action and proxy against a stand-in for Supabase Auth inside `scripts/e2e-flows.mjs` (Turnstile is stubbed; the keys are Cloudflare's test pair). It needs no credentials, only Chromium (`npx playwright install chromium`).
+- `supabase/tests/replay.sh` (CI's database job) replays every migration on Postgres 17, runs `auth-checks.sh` as each role, and proves those checks fail on a database without the sign-in migrations. CI then runs the anon guard against the replayed database.
 - `music_bingo/` and `tests/*.py` are the original offline Python generator (5x5 cards), unused by the web app but still run by `verify`.
 
 ## Architecture
 
 ```
+proxy.ts                 Kit sign-in adapter: session refresh and the staff page gate
 app/prep                 Prep wizard
 app/host, app/host/[id]  Dashboard and live controller
-app/display/[id]         Private TV display
-app/brands, app/admin    Brand management, admin unlock
+app/display/[id]         Private TV display (never signed in; TV link token)
+app/brands               Venue management
+app/admin                Staff: invites, roles, deactivation (admins only)
+app/account              Own account and change password
+app/login, pending, forgot-password, invite, auth/*   Kit sign-in screens
 app/guest/[id]           Retired stub
-app/api/*                sessions, display, spotify, brands, generate, admin/unlock
-lib/live/                Runtime types, reveal, run of show, repo, sync, access
+app/api/*                sessions, display, spotify, brands, generate, errors, cron/auth-maintenance
+lib/auth/                Kit wiring (server.ts), route gate, route registry, cron check
+lib/supabase/            service.ts (service role), admin.ts, server.ts (sign-in client)
+lib/live/                Runtime types, reveal, run of show, repo, sync, link tokens, sign-in guard
+scripts/bootstrap-first-admin.mjs   Prints the first admin's invite link
 supabase/migrations/     Nothing runs them at deploy; production applies them only through the prod-migrate skill (Supabase connector) in an approved change, never db push
 ```
 
@@ -54,8 +63,15 @@ supabase/migrations/     Nothing runs them at deploy; production applies them on
 
 ### Access model
 
-- `APP_ADMIN_SECRET` turns protection on; in production it is always on and a deploy without it fails closed. Unlocking at `/admin` sets the `music_bingo_admin` cookie (400 days). Host and display links carry signed tokens that set a per-session role cookie for 14 days.
-- An empty games list in production almost always means the admin cookie lapsed or the secret changed, not lost data: probe `GET /api/sessions` for a 401 before touching Supabase. `lib/live/adminGuard.ts` redirects to `/admin` on 401; let that error propagate rather than falling back to cached data.
+- **Staff sign in** at `/login` (email and password, Turnstile, invite-only). Roles live in `public.profiles.role` and are read through `current_staff_role()`, which also applies the active-identity gate: a deactivated, banned or deleted account has no role at once, even with a valid token. Admins manage staff at `/admin` (copied invite links, 7 days, one use); everyone can change their password at `/account`. Supabase JWTs last 15 minutes.
+- **Pages:** `proxy.ts` sends a signed-out visitor on `/host`, `/prep`, `/brands`, `/account` or `/admin` to `/login?next=...` and an account with no role to `/pending`; `/admin` is admins only. Pages also call `requireRole`. If Supabase is down the answer is 503, never "signed out".
+- **API routes** each gate themselves through `lib/auth/routeGuard.ts`: a signed-in host or admin, and same-origin for any state change; JSON 401, 403 or 503. The TV's snapshot route also accepts its TV link token. `lib/auth/routeRegistry.ts` lists every route with its protection and side effects, and `routeRegistry.test.ts` fails on an unlisted route or one that lets anonymous callers through. Add every new route there.
+- **Host and TV links** (`lib/live/access.ts`) are HMAC tokens signed with `LIVE_LINK_SECRET` that set a per-session cookie for 14 days. There is no fallback secret: without it no link is made or accepted. The TV link alone opens the display; the host link only opens `/host/[id]`, which still needs sign-in.
+- **The first admin:** `node --env-file=.env.local scripts/bootstrap-first-admin.mjs --email <address>` prints a one-time invite link (service role, never a password) and refuses once an active admin exists.
+- An empty games list now means a sign-in or role problem before lost data: `lib/live/signInGuard.ts` sends a 401 to `/login` and a 403 to `/pending`; let that error propagate rather than falling back to cached data.
+- Daily at 04:17 UTC Vercel Cron calls `/api/cron/auth-maintenance` (`CRON_SECRET`) to prune old audit rows, grants and invites and fail stuck invites.
+- **Deviations and accepted risks** (owner: Peter): the CSP is Report-Only and allows `'unsafe-inline'` scripts and styles (Next's bootstrap has no nonce yet) with no report endpoint, until it can be enforced; high sign-in alerts reach only `app_errors`, not a person; every API call reads the user and role twice (proxy and route), which costs a few milliseconds; hosts can edit venues as well as admins.
+- The Supabase dashboard settings the kit needs (sign-ups off, CAPTCHA Turnstile, JWT 900 seconds, the `public.kit_before_user_created` hook, `/auth/confirm` redirect, SMTP and templates) are in the kit README, section 7.
 
 ## Game and show rules
 
@@ -77,19 +93,28 @@ supabase/migrations/     Nothing runs them at deploy; production applies them on
 
 ## Environment variables
 
-All server-side; none are `NEXT_PUBLIC_`. Next reads `.env.local` only at startup, so restart `npm run dev` after changing them. `lib/buildEnv.mjs` checks them when `next.config.mjs` loads: a production build (`VERCEL_ENV=production`) fails naming every missing or malformed one; local, preview and CI builds need none.
+Next reads `.env.local` only at startup, so restart `npm run dev` after changing them. `lib/buildEnv.mjs` checks them when `next.config.mjs` loads and fails the build naming every missing or malformed one. The sign-in variables are needed on **every** build, local, preview and CI included (CI and E2E use placeholders); the rest only on production builds (`VERCEL_ENV=production`).
 
-| Variable | Purpose |
-|---|---|
-| `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SPOTIFY_WEB_REDIRECT_URI` | Playlists and live control; the redirect URI is an optional override |
-| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Required; routes throw `Missing env var` without them. Project ref `ihyazjaklyhacxixhwww` |
-| `APP_ADMIN_SECRET` | Required in production |
-| `ERROR_SINK_URL`, `ERROR_SINK_TOKEN` | Optional. Set both to store reports in `app_errors`: the URL is this app's `/api/errors` (https), the token a random value of at least 32 characters |
-| `MANAGEMENT_API_BASE_URL`, `MANAGEMENT_API_TOKEN`, `MANAGEMENT_PUBLIC_EVENTS_BASE_URL` | Optional Anchor feed fallback; events site defaults to `https://www.the-anchor.pub` |
+| Variable | Needed | Purpose |
+|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Every build | Staff sign-in. Same project as `SUPABASE_URL` (the build checks) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Every build | Game data and the kit's invites, audit and throttle |
+| `NEXT_PUBLIC_APP_URL` | Every build | This app's origin, for reset and invite links: `https://musicbingo.orangejelly.co.uk` |
+| `NEXT_PUBLIC_TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | Every build | Turnstile; Supabase verifies the token. Locally, Cloudflare's test pair |
+| `AUDIT_HMAC_KEY` | Every build | `v1:` then at least 32 random characters; pseudonymises emails in `auth_audit` |
+| `SUPABASE_URL` | Production | Service-role client. Project ref `ihyazjaklyhacxixhwww` |
+| `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` | Production | Playlists and live control; `SPOTIFY_WEB_REDIRECT_URI` is an optional override |
+| `LIVE_LINK_SECRET` | Production | Signs host and TV links, at least 16 characters. Set it to the old `APP_ADMIN_SECRET` value and links already handed out keep working |
+| `CRON_SECRET` | Production | Vercel Cron's bearer for `/api/cron/auth-maintenance`, at least 32 characters |
+| `ERROR_SINK_URL`, `ERROR_SINK_TOKEN` | Optional | Set both to store reports in `app_errors`: the URL is this app's `/api/errors` (https), the token at least 32 characters |
+| `MANAGEMENT_API_BASE_URL`, `MANAGEMENT_API_TOKEN`, `MANAGEMENT_PUBLIC_EVENTS_BASE_URL` | Optional | Anchor feed fallback; events site defaults to `https://www.the-anchor.pub` |
+
+`APP_ADMIN_SECRET` is retired (M-8): nothing reads it. Remove it from Vercel once `LIVE_LINK_SECRET` is set.
 
 ## Known gotchas
 
-- `.claude/worktrees/<name>` does not inherit the gitignored `.env.local`. Symlink it in and restart dev, or `/host` shows "Failed to load sessions" and `/api/generate` returns 500 even though the build passes.
+- `.claude/worktrees/<name>` does not inherit the gitignored `.env.local`. Symlink it in and restart dev, or the build stops on the sign-in variables and `/host` cannot load sessions.
+- `next.config.mjs` sets `agentRules: false` so `next dev` stops writing its agent block into this file; keep it.
 - Diagnose live-show bugs by replaying the session's `session_events` rows before theorising from code; a sudden stop in rows means the host tab lost the lock or was suspended.
 - Host and display each compute reveal phases locally from `progressMs` and `revealConfig` via `lib/live/reveal.ts`. Keep it deterministic; change ratios only in `lib/live/types.ts`.
 - Prep wizard drafts persist in localStorage so work is never lost; do not clear them on navigation. Drafts also keep the playlists already made, with a signature of the songs, themes, date and intro songs they were built from (`playlistInputSignature` in `lib/prepDraft.ts`); editing a saved game reattaches its playlists the same way. Changing any of those inputs discards the playlists, so sign only after anything that fills inputs in (the Create button's intro lookup discarded fresh playlists on 16 October 2026).

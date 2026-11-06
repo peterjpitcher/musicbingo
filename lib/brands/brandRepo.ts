@@ -1,5 +1,5 @@
 // lib/brands/brandRepo.ts
-import { getSupabaseClient } from "@/lib/supabase";
+import { getSupabaseClient } from "@/lib/supabase/service";
 import type { Brand, BrandConfig, BrandFeedConfig } from "@/lib/brands/types";
 
 type BrandRow = {

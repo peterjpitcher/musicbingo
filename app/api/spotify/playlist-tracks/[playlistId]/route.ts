@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { requireStaff } from "@/lib/auth/routeGuard";
+
 import {
   getOrRefreshAccessToken,
   spotifyApiRequest,
@@ -28,7 +30,10 @@ type SpotifyPlaylistTracksResponse = {
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ playlistId: string }> }
-): Promise<NextResponse> {
+): Promise<Response> {
+  // Signed-in host or admin only (M-8); the Spotify logic below is unchanged.
+  const gate = await requireStaff(request);
+  if (!gate.ok) return gate.response;
   const { playlistId } = await params;
   const origin = new URL(request.url).origin;
   const secure = process.env.NODE_ENV === "production";

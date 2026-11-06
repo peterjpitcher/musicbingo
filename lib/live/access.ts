@@ -1,36 +1,40 @@
 import crypto from "node:crypto";
 import type { NextRequest, NextResponse } from "next/server";
 
+/**
+ * The private host and TV links (signed tokens). Staff access is no longer
+ * here: every game route now asks for a signed-in host or admin through
+ * lib/auth/routeGuard.ts, and only the TV's own routes still accept a TV
+ * token on its own. Expiry and revocation for these links are spec M-9.
+ *
+ * The signing key is LIVE_LINK_SECRET and nothing else: there is no fallback
+ * to the service-role key or to a fixed string. Without it no link can be
+ * made (an error the caller reports) and no token verifies (fails closed).
+ * Setting LIVE_LINK_SECRET to the value APP_ADMIN_SECRET had keeps every link
+ * already handed out working, because those were signed with that value.
+ */
+
 export type SessionAccessRole = "host" | "display";
 
 const TOKEN_VERSION = "v1";
-const ADMIN_COOKIE = "music_bingo_admin";
 const ACCESS_COOKIE_PREFIX = "music_bingo_access";
 
-function configuredSecret(): string | null {
-  return process.env.APP_ADMIN_SECRET?.trim() || null;
+/** The shortest LIVE_LINK_SECRET accepted, here and in lib/buildEnv.mjs. */
+export const LIVE_LINK_SECRET_MIN_LENGTH = 16;
+
+export class LiveLinkSecretMissingError extends Error {
+  constructor() {
+    super(
+      `LIVE_LINK_SECRET is not set (or is shorter than ${LIVE_LINK_SECRET_MIN_LENGTH} characters), so private host and TV links cannot be made or checked.`
+    );
+    this.name = "LiveLinkSecretMissingError";
+  }
 }
 
-function tokenSecret(): string {
-  return (
-    configuredSecret()
-    || process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()
-    || "music-bingo-local-dev-secret"
-  );
-}
-
-function isProduction(): boolean {
-  return process.env.NODE_ENV === "production";
-}
-
-/**
- * Protection is on whenever a secret is configured, and ALWAYS in production:
- * a production deploy without APP_ADMIN_SECRET fails closed (admin access is
- * denied until the variable is set) instead of leaving every session open to
- * anyone with the URL. Local dev without a secret stays open for convenience.
- */
-export function isAdminProtectionEnabled(): boolean {
-  return Boolean(configuredSecret()) || isProduction();
+function linkSecret(): string {
+  const value = process.env.LIVE_LINK_SECRET?.trim() ?? "";
+  if (value.length < LIVE_LINK_SECRET_MIN_LENGTH) throw new LiveLinkSecretMissingError();
+  return value;
 }
 
 function digest(input: string): string {
@@ -38,10 +42,7 @@ function digest(input: string): string {
 }
 
 function sign(input: string): string {
-  return crypto
-    .createHmac("sha256", tokenSecret())
-    .update(input, "utf8")
-    .digest("base64url");
+  return crypto.createHmac("sha256", linkSecret()).update(input, "utf8").digest("base64url");
 }
 
 function safeEqual(a: string, b: string): boolean {
@@ -55,15 +56,14 @@ function roleCookieName(sessionId: string, role: SessionAccessRole): string {
   return `${ACCESS_COOKIE_PREFIX}_${role}_${digest(sessionId).slice(0, 24)}`;
 }
 
-export function createSessionAccessToken(
-  sessionId: string,
-  role: SessionAccessRole
-): string {
+/** Throws LiveLinkSecretMissingError when LIVE_LINK_SECRET is not set. */
+export function createSessionAccessToken(sessionId: string, role: SessionAccessRole): string {
   const nonce = crypto.randomBytes(18).toString("base64url");
   const payload = `${TOKEN_VERSION}.${role}.${sessionId}.${nonce}`;
   return `${payload}.${sign(payload)}`;
 }
 
+/** False for anything that is not a valid token for this session and role, including when LIVE_LINK_SECRET is not set. */
 export function verifySessionAccessToken(params: {
   sessionId: string;
   role: SessionAccessRole;
@@ -79,7 +79,13 @@ export function verifySessionAccessToken(params: {
     return false;
   }
 
-  return safeEqual(signature, sign(`${version}.${role}.${sessionId}.${nonce}`));
+  let expected: string;
+  try {
+    expected = sign(`${version}.${role}.${sessionId}.${nonce}`);
+  } catch {
+    return false;
+  }
+  return safeEqual(signature, expected);
 }
 
 export function setSessionAccessCookie(
@@ -97,73 +103,23 @@ export function setSessionAccessCookie(
   });
 }
 
-export function hasSessionAccess(
+/**
+ * True when the request carries a valid link token for this session and role,
+ * from the role cookie the link set or from `tokenOverride`. Only the TV's own
+ * routes accept this on its own (a display token); everything else needs a
+ * signed-in host or admin.
+ */
+export function hasSessionTokenAccess(
   request: NextRequest,
   sessionId: string,
   role: SessionAccessRole,
   tokenOverride?: string | null
 ): boolean {
-  if (!isAdminProtectionEnabled()) return true;
-  if (hasAdminAccess(request)) return true;
   const token = tokenOverride ?? request.cookies.get(roleCookieName(sessionId, role))?.value;
   return verifySessionAccessToken({ sessionId, role, token });
 }
 
-export function hasAnySessionAccess(
-  request: NextRequest,
-  sessionId: string,
-  roles: SessionAccessRole[],
-  tokenOverride?: string | null
-): boolean {
-  return roles.some((role) => hasSessionAccess(request, sessionId, role, tokenOverride));
-}
-
-export function createAdminCookieValue(): string {
-  return sign("admin");
-}
-
-export function hasAdminAccess(request: NextRequest): boolean {
-  if (!isAdminProtectionEnabled()) return true;
-  if (!configuredSecret() && isProduction()) {
-    // Fail closed: nobody can unlock admin until the secret is configured.
-    console.error(
-      "[music-bingo] APP_ADMIN_SECRET is not set in production; admin access is locked until it is configured."
-    );
-    return false;
-  }
-  const value = request.cookies.get(ADMIN_COOKIE)?.value;
-  return Boolean(value && safeEqual(value, createAdminCookieValue()));
-}
-
-/**
- * 400 days is the ceiling browsers allow (Chrome and Firefox clamp anything
- * longer, per RFC 6265bis), so this is as close to "never expires" as a cookie
- * can get. A shorter window bought no real security here, since this is a
- * single-operator internal tool, but it did silently lock the host out of the
- * games list mid-event whenever it lapsed.
- */
-const ADMIN_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 400;
-
-export function setAdminCookie(response: NextResponse): void {
-  response.cookies.set(ADMIN_COOKIE, createAdminCookieValue(), {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: ADMIN_COOKIE_MAX_AGE_SECONDS,
-  });
-}
-
-export function clearAdminCookie(response: NextResponse): void {
-  response.cookies.set(ADMIN_COOKIE, "", {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: 0,
-  });
-}
-
+/** Throws LiveLinkSecretMissingError when LIVE_LINK_SECRET is not set. */
 export function buildSessionAccessLinks(origin: string, sessionId: string): {
   hostUrl: string;
   displayUrl: string;
