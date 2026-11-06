@@ -9,7 +9,7 @@ A single-operator internal tool for running Music Bingo nights at The Anchor and
 ## Stack, where it differs from the workspace default
 
 - **Next.js 16.4.1** (not 15), React 19.2, TypeScript 5.5, no middleware. Node 24 (`.nvmrc`, matching the Vercel project's Node.js 24.x).
-- **Tailwind 3.4** with `tailwind.config.ts`; brand colours are runtime CSS variables exposed as `brand-primary`, `brand-accent`, `ink`, `cream`.
+- Tailwind 4: tokens live in `@theme inline` in `app/globals.css` (no `tailwind.config.ts`); brand colours are runtime CSS variables exposed as `brand-primary`, `brand-accent`, `ink`, `cream`. A small `@layer base` block keeps Tailwind 3's form and border defaults until the Anchor look (M-6).
 - **No user auth, no Supabase Auth, no server actions.** Every route uses the service-role client (`lib/supabase.ts`); mutations are API route handlers; RLS is on with `anon` and `authenticated` revoked. The workspace auth, RLS-policy and audit-log rules do not apply; the admin secret gates access (below).
 - Tests: **Vitest**, **Playwright** flows (`scripts/e2e-flows.mjs`) and **pytest** for the legacy Python module; not Jest. ESLint 9 flat config, `no-explicit-any` off.
 

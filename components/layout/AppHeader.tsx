@@ -27,10 +27,10 @@ export function AppHeader({
   return (
     <header
       className={[
-        "sticky top-0 z-20 flex items-center justify-between gap-5 px-6 py-4 backdrop-blur",
+        "sticky top-0 z-20 flex items-center justify-between gap-5 px-6 py-4 backdrop-blur-sm",
         isDark
           ? "bg-ink/85 border-b border-brand-gold/35"
-          : "bg-white/95 border-b border-slate-200 shadow-sm",
+          : "bg-white/95 border-b border-slate-200 shadow-xs",
       ].join(" ")}
     >
       <div className="flex items-center gap-3.5">

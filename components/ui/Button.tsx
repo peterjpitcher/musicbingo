@@ -6,13 +6,13 @@ type Size = "sm" | "md";
 
 const variantClasses: Record<Variant, string> = {
   primary:
-    "bg-brand-gold hover:bg-brand-gold-light text-ink border-brand-gold-light shadow-sm",
+    "bg-brand-gold hover:bg-brand-gold-light text-ink border-brand-gold-light shadow-xs",
   secondary:
-    "bg-white/[0.06] hover:bg-white/[0.12] text-cream border-white/[0.16]",
+    "bg-white/6 hover:bg-white/12 text-cream border-white/16",
   danger:
     "bg-red-500/20 hover:bg-red-500/30 text-red-200 border-red-400/60",
   success:
-    "bg-emerald-600 hover:bg-emerald-500 text-emerald-50 border-emerald-400/70 shadow-sm",
+    "bg-emerald-600 hover:bg-emerald-500 text-emerald-50 border-emerald-400/70 shadow-xs",
 };
 
 const sizeClasses: Record<Size, string> = {
@@ -29,7 +29,7 @@ function buildClassName(
   return [
     "inline-flex items-center justify-center rounded-xl border",
     "font-semibold tracking-wide transition-colors cursor-pointer",
-    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold focus-visible:ring-offset-2",
+    "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-gold focus-visible:ring-offset-2",
     "disabled:opacity-50 disabled:cursor-not-allowed",
     variantClasses[variant],
     sizeClasses[size],
