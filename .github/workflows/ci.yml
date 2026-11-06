@@ -1,0 +1,89 @@
+name: CI
+
+# Lint, types, unit tests, build and a full migration replay on every pull
+# request and every push to main. Modelled on OJ-CashBingo's workflow.
+#
+# Not run here, to keep the Actions minutes down: the Playwright flows
+# (npm run test:e2e) and the legacy Python generator tests (npm run test:py).
+# Both still run locally through npm run verify.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  app:
+    name: Lint, types, tests, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # Run twice: Europe/London is the business zone, UTC is what Vercel's
+      # serverless runtime uses. Dates are this workspace's most repeated bug.
+      - name: Unit tests (Europe/London)
+        run: npm run test:unit
+        env:
+          TZ: Europe/London
+
+      - name: Unit tests (UTC)
+        run: npm run test:unit
+        env:
+          TZ: UTC
+
+      # Every variable is server-side and read at request time, so the build
+      # needs none of them. No secrets are given to CI.
+      - name: Build
+        run: npm run build
+
+  database:
+    name: Migration replay
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # A throwaway database in the service container; nothing here can reach
+      # the production Supabase project.
+      - name: Replay every migration
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: "5432"
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: bash supabase/tests/replay.sh
