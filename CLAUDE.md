@@ -39,7 +39,7 @@ app/brands, app/admin    Brand management, admin unlock
 app/guest/[id]           Retired stub
 app/api/*                sessions, display, spotify, brands, generate, admin/unlock
 lib/live/                Runtime types, reveal, run of show, repo, sync, access
-supabase/migrations/     Applied with npx supabase db push; nothing runs them at deploy
+supabase/migrations/     Nothing runs them at deploy; production applies them only through the prod-migrate skill (Supabase connector) in an approved change, never db push
 ```
 
 ### Data and sync model
@@ -60,7 +60,7 @@ supabase/migrations/     Applied with npx supabase db push; nothing runs them at
 - Show order is fixed in `lib/live/runOfShow.ts`. One intro song per game: dance-along for game 1, sing-along for game 2. Half-time standings show positions only.
 - Timing (`lib/live/types.ts`): 45 seconds per song by default (15 to 300); album art at 10s, title 15s, artist 20s, scaled to song length; challenge songs run 90 seconds with reveals at 10/20/25s and a default 10-point bonus; hosts extend in 30-second steps.
 - **Wooden spoon:** with three or more teams it goes to the second-lowest team, and to the lowest only with two. Deliberate anti-sandbagging rule, owner-confirmed 18 July 2026; never "fix" it.
-- Live Spotify control needs a Premium account and a Spotify app that is open. With no active device, play commands go to the only open app (`pickFallbackDevice`); with several open, the host is told to press play on one; with none, the show runs in manual host control mode. Auto-advance only runs while `mode === "running"`: a runtime left on `paused` while Spotify kept playing silently stalled auto-skip on 14 August 2026 (fixed in `4278518`).
+- Live Spotify control needs a Premium account and a Spotify app that is open. With no active device, play commands go to the only open app (`pickFallbackDevice`); with several open, the host is told to press play on one; with none, the show runs in manual host control mode. Auto-advance only runs while `mode === "running"`: a runtime left on `paused` while Spotify keeps playing stalls auto-skip without any error.
 
 ## Integrations
 
