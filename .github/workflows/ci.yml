@@ -45,15 +45,12 @@ jobs:
 
       # Run twice: Europe/London is the business zone, UTC is what Vercel's
       # serverless runtime uses. Dates are this workspace's most repeated bug.
+      # Each script pins its own zone, so CI and a laptop run the same pair.
       - name: Unit tests (Europe/London)
-        run: npm run test:unit
-        env:
-          TZ: Europe/London
+        run: npm test
 
       - name: Unit tests (UTC)
-        run: npm run test:unit
-        env:
-          TZ: UTC
+        run: npm run test:utc
 
       # Every variable is server-side and read at request time, so the build
       # needs none of them. No secrets are given to CI.

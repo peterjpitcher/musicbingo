@@ -4,7 +4,7 @@ Workspace standards live in `/Users/peterpitcher/Cursor/CLAUDE.md`. Read that fi
 
 ## What this is
 
-A single-operator internal tool for running Music Bingo nights at The Anchor and other brands. The prep wizard turns two song lists into an event pack (card PDFs, run sheet, DOCX host clipboard) and two private Spotify playlists; the host controller at `/host/[sessionId]` then drives a private TV display at `/display/[sessionId]` through a fixed run of show. Players use printed cards; there is no per-player screen. Production: `https://music-bingo.vercel.app`.
+A single-operator internal tool for running Music Bingo nights at The Anchor and other brands. The prep wizard turns two song lists into an event pack (card PDFs, run sheet, DOCX host clipboard) and two private Spotify playlists; the host controller at `/host/[sessionId]` then drives a private TV display at `/display/[sessionId]` through a fixed run of show. Players use printed cards; there is no per-player screen. Production: `https://musicbingo.orangejelly.co.uk` and `https://music-bingo.vercel.app` (Vercel project `oj-music-bingo`; both checked live 6 November 2026). `musicbingo-iota.vercel.app` is retired and returns 404.
 
 ## Stack, where it differs from the workspace default
 
@@ -19,10 +19,12 @@ A single-operator internal tool for running Music Bingo nights at The Anchor and
 npm run dev | build | start   # via scripts/next-with-localstorage.mjs
 npm run lint                  # eslint . --max-warnings=0
 npm run typecheck
-npm run test:unit             # vitest run
+npm test                      # vitest run with TZ=Europe/London (the business zone)
+npm run test:utc              # the same suite with TZ=UTC (the serverless runtime); keep both green
+npm run test:unit             # vitest run in the machine's own zone
 npm run test:py               # python3 -m pytest -q (Python 3.11+)
 npm run test:e2e              # Playwright; boots its own server on 127.0.0.1:3100
-npm run verify                # lint, typecheck, test:unit, test:py, test:e2e, build
+npm run verify                # lint, typecheck, test, test:utc, test:py, test:e2e, build
 ```
 
 - The wrapper passes `--localstorage-file=.next/node-localstorage.json` via `NODE_OPTIONS` so Node's Web Storage API works server-side. Use the npm scripts, not `npx next`.

@@ -1,5 +1,6 @@
 import type { LiveRuntimeState, LiveSessionV1 } from "@/lib/live/types";
 import type { BrandConfig } from "@/lib/brands/types";
+import { websiteLabel } from "@/lib/brands/websiteUrl";
 
 /**
  * Allowlisted editable-text keys shown on the TV screens. Bounded on purpose
@@ -36,9 +37,17 @@ export const CONTENT_MAX_LENGTH = 500;
 
 const CONTENT_KEY_SET = new Set<string>(CONTENT_KEYS);
 
-/** Static fallbacks lifted verbatim from the design bundle (screens-a/b.jsx placeholders). */
+/**
+ * Static fallbacks lifted from the design bundle (screens-a/b.jsx placeholders).
+ *
+ * Facts about a real night are never invented: the host name, the next event
+ * date and the prizes are empty unless the host types them, and an empty value
+ * hides that element on the TV. Until 6 November 2026 these held design sample
+ * values ("Fri 27 June · 8PM", a sample host name and sample prizes), which
+ * the TV showed whenever the host left the fields blank.
+ */
 export const CONTENT_PLACEHOLDERS: Record<ContentKey, string> = {
-  venueName: "The Anchor", venuePresents: "The Anchor Presents", venueWeb: "theanchor.pub", hostName: "Nikki Manfadge",
+  venueName: "The Anchor", venuePresents: "The Anchor Presents", venueWeb: "", hostName: "",
   welcomeTitle: "Music", welcomeTitle2: "Bingo", welcomeTitleC: "Welcome To The Show",
   welcomeLede: "Grab a drink, find your table and settle in — your host", welcomeLedeA: "Grab a drink, settle in —",
   welcomeDate: "Friday · 8:00 PM", introTitle: "Yes Sir, I Can Boogie", introArtist: "Baccara",
@@ -62,14 +71,14 @@ export const CONTENT_PLACEHOLDERS: Record<ContentKey, string> = {
   g1theme: "Pop Anthems", g1title: "Mr. Brightside", g1artist: "The Killers",
   g2theme: "Throwback Bangers", g2title: "Take On Me", g2artist: "a-ha",
   breakL1: "We're On", breakL2: "A Break", breakLede: "Grab a refill, stretch your legs and keep your cards safe.", breakMins: "10",
-  winPrize: "£25 bar voucher", spoonPrize: "Bottle of house wine",
-  nextDate: "Fri 27 June · 8PM", tyL1: "Thank You", tyL2: "& Goodnight",
+  winPrize: "", spoonPrize: "",
+  nextDate: "", tyL1: "Thank You", tyL2: "& Goodnight",
   tyLede: "We hope you had a brilliant night. If you did, a Google review means the world to us.",
   // Canonical short link, not the retired vip-club.uk one. Kept as a real default rather
   // than "" because brands.qr_items is currently null for every brand, so falling through
-  // to resolveQrUrl would yield brand.website_url, which is stored without a scheme and
-  // makes an unusable QR code. A host override still wins, and the short link keeps the
-  // scan tracked. Populate brands.qr_items with a "review" entry to retire this default.
+  // to resolveQrUrl would yield brand.website_url (the website, not a review page). A host
+  // override still wins, and the short link keeps the scan tracked. Populate
+  // brands.qr_items with a "review" entry to retire this default.
   reviewQrUrl: "https://l.the-anchor.pub/jls0mu", bookQrUrl: "",
   nfL1: "Nothing", nfL2: "On Yet",
 };
@@ -113,7 +122,7 @@ function derivedDefault(
       : undefined;
     case "venueName": return brand?.name || undefined;
     case "venuePresents": return brand?.name ? `${brand.name} Presents` : undefined;
-    case "venueWeb": return brand?.website_url || undefined;
+    case "venueWeb": return websiteLabel(brand?.website_url) || undefined;
     case "breakLede": return brand?.break_message || undefined;
     case "tyLede": return brand?.end_message || undefined;
     default: return undefined;
