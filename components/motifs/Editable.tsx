@@ -8,6 +8,12 @@ export type EditableProps = {
   field: string;
   /** Shown via CSS ::before when the element is empty. */
   placeholder?: string;
+  /**
+   * When true, an unset field stays empty instead of filling in the
+   * placeholder, and the placeholder is only a faint hint while editing. Use
+   * for facts the TV must never invent (host name, next event date).
+   */
+  optional?: boolean;
   /** HTML element to render; defaults to "span". */
   as?: keyof React.JSX.IntrinsicElements;
   className?: string;
@@ -27,12 +33,13 @@ export function Editable({
   field,
   placeholder,
   as = "span",
+  optional = false,
   className = "",
   style,
 }: EditableProps): React.JSX.Element {
   const { editing, get, set } = useEdit();
   const ref = useRef<HTMLElement>(null);
-  const value = get(field, placeholder);
+  const value = get(field, optional ? "" : placeholder);
 
   /* Sync from store only when the element is not the active (focused) element. */
   useEffect(() => {
@@ -47,7 +54,7 @@ export function Editable({
     <Tag
       ref={ref}
       data-edit
-      data-placeholder={placeholder}
+      data-placeholder={optional && !editing ? undefined : placeholder}
       className={className}
       style={style}
       contentEditable={editing}

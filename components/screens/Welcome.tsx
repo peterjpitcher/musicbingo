@@ -6,6 +6,7 @@ import { Vinyl } from "@/components/motifs/Vinyl";
 import { VenueLogo } from "@/components/motifs/VenueLogo";
 import { Chrome } from "@/components/motifs/Chrome";
 import { Editable } from "@/components/motifs/Editable";
+import { useEdit } from "@/components/motifs/EditContext";
 import { NowPlaying } from "@/components/screens/NowPlaying";
 
 /**
@@ -16,6 +17,16 @@ import { NowPlaying } from "@/components/screens/NowPlaying";
  * Variant C: marquee-framed card centred on a sunburst.
  */
 export function Welcome({ brand, runtime, variant = "A" }: ScreenProps): React.JSX.Element {
+  // The host's name is only shown when the host typed it; the copy reads
+  // naturally without it. While editing, the empty slot stays clickable.
+  const { editing, get } = useEdit();
+  const hostName = get("hostName", "").trim();
+  const showHostName = Boolean(hostName) || editing;
+  const hostNameEl = (
+    <b style={{ color: "var(--anchor-gold-bright)" }}>
+      <Editable optional field="hostName" placeholder="Host name" />
+    </b>
+  );
   // The "Now Playing" pill only appears once the host has actually played the
   // welcome song — i.e. it is the live, currently-playing track. In design /
   // preview contexts (no runtime) we keep showing it so the layout stays
@@ -50,10 +61,8 @@ export function Welcome({ brand, runtime, variant = "A" }: ScreenProps): React.J
             <Editable
               field="welcomeLede"
               placeholder="Grab a drink, find your table and settle in — your host"
-            />{" "}
-            <b style={{ color: "var(--anchor-gold-bright)" }}>
-              <Editable field="hostName" placeholder="Nikki Manfadge" />
-            </b>{" "}
+            />
+            {showHostName && <>{" "}{hostNameEl}</>}{" "}
             is about to take the mic.
           </p>
           {showNowPlaying && (
@@ -180,10 +189,8 @@ export function Welcome({ brand, runtime, variant = "A" }: ScreenProps): React.J
               <Editable field="welcomeTitleC" placeholder="Welcome To The Show" />
             </h1>
             <p className="lede an-rise d4" style={{ maxWidth: 900, margin: "0 auto" }}>
-              The room&apos;s filling up and the records are warming. Your host{" "}
-              <b style={{ color: "var(--anchor-gold-bright)" }}>
-                <Editable field="hostName" placeholder="Nikki Manfadge" />
-              </b>{" "}
+              The room&apos;s filling up and the records are warming. Your host
+              {showHostName && <>{" "}{hostNameEl}</>}{" "}
               is on in a moment.
             </p>
             {showNowPlaying && (
@@ -234,9 +241,7 @@ export function Welcome({ brand, runtime, variant = "A" }: ScreenProps): React.J
         </h1>
         <p className="lede an-rise d3" style={{ maxWidth: 1120 }}>
           <Editable field="welcomeLedeA" placeholder="Grab a drink, settle in —" />{" "}
-          <b style={{ color: "var(--anchor-gold-bright)" }}>
-            <Editable field="hostName" placeholder="Nikki Manfadge" />
-          </b>{" "}
+          {showHostName ? hostNameEl : "your host"}{" "}
           is about to take the mic.
         </p>
         {showNowPlaying && (

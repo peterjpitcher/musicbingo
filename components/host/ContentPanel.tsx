@@ -58,12 +58,12 @@ export function ContentPanel({ get, set, collapsed, onToggle }: ContentPanelProp
           <Row field="spoonPrize" label="Wooden spoon prize" ph="Bottle of house wine" get={get} set={set} />
         </div>
 
-        <Row field="nextDate" label="Next event date" ph="Fri 27 June · 8PM" get={get} set={set} />
-        <Row field="hostName" label="Host name" ph="Nikki Manfadge" get={get} set={set} />
+        <Row field="nextDate" label="Next event date" ph="Day, date and time" get={get} set={set} />
+        <Row field="hostName" label="Host name" ph="Leave blank to say 'your host'" get={get} set={set} />
 
         <div className="ed-two">
           <Row field="reviewQrUrl" label="Review QR URL" ph="https://g.page/r/..." get={get} set={set} />
-          <Row field="bookQrUrl" label="Book again QR URL" ph="https://orangejelly.co.uk/events/..." get={get} set={set} />
+          <Row field="bookQrUrl" label="Book again QR URL" ph="https://www.the-anchor.pub/whats-on" get={get} set={set} />
         </div>
 
         {/* Game themes side-by-side */}

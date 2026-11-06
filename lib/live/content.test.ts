@@ -3,7 +3,7 @@ import { CONTENT_KEYS, sanitizeContent, normalizeVariant, getContent } from "@/l
 import type { LiveSessionV1, LiveRuntimeState } from "@/lib/live/types";
 import type { BrandConfig } from "@/lib/brands/types";
 
-const brand = { name: "The Anchor", website_url: "theanchor.pub", break_message: "Back in 10", end_message: "Night night" } as unknown as BrandConfig;
+const brand = { name: "The Anchor", website_url: "www.the-anchor.pub", break_message: "Back in 10", end_message: "Night night" } as unknown as BrandConfig;
 const session = { eventDateDisplay: "Fri 27 June", games: [{ theme: "Pop Anthems" }, { theme: "Throwbacks" }] } as unknown as LiveSessionV1;
 
 describe("sanitizeContent", () => {
@@ -51,11 +51,21 @@ describe("getContent precedence", () => {
   });
   it("derives venue copy from the brand", () => {
     expect(getContent("venueName", { brand })).toBe("The Anchor");
-    expect(getContent("venueWeb", { brand })).toBe("theanchor.pub");
+    expect(getContent("venueWeb", { brand })).toBe("www.the-anchor.pub");
+    expect(getContent("venueWeb", { brand: { ...brand, website_url: "https://www.the-anchor.pub/" } })).toBe("www.the-anchor.pub");
   });
-  it("keeps winner prize placeholders editable", () => {
-    expect(getContent("winPrize", {})).toBe("£25 bar voucher");
-    expect(getContent("spoonPrize", {})).toBe("Bottle of house wine");
+  it("never invents the host name, next event date or prizes", () => {
+    for (const key of ["hostName", "nextDate", "winPrize", "spoonPrize"] as const) {
+      expect(getContent(key, {})).toBe("");
+      expect(getContent(key, { session, brand })).toBe("");
+    }
+  });
+  it("still shows prizes, date and host name the host typed", () => {
+    const typed = { content: { winPrize: "Bar tab", spoonPrize: "Wooden spoon", nextDate: "Fri 4 Dec", hostName: "Sam" } } as unknown as LiveRuntimeState;
+    expect(getContent("winPrize", { runtime: typed })).toBe("Bar tab");
+    expect(getContent("spoonPrize", { runtime: typed })).toBe("Wooden spoon");
+    expect(getContent("nextDate", { runtime: typed })).toBe("Fri 4 Dec");
+    expect(getContent("hostName", { runtime: typed })).toBe("Sam");
   });
   it("falls back to the design placeholder when nothing else is set", () => {
     expect(getContent("welcomeTitle", {})).toBe("Music");

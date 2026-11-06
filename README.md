@@ -18,7 +18,8 @@ Next.js app to generate a full Music Bingo event pack from two plain-text song l
    - In your Spotify Developer app settings, add Redirect URIs:
      - `http://127.0.0.1:3000/api/spotify/callback`
      - `http://localhost:3000/api/spotify/callback`
-     - `https://musicbingo-iota.vercel.app/api/spotify/callback` (production)
+     - `https://musicbingo.orangejelly.co.uk/api/spotify/callback` (production)
+     - `https://music-bingo.vercel.app/api/spotify/callback` (production alias)
 4) (Optional) Configure upcoming event QR codes (from The Anchor management API):
    - Copy `.env.example` to `.env.local`
    - Set `MANAGEMENT_API_BASE_URL` (e.g. `https://management.orangejelly.co.uk`)
@@ -73,5 +74,5 @@ Next.js app to generate a full Music Bingo event pack from two plain-text song l
 
 ## Notes
 - Supabase stores saved sessions and live runtime state.
-- Vercel project slug: `music-bingo`.
+- Vercel project: `oj-music-bingo`. Production addresses: `https://musicbingo.orangejelly.co.uk` and `https://music-bingo.vercel.app`. `musicbingo-iota.vercel.app` is retired.
 - Git auto-deploy smoke test marker.

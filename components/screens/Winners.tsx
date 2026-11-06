@@ -22,8 +22,9 @@ export function Winners(props: ScreenProps): React.ReactElement {
   const hasScoredTeams = scoredTeams.length > 0;
   const winnerIndex = scoredTeams.length - 1;
   const spoonIndex = scoredTeams.length > 2 ? 1 : scoredTeams.length > 1 ? 0 : -1;
-  const winPrize = get("winPrize", "£25 bar voucher");
-  const spoonPrize = get("spoonPrize", "Bottle of house wine");
+  // Prizes are only shown when the host typed them; never a sample prize.
+  const winPrize = get("winPrize", "").trim();
+  const spoonPrize = get("spoonPrize", "").trim();
   const revealCount = Math.max(0, runtime?.winnersRevealCount ?? 0);
   const visibleScoredTeams = scoredTeams.slice(0, Math.min(revealCount, scoredTeams.length));
   // Eight or nine teams fill the table at full size. Beyond that rows shrink, so
@@ -110,7 +111,11 @@ export function Winners(props: ScreenProps): React.ReactElement {
             const rank = scoredTeams.length - index;
             const isWinner = index === winnerIndex;
             const isSpoon = index === spoonIndex;
-            const prize = isWinner ? winPrize : isSpoon ? spoonPrize : "";
+            const prizeLabel = isWinner
+              ? (winPrize ? `Wins ${winPrize}` : "Winner")
+              : isSpoon
+                ? (spoonPrize ? `Wooden Spoon · ${spoonPrize}` : "Wooden Spoon")
+                : "";
             return (
               <div
                 key={team.id}
@@ -154,7 +159,7 @@ export function Winners(props: ScreenProps): React.ReactElement {
                   >
                     {team.name}
                   </div>
-                  {prize ? (
+                  {prizeLabel ? (
                     <div
                       style={{
                         marginTop: px(8),
@@ -165,7 +170,7 @@ export function Winners(props: ScreenProps): React.ReactElement {
                         overflowWrap: "anywhere",
                       }}
                     >
-                      {isWinner ? `Wins ${prize}` : `Wooden Spoon: ${prize}`}
+                      {prizeLabel}
                     </div>
                   ) : null}
                 </div>
