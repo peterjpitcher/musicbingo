@@ -274,7 +274,7 @@ function PrepPageInner() {
   const [resolvedMissing, setResolvedMissing] = useState<string[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const pendingAutoSave = useRef(false);
-  const saveLiveSessionRef = useRef<() => Promise<void>>();
+  const saveLiveSessionRef = useRef<(() => Promise<void>) | undefined>(undefined);
   const [savingLive, setSavingLive] = useState(false);
   // Draft autosave (new-game mode): guards against losing typed prep on refresh
   const [draftNotice, setDraftNotice] = useState<string>("");

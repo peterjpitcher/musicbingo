@@ -27,7 +27,7 @@ export function NowPlaying({
   artistField,
   titlePH,
   artistPH,
-}: NowPlayingProps): JSX.Element {
+}: NowPlayingProps): React.JSX.Element {
   return (
     <div
       className="an-rise d5"

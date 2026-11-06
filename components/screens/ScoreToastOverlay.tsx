@@ -9,7 +9,7 @@ type ScoreToastOverlayProps = {
 
 const SCORE_TOAST_MS = 5_500;
 
-export function ScoreToastOverlay({ toast }: ScoreToastOverlayProps): JSX.Element | null {
+export function ScoreToastOverlay({ toast }: ScoreToastOverlayProps): React.JSX.Element | null {
   const [hiddenToastId, setHiddenToastId] = useState<string | null>(null);
 
   useEffect(() => {

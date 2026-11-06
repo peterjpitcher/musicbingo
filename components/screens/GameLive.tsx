@@ -120,7 +120,7 @@ export function GameLive({
   runtime,
   game = 1,
   progressMs,
-}: ScreenProps & { game?: 1 | 2 }): JSX.Element {
+}: ScreenProps & { game?: 1 | 2 }): React.JSX.Element {
   const themeField = game === 1 ? "g1theme" : "g2theme";
   const themePH = game === 1 ? "Pop Anthems" : "Throwback Bangers";
   const t = game === 1 ? "g1" : "g2";

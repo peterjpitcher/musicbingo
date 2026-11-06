@@ -16,7 +16,7 @@ import { NowPlaying } from "@/components/screens/NowPlaying";
  * Variant B: split-panel — text left, spinning vinyl right.
  * Variant C: marquee-framed card centred on a sunburst.
  */
-export function Welcome({ brand, runtime, variant = "A" }: ScreenProps): JSX.Element {
+export function Welcome({ brand, runtime, variant = "A" }: ScreenProps): React.JSX.Element {
   // The host's name is only shown when the host typed it; the copy reads
   // naturally without it. While editing, the empty slot stays clickable.
   const { editing, get } = useEdit();

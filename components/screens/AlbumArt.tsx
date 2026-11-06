@@ -18,7 +18,7 @@ export function AlbumArt({
   size = 560,
   revealed = true,
   imageUrl,
-}: AlbumArtProps): JSX.Element {
+}: AlbumArtProps): React.JSX.Element {
   const containerStyle: React.CSSProperties = {
     width: size,
     height: size,

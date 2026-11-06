@@ -32,7 +32,7 @@ const COUNTDOWN_VALUE_STYLE: React.CSSProperties = {
  * from the editable break minutes and switches to "any minute now" at zero.
  * While editing (host preview) it stays a static editable number.
  */
-export function BreakScreen({ brand, runtime }: ScreenProps): JSX.Element {
+export function BreakScreen({ brand, runtime }: ScreenProps): React.JSX.Element {
   const { editing, get } = useEdit();
   const breakStartedAtMs = runtime?.breakStartedAtMs ?? null;
   const [nowMs, setNowMs] = useState(() => Date.now());

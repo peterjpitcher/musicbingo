@@ -33,7 +33,7 @@ const RUN_ORDER = [
  * 16 October 2026. Items stagger-animate in from the left using
  * `an-slideL d1…d6`; rows past the sixth reuse the last delay.
  */
-export function RunningOrder({ brand }: ScreenProps): JSX.Element {
+export function RunningOrder({ brand }: ScreenProps): React.JSX.Element {
   return (
     <div
       className="screen grain vignette"
