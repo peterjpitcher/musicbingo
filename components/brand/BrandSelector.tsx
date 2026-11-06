@@ -29,7 +29,13 @@ export function BrandSelector({ value, onChange, className, disabled }: BrandSel
   // component fetched for itself. Only a request that never landed is an error.
   const requestFailed = error !== null && errorStatus === null;
 
-  if (requestFailed || brands.length === 0) {
+  // Archived venues (Barons Pubs) are never offered. A game that already uses
+  // one shows it as a disabled entry so the select still reads truthfully;
+  // its screens fall back to the default venue.
+  const live = brands.filter((b) => !b.archived_at);
+  const currentArchived = value ? brands.find((b) => b.id === value && b.archived_at) : undefined;
+
+  if (requestFailed || live.length === 0) {
     return (
       <select disabled className={className}>
         <option>{requestFailed ? "Failed to load brands" : "No brands available"}</option>
@@ -37,7 +43,7 @@ export function BrandSelector({ value, onChange, className, disabled }: BrandSel
     );
   }
 
-  const defaultBrand = brands.find((b) => b.is_default);
+  const defaultBrand = live.find((b) => b.is_default);
   const selectedId = value ?? defaultBrand?.id ?? "";
 
   return (
@@ -47,7 +53,12 @@ export function BrandSelector({ value, onChange, className, disabled }: BrandSel
       onChange={(e) => onChange(e.target.value)}
       className={className}
     >
-      {brands.map((b) => (
+      {currentArchived ? (
+        <option value={currentArchived.id} disabled>
+          {currentArchived.name} (archived)
+        </option>
+      ) : null}
+      {live.map((b) => (
         <option key={b.id} value={b.id}>
           {b.name}{b.is_default ? " (default)" : ""}
         </option>

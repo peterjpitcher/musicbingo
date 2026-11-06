@@ -67,8 +67,8 @@ export function Warmup({
         </div>
 
         <h1
-          className={`display an-rise d2${dance ? "" : " display--gold"}`}
-          style={{ fontSize: dance ? 210 : 200, lineHeight: 0.9, color: dance ? "#04130C" : undefined }}
+          className="display display--gold an-rise d2"
+          style={{ fontSize: dance ? 210 : 200, lineHeight: 0.9 }}
         >
           {dance ? (
             <>
@@ -85,7 +85,7 @@ export function Warmup({
 
         <p
           className="lede an-rise d3"
-          style={{ maxWidth: 760, color: dance ? "rgba(4,19,12,.82)" : undefined }}
+          style={{ maxWidth: 760 }}
         >
           {dance ? (
             <Editable
@@ -110,8 +110,8 @@ export function Warmup({
                 gap: 22,
                 padding: "18px 30px",
                 borderRadius: 999,
-                background: dance ? "rgba(4,19,12,.16)" : "rgba(0,0,0,.3)",
-                border: `2px solid ${dance ? "rgba(4,19,12,.3)" : "rgb(var(--brand-accent-light-rgb) / .55)"}`,
+                background: "rgba(0,0,0,.3)",
+                border: "2px solid color-mix(in srgb, var(--anchor-gold-bright) 55%, transparent)",
                 maxWidth: "100%",
               }}
             >
@@ -120,12 +120,12 @@ export function Warmup({
                 style={{
                   minWidth: 0,
                   textAlign: "left",
-                  color: dance ? "var(--ink)" : "var(--cream)",
+                  color: "var(--anchor-cream-text)",
                 }}
               >
                 <div
                   style={{
-                    fontSize: 14,
+                    fontSize: 32,
                     letterSpacing: ".24em",
                     textTransform: "uppercase",
                     fontWeight: 700,
@@ -136,7 +136,7 @@ export function Warmup({
                 </div>
                 <div
                   style={{
-                    fontSize: 30,
+                    fontSize: 38,
                     fontWeight: 700,
                     lineHeight: 1.12,
                     maxWidth: 820,

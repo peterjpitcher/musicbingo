@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { LiveTeamScore } from "@/lib/live/types";
+import { buttonClass } from "@anchor-nights/kit/ui";
 
 export type AwardPreset = {
   label: string;
@@ -54,7 +55,7 @@ export function AwardPointsModal({
             <h2>Award Points</h2>
             <p>Add teams, then tap the correct award for the team that won it.</p>
           </div>
-          <button type="button" className="hbtn" onClick={onClose}>
+          <button type="button" className={buttonClass({ variant: "outline", size: "sm" })} onClick={onClose}>
             Close
           </button>
         </div>
@@ -68,7 +69,7 @@ export function AwardPointsModal({
             }}
             placeholder="Team name"
           />
-          <button type="button" className="hbtn hbtn--primary" onClick={submitTeam}>
+          <button type="button" className={buttonClass({ variant: "primary", size: "sm" })} onClick={submitTeam}>
             Add Team
           </button>
         </div>
@@ -127,7 +128,7 @@ function TeamScoreRow({
         {presets.map((preset) => (
           <button
             type="button"
-            className="hbtn hbtn--primary"
+            className={buttonClass({ variant: "primary", size: "sm" })}
             key={`${team.id}-${preset.label}`}
             onClick={() => onAward(team, preset.points, preset.label)}
           >
@@ -150,7 +151,7 @@ function TeamScoreRow({
         />
         <button
           type="button"
-          className="hbtn hbtn--go"
+          className={buttonClass({ variant: "primary", size: "sm" })}
           disabled={!canAwardBonus}
           onClick={() => onAward(team, bonusPoints, "Bonus")}
         >
@@ -158,7 +159,7 @@ function TeamScoreRow({
         </button>
         <button
           type="button"
-          className="hbtn"
+          className={buttonClass({ variant: "outline", size: "sm" })}
           onClick={() => onRemoveTeam(team.id)}
           title={`Remove ${team.name}`}
         >

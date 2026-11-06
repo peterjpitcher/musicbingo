@@ -5,7 +5,7 @@ import type { ScreenProps } from "@/components/screens/types";
 import type { BrandConfig } from "@/lib/brands/types";
 import { Sunburst } from "@/components/motifs/Sunburst";
 import { VenueLogo } from "@/components/motifs/VenueLogo";
-import { Qr } from "@/components/motifs/Qr";
+import { Qr, qrValue } from "@anchor-nights/kit/qr";
 import { Editable } from "@/components/motifs/Editable";
 import { useEdit } from "@/components/motifs/EditContext";
 import { Chrome } from "@/components/motifs/Chrome";
@@ -35,7 +35,7 @@ type QrCard = { label: string; key: string; url: string; sub: string; delay: num
  * Screen 13 — Thank You / Reviews / Next Event.
  *
  * Left column: venue logo, headline, lede, next-event date badge.
- * Right column: two QR cards — "Review Us" and "Book Again".
+ * Right column: two QR cards, "Review us" and "Book Again".
  *
  * QR URLs are resolved from `brand.qr_items`:
  *   - Review card  → label containing "review"
@@ -59,10 +59,16 @@ export function ThankYou({ brand }: ScreenProps): React.ReactElement {
   const nextDate = get("nextDate", "").trim();
   const showNextDate = Boolean(nextDate) || editing;
 
+  // Every address is normalised to https:// first (the brand value may be
+  // stored without a scheme), then only links a phone can open get a card
+  // (the kit's QR guard): a typo or a localhost address shows no code rather
+  // than one that scans to nothing. The review card asks for feedback, never
+  // for a particular rating or a particular site (owner rule, website SSOT
+  // section 17): its QR leads to a neutral feedback page.
   const qrCards: QrCard[] = [
-    { label: "Review Us",   key: "review", url: reviewUrl ?? "", sub: "Scan & rate us ★★★★★",  delay: 4 },
+    { label: "Review us",   key: "review", url: reviewUrl ?? "", sub: "Tell us how we did", delay: 4 },
     { label: "Book Again",  key: "book",   url: bookUrl ?? "",   sub: "Book your seats before you leave!", delay: 5 },
-  ].filter((card) => card.url);
+  ].filter((card) => qrValue(card.url) !== null);
 
   return (
     <div
@@ -84,7 +90,7 @@ export function ThankYou({ brand }: ScreenProps): React.ReactElement {
         }}
       />
 
-      {/* Left column — text content */}
+      {/* Left column: text content */}
       <div
         className="col"
         style={{ flex: 1, gap: 24, position: "relative", zIndex: 2 }}
@@ -100,7 +106,7 @@ export function ThankYou({ brand }: ScreenProps): React.ReactElement {
         <p className="lede an-rise d3" style={{ maxWidth: 760 }}>
           <Editable
             field="tyLede"
-            placeholder="We hope you had a brilliant night. If you did, a Google review means the world to us."
+            placeholder="We hope you had a brilliant night. We'd love to hear how it went."
           />
         </p>
         {showNextDate && (
@@ -113,16 +119,16 @@ export function ThankYou({ brand }: ScreenProps): React.ReactElement {
             padding: "20px 30px",
             borderRadius: 18,
             width: "fit-content",
-            background: "rgb(var(--brand-accent-rgb) / .16)",
-            border: "2px solid var(--brand-accent)",
+            background: "color-mix(in srgb, var(--anchor-gold) 16%, transparent)",
+            border: "2px solid var(--anchor-gold)",
           }}
         >
           <span
             style={{
-              fontSize: 18,
+              fontSize: 32,
               letterSpacing: ".2em",
               textTransform: "uppercase",
-              color: "var(--brand-accent-light)",
+              color: "var(--anchor-gold-bright)",
               fontWeight: 700,
             }}
           >
@@ -130,9 +136,9 @@ export function ThankYou({ brand }: ScreenProps): React.ReactElement {
           </span>
           <span
             style={{
-              fontFamily: "var(--brand-display)",
+              fontFamily: "var(--font-dm-serif), serif",
               fontSize: 52,
-              color: "var(--cream)",
+              color: "var(--anchor-cream-text)",
               lineHeight: 0.9,
             }}
           >
@@ -142,7 +148,8 @@ export function ThankYou({ brand }: ScreenProps): React.ReactElement {
         )}
       </div>
 
-      {/* Right column — QR cards */}
+      {/* Right column: QR cards */}
+      {qrCards.length > 0 ? (
       <div
         className="col"
         style={{
@@ -162,33 +169,33 @@ export function ThankYou({ brand }: ScreenProps): React.ReactElement {
             <div
               style={{
                 padding: 16,
-                background: "var(--cream)",
+                background: "#ffffff",
                 borderRadius: 20,
                 display: "inline-block",
                 boxShadow: "0 24px 60px rgba(0,0,0,.5)",
-                border: "3px solid var(--brand-accent-light)",
+                border: "3px solid var(--anchor-gold-bright)",
               }}
             >
-              <Qr value={url} size={250} />
+              <Qr value={url} title={`QR code: ${label}`} size={250} />
             </div>
             <div
               style={{
-                fontFamily: "var(--brand-display)",
-                fontSize: 38,
-                textTransform: "uppercase",
+                fontFamily: "var(--font-dm-serif), serif",
+                fontSize: 44,
                 marginTop: 20,
-                color: "var(--cream)",
+                color: "var(--anchor-cream-text)",
                 whiteSpace: "nowrap",
               }}
             >
               {label}
             </div>
-            <div className="muted" style={{ fontSize: 22, marginTop: 6 }}>
+            <div className="muted" style={{ fontSize: 32, marginTop: 6 }}>
               {sub}
             </div>
           </div>
         ))}
       </div>
+      ) : null}
 
       <Chrome
         left={<Editable field="venueWeb" placeholder={websiteLabel(brand.website_url) || brand.name} />}

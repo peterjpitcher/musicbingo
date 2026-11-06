@@ -5,6 +5,7 @@ import type { ScreenProps } from "@/components/screens/types";
 import type { PlayedTrack } from "@/lib/live/types";
 import { Editable } from "@/components/motifs/Editable";
 import { Chrome } from "@/components/motifs/Chrome";
+import { TV_TYPE } from "@/lib/tvType";
 
 /**
  * "BINGO CLAIM" validation screen. When a guest shouts bingo the host switches
@@ -51,7 +52,7 @@ export function ClaimScreen({ brand, runtime }: ScreenProps): React.JSX.Element 
           padding: "0 26px",
           borderRadius: 12,
           background: "rgba(0,0,0,.26)",
-          border: "1px solid rgb(var(--brand-accent-rgb) / .35)",
+          border: "1px solid color-mix(in srgb, var(--anchor-gold) 35%, transparent)",
           minWidth: 0,
           overflow: "hidden",
         }}
@@ -59,47 +60,31 @@ export function ClaimScreen({ brand, runtime }: ScreenProps): React.JSX.Element 
         <span
           style={{
             flex: "0 0 auto",
-            fontFamily: "var(--brand-display)",
-            fontSize: 34,
+            fontFamily: "var(--font-dm-serif), serif",
+            fontSize: TV_TYPE.base,
             lineHeight: 1,
-            color: "var(--brand-accent-light)",
+            color: "var(--anchor-gold-bright)",
             minWidth: "1.8em",
             textAlign: "right",
           }}
         >
           {index + 1}
         </span>
+        {/* Title and artist on one line, at TV base size and up. */}
         <span
           style={{
             minWidth: 0,
-            display: "flex",
-            flexDirection: "column",
-            gap: 4,
-            lineHeight: 1.05,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            lineHeight: 1.1,
           }}
         >
-          <span
-            style={{
-              color: "var(--cream)",
-              fontSize: 30,
-              fontWeight: 800,
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-            }}
-          >
+          <span style={{ color: "var(--anchor-cream-text)", fontSize: TV_TYPE.base, fontWeight: 700 }}>
             {track.title || "Unknown title"}
           </span>
-          <span
-            className="muted"
-            style={{
-              fontSize: 24,
-              fontWeight: 600,
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-            }}
-          >
+          <span className="muted" style={{ fontSize: TV_TYPE.sm, fontWeight: 500 }}>
+            {"  ·  "}
             {track.artist || "Unknown artist"}
           </span>
         </span>
@@ -138,16 +123,14 @@ export function ClaimScreen({ brand, runtime }: ScreenProps): React.JSX.Element 
           <div className="col center-all" style={{ flex: 1, gap: 8 }}>
             <div
               style={{
-                fontFamily: "var(--brand-display)",
+                fontFamily: "var(--font-dm-serif), serif",
                 fontSize: 64,
-                textTransform: "uppercase",
-                color: "var(--cream-dim)",
-                letterSpacing: ".04em",
+                color: "var(--tv-muted)",
               }}
             >
               No songs played yet
             </div>
-            <div className="muted" style={{ fontSize: 26 }}>
+            <div className="muted" style={{ fontSize: 32 }}>
               Songs appear here as the game plays.
             </div>
           </div>

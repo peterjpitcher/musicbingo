@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { buttonClass } from "@anchor-nights/kit/ui";
 
 export default function GuestRemovedPage() {
   return (
@@ -9,7 +10,7 @@ export default function GuestRemovedPage() {
           <p>
             Public guest links are no longer used. Open the private display from the host controller.
           </p>
-          <Link className="hbtn hbtn--primary" href="/host">
+          <Link className={buttonClass({ variant: "primary", size: "sm" })} href="/host">
             Back to host
           </Link>
         </section>

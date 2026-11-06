@@ -1,11 +1,11 @@
 "use client";
 
+import Link from "next/link";
+
 import { useCallback, useEffect, useMemo, useRef, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { AppHeader } from "@/components/layout/AppHeader";
-import { Button } from "@/components/ui/Button";
-import { Notice } from "@/components/ui/Notice";
 import { promotionNotice } from "@/lib/eventFeed/promotionStatus";
 import { formatEventDateDisplay } from "@/lib/eventDate";
 import { DEFAULT_GAME_THEME, MAX_SONGS_PER_GAME, makeSongSelectionValue } from "@/lib/gameInput";
@@ -44,6 +44,7 @@ import { sanitizeFilenamePart } from "@/lib/utils";
 import { StepEventSetup } from "./StepEventSetup";
 import { StepGameConfig } from "./StepGameConfig";
 import { StepGenerateConnect } from "./StepGenerateConnect";
+import { Banner, Button, buttonClass } from "@anchor-nights/kit/ui";
 
 const STEPS = [
   { label: "Event Setup" },
@@ -1402,25 +1403,23 @@ function PrepPageInner() {
   }
 
   return (
-    <div className="min-h-screen bg-ink">
+    <div className="host-root theme-desk">
       <AppHeader
         title="Music Bingo"
         subtitle="Event Prep"
         actions={
-          <Button as="link" href="/host" variant="secondary" size="sm">
-            Live Host Console
-          </Button>
+          <Link href="/host" className={buttonClass({ variant: "outline", size: "sm" })}>Live Host Console</Link>
         }
       />
 
 
       <main className="max-w-2xl mx-auto px-4 py-8">
         {editHydrationNotice && (
-          <Notice variant="warning" className="mb-4">{editHydrationNotice}</Notice>
+          <Banner tone="warning" className="mb-4">{editHydrationNotice}</Banner>
         )}
 
         {draftNotice && (
-          <Notice variant="info" className="mb-4">
+          <Banner tone="info" className="mb-4">
             <div
               style={{
                 display: "flex",
@@ -1431,11 +1430,11 @@ function PrepPageInner() {
               }}
             >
               <span>{draftNotice}</span>
-              <Button variant="secondary" size="sm" onClick={discardDraft}>
+              <Button type="button" variant="outline" size="sm" onClick={discardDraft}>
                 Discard draft
               </Button>
             </div>
-          </Notice>
+          </Banner>
         )}
 
         {editingSessionId && !editHydrationNotice && (

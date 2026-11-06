@@ -37,7 +37,7 @@ export function NowPlaying({
         gap: 26,
         padding: "20px 34px",
         borderRadius: 999,
-        border: "2px solid rgb(var(--brand-accent-light-rgb) / .55)",
+        border: "2px solid color-mix(in srgb, var(--anchor-gold-bright) 55%, transparent)",
         background: "rgba(0,0,0,.28)",
         backdropFilter: "blur(6px)",
         maxWidth: "100%",
@@ -47,10 +47,10 @@ export function NowPlaying({
       <div style={{ minWidth: 0, textAlign: "left" }}>
         <div
           style={{
-            fontSize: 16,
+            fontSize: 32,
             letterSpacing: ".26em",
             textTransform: "uppercase",
-            color: "var(--brand-accent-light)",
+            color: "var(--anchor-gold-bright)",
             fontWeight: 700,
           }}
         >
@@ -58,7 +58,7 @@ export function NowPlaying({
         </div>
         <div
           style={{
-            fontSize: 30,
+            fontSize: 38,
             fontWeight: 700,
             lineHeight: 1.12,
             maxWidth: 880,

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { buttonClass } from "@anchor-nights/kit/ui";
 
 /** Prop types for the Now Playing panel */
 export interface NowPlayingPanelProps {
@@ -160,14 +161,14 @@ export function NowPlayingPanel({
       {/* Transport row: previous / pause-resume / next */}
       <div className="btn-row" style={{ marginBottom: 10 }}>
         <button
-          className="hbtn hbtn--icon"
+          className={buttonClass({ variant: "outline", size: "sm", className: "px-4" })}
           onClick={() => onTransport('previous')}
           title="Previous"
         >
           ⏮
         </button>
         <button
-          className="hbtn hbtn--icon hbtn--primary grow"
+          className={buttonClass({ variant: "primary", size: "sm", className: "px-4 flex-1" })}
           onClick={() => {
             if (welcomeIntroActive && !playing) {
               onWelcomeIntro?.();
@@ -180,7 +181,7 @@ export function NowPlayingPanel({
           {welcomeIntroActive && !playing ? '▶ Play Welcome Intro' : playing ? '❚❚ Pause' : '▶ Resume'}
         </button>
         <button
-          className="hbtn hbtn--icon"
+          className={buttonClass({ variant: "outline", size: "sm", className: "px-4" })}
           onClick={() => onTransport('next')}
           title="Next"
         >
@@ -191,20 +192,20 @@ export function NowPlayingPanel({
       {/* Secondary controls: extend, skip, restart, free play */}
       <div className="btn-row">
         <button
-          className="hbtn grow"
+          className={buttonClass({ variant: "outline", size: "sm", className: "flex-1" })}
           onClick={onExtend}
           disabled={freePlay || isIntro}
         >
           +30s
         </button>
-        <button className="hbtn grow" onClick={onSkip} disabled={isIntro}>
+        <button className={buttonClass({ variant: "outline", size: "sm", className: "flex-1" })} onClick={onSkip} disabled={isIntro}>
           Skip 30s
         </button>
-        <button className="hbtn grow" onClick={onRestart}>
+        <button className={buttonClass({ variant: "outline", size: "sm", className: "flex-1" })} onClick={onRestart}>
           Restart
         </button>
         <button
-          className={`hbtn grow ${freePlay ? 'hbtn--on' : ''}`}
+          className={buttonClass({ variant: freePlay ? "primary" : "outline", size: "sm", className: "flex-1" })}
           onClick={onFree}
           title="Songs play in full, no auto-advance — use after bingo is called"
         >
@@ -216,7 +217,7 @@ export function NowPlayingPanel({
       {welcomeIntroActive && onPreShow && (
         <div className="btn-row" style={{ marginTop: 10 }}>
           <button
-            className="hbtn grow"
+            className={buttonClass({ variant: "outline", size: "sm", className: "flex-1" })}
             onClick={onPreShow}
             disabled={preShowDisabled}
             title={

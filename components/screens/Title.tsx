@@ -68,10 +68,10 @@ export function Title({ brand, variant = "A" }: ScreenProps): React.JSX.Element 
             zIndex: 2,
             padding: "60px 80px",
             borderRadius: 30,
-            border: "3px solid var(--brand-accent)",
+            border: "3px solid var(--anchor-gold)",
             background: "rgba(0,0,0,.3)",
             boxShadow:
-              "0 0 0 12px rgb(var(--brand-primary-rgb) / .6), 0 40px 120px rgba(0,0,0,.6)",
+              "0 0 0 12px color-mix(in srgb, var(--anchor-green) 60%, transparent), 0 40px 120px rgba(0,0,0,.6)",
           }}
         >
           {/* Dot-grid bulb overlay */}
@@ -83,7 +83,7 @@ export function Title({ brand, variant = "A" }: ScreenProps): React.JSX.Element 
               borderRadius: 20,
               pointerEvents: "none",
               background:
-                "radial-gradient(circle, var(--brand-accent-light) 0 2.6px, transparent 3.2px) 0 0/42px 42px",
+                "radial-gradient(circle, var(--anchor-gold-bright) 0 2.6px, transparent 3.2px) 0 0/42px 42px",
               WebkitMaskImage: "linear-gradient(#000 0 0)",
               opacity: 0.85,
               maskComposite: "exclude",
@@ -120,7 +120,7 @@ export function Title({ brand, variant = "A" }: ScreenProps): React.JSX.Element 
           className="col center-all"
           style={{ position: "relative", zIndex: 2, gap: 8 }}
         >
-          <div className="kicker an-rise d1">It&apos;s Time For</div>
+          <div className="tv-kicker an-rise d1">It&apos;s Time For</div>
           <TitleHero brand={brand} max={1080} />
           <div className="pill an-rise d4" style={{ marginTop: 6 }}>
             <Editable

@@ -6,6 +6,7 @@ import { brandInputSchema } from "@/lib/brands/types";
 import type { Brand } from "@/lib/brands/types";
 import { validateEventFeedUrl } from "@/lib/brands/validation";
 import { hasAdminAccess } from "@/lib/live/access";
+import { reportError } from "@/lib/reportError";
 
 function resolveLogoUrls(
   brand: Brand
@@ -34,6 +35,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const brands = await listBrands();
     return NextResponse.json(brands.map(resolveLogoUrls));
   } catch (err: any) {
+    await reportError({ scope: "api:brands:get" }, err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
@@ -99,6 +101,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const brand = await createBrand(dbInput);
     return NextResponse.json(resolveLogoUrls(brand), { status: 201 });
   } catch (err: any) {
+    await reportError({ scope: "api:brands:post" }, err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

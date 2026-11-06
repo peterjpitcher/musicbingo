@@ -48,6 +48,12 @@ export const brandSchema = z.object({
   event_feed_base_url: z.string().url().nullable().or(z.literal("")),
   event_feed_venue_id: z.string().max(100).nullable().or(z.literal("")),
   event_feed_has_key: z.boolean(),
+  /**
+   * Set when a venue is retired (Barons Pubs, 6 Nov 2026). Archived venues are
+   * hidden from selection; games that already use one fall back to the default
+   * venue on screen. Optional so rows read before the column exists still parse.
+   */
+  archived_at: z.string().nullable().optional(),
   created_at: z.string(),
   updated_at: z.string(),
 });
@@ -94,6 +100,7 @@ export const brandInputSchema = brandSchema.omit({
   created_at: true,
   updated_at: true,
   event_feed_has_key: true,
+  archived_at: true,
 });
 
 export type BrandInput = z.infer<typeof brandInputSchema>;

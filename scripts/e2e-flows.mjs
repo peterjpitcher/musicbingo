@@ -885,11 +885,11 @@ async function main() {
       await flow6DisplayPage.goto(`${BASE_URL}/display/flow-live-session`, { waitUntil: "domcontentloaded" });
       // The display TV renders the run-of-show screens inside a full-bleed,
       // 1920×1080 scaler (the "After Hours" TV display).
-      await flow6DisplayPage.locator(".viewport").waitFor({ timeout: 15_000 });
-      await flow6DisplayPage.locator(".stage-scaler").first().waitFor({ timeout: 15_000 });
+      await flow6DisplayPage.locator(".anchor-stage").waitFor({ timeout: 15_000 });
+      await flow6DisplayPage.locator(".anchor-stage-scaler").first().waitFor({ timeout: 15_000 });
 
       const displayStyles = await flow6DisplayPage.evaluate(() => {
-        const viewport = document.querySelector(".viewport");
+        const viewport = document.querySelector(".anchor-stage");
         const rect = viewport?.getBoundingClientRect();
         return {
           viewportWidth: window.innerWidth,
@@ -930,7 +930,7 @@ async function main() {
       // operational warning lives on the host controller (asserted above). Verify
       // the display still renders correctly while Spotify control is unavailable.
       await flow7DisplayPage.goto(`${BASE_URL}/display/flow-live-fallback`, { waitUntil: "domcontentloaded" });
-      await flow7DisplayPage.locator(".viewport").waitFor({ timeout: 10_000 });
+      await flow7DisplayPage.locator(".anchor-stage").waitFor({ timeout: 10_000 });
     });
 
     await flow7Context.close();

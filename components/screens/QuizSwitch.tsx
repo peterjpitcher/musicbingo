@@ -58,12 +58,12 @@ export function QuizSwitch({ brand, round = "One" }: QuizSwitchProps): React.JSX
         >
           <span
             style={{
-              fontFamily: "var(--brand-display)",
+              fontFamily: "var(--font-dm-serif), serif",
               fontSize: 64,
-              color: "var(--brand-accent-light)",
+              color: "var(--anchor-gold-bright)",
             }}
           >
-            ROUND
+            Round
           </span>
           <Ball n={round === "One" ? "1" : "2"} size={130} />
         </div>

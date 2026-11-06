@@ -1,5 +1,7 @@
 'use client';
 
+import { buttonClass } from "@anchor-nights/kit/ui";
+
 /** Prop types for the Game Flow panel */
 export interface GameFlowPanelProps {
   /** Current game mode, e.g. "lobby" | "intro" | "playing" | "break" | "ended" */
@@ -73,17 +75,17 @@ export function GameFlowPanel({
            it restarts that song and carries on through the playlist. */
         <div className="btn-row">
           {resumeGameNumber ? (
-            <button className="hbtn hbtn--go hbtn--lg grow" onClick={onResumeGame}>
+            <button className={buttonClass({ variant: "primary", size: "lg", className: "flex-1" })} onClick={onResumeGame}>
               ▶ Resume Game {resumeGameNumber}
             </button>
           ) : null}
           <button
-            className={`hbtn hbtn--lg grow${resumeGameNumber ? '' : ' hbtn--go'}`}
+            className={buttonClass({ variant: resumeGameNumber ? "outline" : "primary", size: "lg", className: "flex-1" })}
             onClick={onResume}
           >
             ▶ Continue Show
           </button>
-          <button className="hbtn hbtn--danger" onClick={onEnd}>
+          <button className={buttonClass({ variant: "outline", size: "sm", className: "border-danger-text text-danger-text hover:bg-danger-fill hover:text-danger-text" })} onClick={onEnd}>
             End Session
           </button>
         </div>
@@ -91,16 +93,16 @@ export function GameFlowPanel({
         <>
           {/* 2×2 grid: intro / start for each game */}
           <div className="btn-grid" style={{ marginBottom: 10 }}>
-            <button className="hbtn" onClick={() => onIntro(1)}>
+            <button className={buttonClass({ variant: "outline", size: "sm" })} onClick={() => onIntro(1)}>
               ▶ Dance Along
             </button>
-            <button className="hbtn hbtn--primary" onClick={() => onStart(1)}>
+            <button className={buttonClass({ variant: "primary", size: "sm" })} onClick={() => onStart(1)}>
               Start Game 1
             </button>
-            <button className="hbtn" onClick={() => onIntro(2)}>
+            <button className={buttonClass({ variant: "outline", size: "sm" })} onClick={() => onIntro(2)}>
               ▶ Sing Along
             </button>
-            <button className="hbtn hbtn--primary" onClick={() => onStart(2)}>
+            <button className={buttonClass({ variant: "primary", size: "sm" })} onClick={() => onStart(2)}>
               Start Game 2
             </button>
           </div>
@@ -110,13 +112,13 @@ export function GameFlowPanel({
           {showClaimRow && (
             <div className="btn-row" style={{ marginBottom: 10 }}>
               {claimActive ? (
-                <button className="hbtn hbtn--go grow" onClick={onBackToGame}>
+                <button className={buttonClass({ variant: "primary", size: "sm", className: "flex-1" })} onClick={onBackToGame}>
                   {/* Fall back to a number-less label if the game ended while the
                       claim screen was up (avoids a dangling "Back to Game "). */}
                   ◀ Back to Game{activeGame ? ` ${activeGame}` : ''}
                 </button>
               ) : (
-                <button className="hbtn hbtn--primary grow" onClick={onClaim}>
+                <button className={buttonClass({ variant: "primary", size: "sm", className: "flex-1" })} onClick={onClaim}>
                   🎙️ Bingo Claim
                   {claimCount > 0 ? ` · ${claimCount} ${claimCount === 1 ? 'song' : 'songs'}` : ''}
                 </button>
@@ -126,15 +128,15 @@ export function GameFlowPanel({
 
           {/* Footer row: break screen + end/reset */}
           <div className="btn-row">
-            <button className="hbtn grow" onClick={onBreak}>
+            <button className={buttonClass({ variant: "outline", size: "sm", className: "flex-1" })} onClick={onBreak}>
               Show Break Screen
             </button>
             {mode === 'ended' ? (
-              <button className="hbtn grow" onClick={onReset}>
+              <button className={buttonClass({ variant: "outline", size: "sm", className: "flex-1" })} onClick={onReset}>
                 Reset to Lobby
               </button>
             ) : (
-              <button className="hbtn hbtn--danger" onClick={onEnd}>
+              <button className={buttonClass({ variant: "outline", size: "sm", className: "border-danger-text text-danger-text hover:bg-danger-fill hover:text-danger-text" })} onClick={onEnd}>
                 End Session
               </button>
             )}

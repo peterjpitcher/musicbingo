@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { Button } from "@/components/ui/Button";
 import { MAX_SONGS_PER_GAME, makeSongSelectionValue } from "@/lib/gameInput";
 import {
   CHALLENGE_REVEAL_CONFIG,
@@ -12,6 +11,7 @@ import {
 } from "@/lib/live/types";
 import { parseSpotifyTrackUrl } from "@/lib/spotifyTrackUrl";
 import type { Song } from "@/lib/types";
+import { Button } from "@anchor-nights/kit/ui";
 
 type ParsedResult = {
   songs: Song[];
@@ -391,8 +391,8 @@ export function StepGameConfig({
       </p>
 
       <div className="wiznav">
-        <Button variant="secondary" onClick={onBack}>← Back</Button>
-        <Button variant="primary" onClick={onNext} disabled={!canNext}>{nextLabel}</Button>
+        <Button type="button" size="sm" variant="outline" onClick={onBack}>← Back</Button>
+        <Button type="button" size="sm" variant="primary" onClick={onNext} disabled={!canNext}>{nextLabel}</Button>
       </div>
     </div>
   );

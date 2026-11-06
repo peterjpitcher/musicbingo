@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { getBrandLogoPublicUrl } from "@/lib/brands/brandStorage";
-import { resolveBrandConfig } from "@/lib/brands/brandRepo";
+import { resolveScreenBrandConfig } from "@/lib/brands/brandRepo";
 import { hasSessionAccess } from "@/lib/live/access";
 import { getRuntimeState, getSession } from "@/lib/live/sessionRepo";
 import { makeEmptyRuntimeState } from "@/lib/live/types";
+import { reportError } from "@/lib/reportError";
 
 export const runtime = "nodejs";
 
@@ -25,7 +26,7 @@ export async function GET(
 
     const [runtimeState, brand] = await Promise.all([
       getRuntimeState(id),
-      resolveBrandConfig(session.brandId ?? null),
+      resolveScreenBrandConfig(session.brandId ?? null),
     ]);
 
     const brandWithUrls = brand ? {
@@ -46,6 +47,7 @@ export async function GET(
       { headers: { "Cache-Control": "no-store" } }
     );
   } catch (err) {
+    await reportError({ scope: "api:display-snapshot:get" }, err);
     const message = err instanceof Error ? err.message : "Failed to load display snapshot.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
