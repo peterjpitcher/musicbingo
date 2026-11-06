@@ -9,10 +9,12 @@ import { Qr } from "@/components/motifs/Qr";
 import { Editable } from "@/components/motifs/Editable";
 import { useEdit } from "@/components/motifs/EditContext";
 import { Chrome } from "@/components/motifs/Chrome";
+import { normaliseWebUrl, websiteLabel } from "@/lib/brands/websiteUrl";
 
 /**
  * Resolve a QR URL from `brand.qr_items` using a keyword search.
- * Falls back through qr_items order, then `fallback`, then empty string.
+ * Falls back through qr_items order, then `fallback`, then `brand.website_url`,
+ * then empty string. Callers normalise the result with `normaliseWebUrl`.
  */
 function resolveQrUrl(
   brand: BrandConfig,
@@ -27,6 +29,8 @@ function resolveQrUrl(
   return fallback ?? brand.website_url ?? "";
 }
 
+type QrCard = { label: string; key: string; url: string; sub: string; delay: number };
+
 /**
  * Screen 13 — Thank You / Reviews / Next Event.
  *
@@ -37,19 +41,28 @@ function resolveQrUrl(
  *   - Review card  → label containing "review"
  *   - Booking card → label containing "book", "booking", "reserve", or "event"
  * Falls back to the first / second qr_items entries, then `brand.website_url`.
+ * Every URL is normalised to https:// (the brand value may be stored without
+ * a scheme); a card with no usable URL is hidden rather than given an
+ * invented code. The "Next Event" badge only shows when the host typed a date.
  */
 export function ThankYou({ brand }: ScreenProps): React.ReactElement {
-  const { get } = useEdit();
+  const { editing, get } = useEdit();
   const items = brand.qr_items ?? [];
 
   // Prefer keyword-matched items; fall back by position, then website_url.
-  const reviewUrl = get("reviewQrUrl", "").trim() || resolveQrUrl(brand, ["review"], items[0]?.url);
-  const bookUrl = get("bookQrUrl", "").trim() || resolveQrUrl(brand, ["book", "booking", "reserve", "event"], items[1]?.url ?? items[0]?.url);
+  const reviewUrl = normaliseWebUrl(
+    get("reviewQrUrl", "").trim() || resolveQrUrl(brand, ["review"], items[0]?.url),
+  );
+  const bookUrl = normaliseWebUrl(
+    get("bookQrUrl", "").trim() || resolveQrUrl(brand, ["book", "booking", "reserve", "event"], items[1]?.url ?? items[0]?.url),
+  );
+  const nextDate = get("nextDate", "").trim();
+  const showNextDate = Boolean(nextDate) || editing;
 
-  const qrCards: Array<{ label: string; key: string; url: string; sub: string; delay: number }> = [
-    { label: "Review Us",   key: "review", url: reviewUrl, sub: "Scan & rate us ★★★★★",  delay: 4 },
-    { label: "Book Again",  key: "book",   url: bookUrl,   sub: "Book your seats before you leave!", delay: 5 },
-  ];
+  const qrCards: QrCard[] = [
+    { label: "Review Us",   key: "review", url: reviewUrl ?? "", sub: "Scan & rate us ★★★★★",  delay: 4 },
+    { label: "Book Again",  key: "book",   url: bookUrl ?? "",   sub: "Book your seats before you leave!", delay: 5 },
+  ].filter((card) => card.url);
 
   return (
     <div
@@ -90,6 +103,7 @@ export function ThankYou({ brand }: ScreenProps): React.ReactElement {
             placeholder="We hope you had a brilliant night. If you did, a Google review means the world to us."
           />
         </p>
+        {showNextDate && (
         <div
           className="an-rise d4"
           style={{
@@ -122,9 +136,10 @@ export function ThankYou({ brand }: ScreenProps): React.ReactElement {
               lineHeight: 0.9,
             }}
           >
-            <Editable field="nextDate" placeholder="Fri 27 June · 8PM" />
+            <Editable optional field="nextDate" placeholder="Next event date" />
           </span>
         </div>
+        )}
       </div>
 
       {/* Right column — QR cards */}
@@ -176,7 +191,7 @@ export function ThankYou({ brand }: ScreenProps): React.ReactElement {
       </div>
 
       <Chrome
-        left={<Editable field="venueWeb" placeholder={brand.website_url ?? brand.name} />}
+        left={<Editable field="venueWeb" placeholder={websiteLabel(brand.website_url) || brand.name} />}
         right="See You Next Month"
       />
     </div>

@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactElement } from "react";
 import QRCode from "qrcode";
 
 export type QrProps = {
-  /** URL or text to encode. Falls back to a placeholder when empty. */
+  /** URL or text to encode. An empty value renders nothing (never a placeholder code). */
   value: string;
   /** Pixel dimensions of the rendered square. Defaults to 320. */
   size?: number;
@@ -19,26 +19,33 @@ export type QrProps = {
  *
  * Generates an SVG string asynchronously in a useEffect and injects it via
  * dangerouslySetInnerHTML. Shows an empty rounded square while the SVG is
- * being generated so layout does not shift.
+ * being generated so layout does not shift. An empty value renders nothing:
+ * a QR code that points somewhere invented is worse than no QR code.
  */
 export function Qr({
   value,
   size = 320,
   light = "#F6EFDD",
   dark = "#04130C",
-}: QrProps): JSX.Element {
-  const [svg, setSvg] = useState<string | null>(null);
+}: QrProps): ReactElement | null {
+  const text = (value ?? "").trim();
+  // Keyed by the text it was made from, so a stale code is never shown for a
+  // new value while the new one is generated.
+  const [rendered, setRendered] = useState<{ key: string; svg: string } | null>(null);
+  const key = `${text}|${light}|${dark}`;
+  const svg = rendered?.key === key ? rendered.svg : null;
 
   useEffect(() => {
     let cancelled = false;
+    if (!text) return;
 
-    QRCode.toString(value || "https://example.com", {
+    QRCode.toString(text, {
       type: "svg",
       margin: 1,
       color: { dark, light },
     })
       .then((result) => {
-        if (!cancelled) setSvg(result);
+        if (!cancelled) setRendered({ key: `${text}|${light}|${dark}`, svg: result });
       })
       .catch(() => {
         /* Silently swallow generation errors; the empty state remains visible. */
@@ -47,7 +54,9 @@ export function Qr({
     return () => {
       cancelled = true;
     };
-  }, [value, light, dark]);
+  }, [text, light, dark]);
+
+  if (!text) return null;
 
   return (
     <div

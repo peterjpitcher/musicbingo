@@ -21,8 +21,9 @@ export function Winners(props: ScreenProps): React.ReactElement {
   const hasScoredTeams = scoredTeams.length > 0;
   const winnerIndex = scoredTeams.length - 1;
   const spoonIndex = scoredTeams.length > 2 ? 1 : scoredTeams.length > 1 ? 0 : -1;
-  const winPrize = get("winPrize", "£25 bar voucher");
-  const spoonPrize = get("spoonPrize", "Bottle of house wine");
+  // Prizes are only shown when the host typed them; never a sample prize.
+  const winPrize = get("winPrize", "").trim();
+  const spoonPrize = get("spoonPrize", "").trim();
   const revealCount = Math.max(0, runtime?.winnersRevealCount ?? 0);
   const visibleScoredTeams = scoredTeams.slice(0, Math.min(revealCount, scoredTeams.length));
   // Eight or nine teams fill the table at full size. Beyond that rows shrink, so
@@ -109,7 +110,11 @@ export function Winners(props: ScreenProps): React.ReactElement {
             const rank = scoredTeams.length - index;
             const isWinner = index === winnerIndex;
             const isSpoon = index === spoonIndex;
-            const prize = isWinner ? winPrize : isSpoon ? spoonPrize : "";
+            const prizeLabel = isWinner
+              ? (winPrize ? `Wins ${winPrize}` : "Winner")
+              : isSpoon
+                ? (spoonPrize ? `Wooden Spoon · ${spoonPrize}` : "Wooden Spoon")
+                : "";
             return (
               <div
                 key={team.id}
@@ -167,12 +172,12 @@ export function Winners(props: ScreenProps): React.ReactElement {
                   style={{
                     fontSize: Math.max(16, px(isWinner ? 25 : 20)),
                     fontWeight: 800,
-                    color: prize ? "var(--cream)" : "rgb(var(--cream-rgb) / .34)",
+                    color: prizeLabel ? "var(--cream)" : "rgb(var(--cream-rgb) / .34)",
                     textAlign: "right",
                     overflowWrap: "anywhere",
                   }}
                 >
-                  {isWinner ? `Wins ${prize}` : isSpoon ? `Wooden Spoon · ${prize}` : " "}
+                  {prizeLabel || " "}
                 </div>
               </div>
             );
