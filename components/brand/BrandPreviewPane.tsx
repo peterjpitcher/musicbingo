@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BrandProvider } from "@/components/brand/BrandProvider";
 import { EditContext, type EditContextValue } from "@/components/motifs/EditContext";
 import { Welcome } from "@/components/screens/Welcome";
 import type { BrandConfig } from "@/lib/brands/types";
@@ -59,8 +58,7 @@ export function BrandPreviewPane({ brand, variant = "A" }: BrandPreviewPaneProps
   }, []);
 
   return (
-    <BrandProvider brand={brand}>
-      <EditContext.Provider value={READ_ONLY_EDIT_CTX}>
+    <EditContext.Provider value={READ_ONLY_EDIT_CTX}>
         {/*
          * Container div: holds the scaled canvas and sizes itself to the
          * correct aspect-ratio height (1080/1920 = 56.25 %) so the parent
@@ -84,7 +82,6 @@ export function BrandPreviewPane({ brand, variant = "A" }: BrandPreviewPaneProps
             <Welcome brand={brand} variant={variant} runtime={null} />
           </div>
         </div>
-      </EditContext.Provider>
-    </BrandProvider>
+    </EditContext.Provider>
   );
 }

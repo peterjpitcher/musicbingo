@@ -43,23 +43,23 @@ export function SysNotFound({ brand }: ScreenProps): React.ReactElement {
             padding: "16px 28px",
             borderRadius: 14,
             background: "rgba(0,0,0,.3)",
-            border: "2px dashed rgb(var(--brand-accent-light-rgb) / .55)",
+            border: "2px dashed color-mix(in srgb, var(--anchor-gold-bright) 55%, transparent)",
           }}
         >
           <span
             style={{
-              fontSize: 18,
+              fontSize: 32,
               letterSpacing: ".2em",
               textTransform: "uppercase",
-              color: "var(--brand-accent-light)",
+              color: "var(--anchor-gold-bright)",
               fontWeight: 700,
             }}
           >
             Host
           </span>
-          <span style={{ fontSize: 26, color: "var(--cream)" }}>
+          <span style={{ fontSize: 32, color: "var(--anchor-cream-text)" }}>
             Open the controller &amp; press{" "}
-            <b style={{ color: "var(--brand-accent-light)" }}>Start Game</b>
+            <b style={{ color: "var(--anchor-gold-bright)" }}>Start Game</b>
           </span>
         </div>
       </div>

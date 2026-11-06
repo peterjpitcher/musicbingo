@@ -5,7 +5,7 @@ import type { ScreenProps } from "@/components/screens/types";
 import type { BrandConfig } from "@/lib/brands/types";
 import { Sunburst } from "@/components/motifs/Sunburst";
 import { VenueLogo } from "@/components/motifs/VenueLogo";
-import { Qr } from "@/components/motifs/Qr";
+import { Qr, qrValue } from "@anchor-nights/kit/qr";
 import { Editable } from "@/components/motifs/Editable";
 import { useEdit } from "@/components/motifs/EditContext";
 import { Chrome } from "@/components/motifs/Chrome";
@@ -46,10 +46,13 @@ export function ThankYou({ brand }: ScreenProps): React.ReactElement {
   const reviewUrl = get("reviewQrUrl", "").trim() || resolveQrUrl(brand, ["review"], items[0]?.url);
   const bookUrl = get("bookQrUrl", "").trim() || resolveQrUrl(brand, ["book", "booking", "reserve", "event"], items[1]?.url ?? items[0]?.url);
 
+  // Only links a phone can open get a card (the kit's QR guard): a bare
+  // hostname, a typo or a localhost address shows no code rather than one that
+  // scans to nothing.
   const qrCards: Array<{ label: string; key: string; url: string; sub: string; delay: number }> = [
     { label: "Review Us",   key: "review", url: reviewUrl, sub: "Scan & rate us ★★★★★",  delay: 4 },
     { label: "Book Again",  key: "book",   url: bookUrl,   sub: "Book your seats before you leave!", delay: 5 },
-  ];
+  ].filter((card) => qrValue(card.url) !== null);
 
   return (
     <div
@@ -71,7 +74,7 @@ export function ThankYou({ brand }: ScreenProps): React.ReactElement {
         }}
       />
 
-      {/* Left column — text content */}
+      {/* Left column: text content */}
       <div
         className="col"
         style={{ flex: 1, gap: 24, position: "relative", zIndex: 2 }}
@@ -99,16 +102,16 @@ export function ThankYou({ brand }: ScreenProps): React.ReactElement {
             padding: "20px 30px",
             borderRadius: 18,
             width: "fit-content",
-            background: "rgb(var(--brand-accent-rgb) / .16)",
-            border: "2px solid var(--brand-accent)",
+            background: "color-mix(in srgb, var(--anchor-gold) 16%, transparent)",
+            border: "2px solid var(--anchor-gold)",
           }}
         >
           <span
             style={{
-              fontSize: 18,
+              fontSize: 32,
               letterSpacing: ".2em",
               textTransform: "uppercase",
-              color: "var(--brand-accent-light)",
+              color: "var(--anchor-gold-bright)",
               fontWeight: 700,
             }}
           >
@@ -116,9 +119,9 @@ export function ThankYou({ brand }: ScreenProps): React.ReactElement {
           </span>
           <span
             style={{
-              fontFamily: "var(--brand-display)",
+              fontFamily: "var(--font-dm-serif), serif",
               fontSize: 52,
-              color: "var(--cream)",
+              color: "var(--anchor-cream-text)",
               lineHeight: 0.9,
             }}
           >
@@ -127,7 +130,8 @@ export function ThankYou({ brand }: ScreenProps): React.ReactElement {
         </div>
       </div>
 
-      {/* Right column — QR cards */}
+      {/* Right column: QR cards */}
+      {qrCards.length > 0 ? (
       <div
         className="col"
         style={{
@@ -147,33 +151,33 @@ export function ThankYou({ brand }: ScreenProps): React.ReactElement {
             <div
               style={{
                 padding: 16,
-                background: "var(--cream)",
+                background: "#ffffff",
                 borderRadius: 20,
                 display: "inline-block",
                 boxShadow: "0 24px 60px rgba(0,0,0,.5)",
-                border: "3px solid var(--brand-accent-light)",
+                border: "3px solid var(--anchor-gold-bright)",
               }}
             >
-              <Qr value={url} size={250} />
+              <Qr value={url} title={`QR code: ${label}`} size={250} />
             </div>
             <div
               style={{
-                fontFamily: "var(--brand-display)",
-                fontSize: 38,
-                textTransform: "uppercase",
+                fontFamily: "var(--font-dm-serif), serif",
+                fontSize: 44,
                 marginTop: 20,
-                color: "var(--cream)",
+                color: "var(--anchor-cream-text)",
                 whiteSpace: "nowrap",
               }}
             >
               {label}
             </div>
-            <div className="muted" style={{ fontSize: 22, marginTop: 6 }}>
+            <div className="muted" style={{ fontSize: 32, marginTop: 6 }}>
               {sub}
             </div>
           </div>
         ))}
       </div>
+      ) : null}
 
       <Chrome
         left={<Editable field="venueWeb" placeholder={brand.website_url ?? brand.name} />}

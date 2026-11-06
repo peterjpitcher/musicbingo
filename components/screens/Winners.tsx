@@ -6,6 +6,7 @@ import { Sunburst } from "@/components/motifs/Sunburst";
 import { Editable } from "@/components/motifs/Editable";
 import { useEdit } from "@/components/motifs/EditContext";
 import { Chrome } from "@/components/motifs/Chrome";
+import { TV_TYPE } from "@/lib/tvType";
 
 /**
  * Screen 12 — Winners.
@@ -73,7 +74,7 @@ export function Winners(props: ScreenProps): React.ReactElement {
         className="col center-all"
         style={{ gap: 12, position: "relative", zIndex: 2 }}
       >
-        <div className="kicker an-rise d1">Drum Roll, Please</div>
+        <div className="tv-kicker an-rise d1">Drum Roll, Please</div>
         <h1 className="display display--gold an-rise d2" style={{ fontSize: 124 }}>
           Tonight&apos;s Winners
         </h1>
@@ -117,62 +118,67 @@ export function Winners(props: ScreenProps): React.ReactElement {
                 style={{
                   animationDelay: `${0.12 + index * 0.12}s`,
                   display: "grid",
-                  gridTemplateColumns: "110px minmax(0, 1fr) 190px minmax(220px, .65fr)",
+                  gridTemplateColumns: "110px minmax(0, 1fr) 220px",
                   alignItems: "center",
                   gap: 22,
                   padding: isWinner ? `${px(20)}px 26px` : `${px(15)}px 22px`,
                   borderRadius: 18,
                   background: isWinner
-                    ? "linear-gradient(180deg, rgb(var(--brand-accent-rgb) / .92), rgb(var(--ink-rgb) / .55))"
+                    ? "linear-gradient(180deg, color-mix(in srgb, var(--anchor-gold) 92%, transparent), color-mix(in srgb, var(--anchor-green-deep) 55%, transparent))"
                     : "rgb(0 0 0 / .28)",
                   border: isWinner
-                    ? "3px solid var(--brand-accent-light)"
-                    : "2px solid rgb(var(--brand-accent-rgb) / .36)",
+                    ? "3px solid var(--anchor-gold-bright)"
+                    : "2px solid color-mix(in srgb, var(--anchor-gold) 36%, transparent)",
                   boxShadow: isWinner ? "0 26px 80px rgb(0 0 0 / .45)" : "none",
                 }}
               >
                 <div
                   style={{
-                    fontFamily: "var(--brand-display)",
+                    fontFamily: "var(--font-dm-serif), serif",
                     fontSize: px(isWinner ? 58 : 44),
                     lineHeight: .9,
-                    color: isWinner ? "#fff6dd" : "var(--brand-accent-light)",
+                    color: isWinner ? "var(--anchor-cream-text)" : "var(--anchor-gold-bright)",
                   }}
                 >
                   #{rank}
                 </div>
-                <div
-                  style={{
-                    fontSize: px(isWinner ? 48 : 36),
-                    fontWeight: 900,
-                    lineHeight: 1,
-                    overflowWrap: "anywhere",
-                    color: "var(--cream)",
-                  }}
-                >
-                  {team.name}
+                <div style={{ minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontSize: px(isWinner ? 52 : 40),
+                      fontWeight: 700,
+                      lineHeight: 1,
+                      overflowWrap: "anywhere",
+                      color: "var(--anchor-cream-text)",
+                    }}
+                  >
+                    {team.name}
+                  </div>
+                  {prize ? (
+                    <div
+                      style={{
+                        marginTop: px(8),
+                        fontSize: Math.max(TV_TYPE.xs, px(isWinner ? TV_TYPE.sm : TV_TYPE.xs)),
+                        fontWeight: 600,
+                        lineHeight: 1.1,
+                        color: isWinner ? "var(--anchor-cream-text)" : "var(--anchor-gold-bright)",
+                        overflowWrap: "anywhere",
+                      }}
+                    >
+                      {isWinner ? `Wins ${prize}` : `Wooden Spoon: ${prize}`}
+                    </div>
+                  ) : null}
                 </div>
                 <div
                   style={{
-                    fontFamily: "var(--brand-display)",
+                    fontFamily: "var(--font-dm-serif), serif",
                     fontSize: px(isWinner ? 56 : 42),
                     lineHeight: .9,
                     textAlign: "right",
-                    color: isWinner ? "#fff6dd" : "var(--brand-accent-light)",
+                    color: isWinner ? "var(--anchor-cream-text)" : "var(--anchor-gold-bright)",
                   }}
                 >
                   {team.score} pts
-                </div>
-                <div
-                  style={{
-                    fontSize: Math.max(16, px(isWinner ? 25 : 20)),
-                    fontWeight: 800,
-                    color: prize ? "var(--cream)" : "rgb(var(--cream-rgb) / .34)",
-                    textAlign: "right",
-                    overflowWrap: "anywhere",
-                  }}
-                >
-                  {isWinner ? `Wins ${prize}` : isSpoon ? `Wooden Spoon · ${prize}` : " "}
                 </div>
               </div>
             );
@@ -199,7 +205,7 @@ export function Winners(props: ScreenProps): React.ReactElement {
               fontSize: 38,
               lineHeight: 1.15,
               fontWeight: 800,
-              color: "var(--cream)",
+              color: "var(--anchor-cream-text)",
             }}
           >
             Add teams and scores in Award Points to reveal the winners.

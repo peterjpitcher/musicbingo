@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 
 import { BrandSelector } from "@/components/brand/BrandSelector";
 import { AppHeader } from "@/components/layout/AppHeader";
-import { Notice } from "@/components/ui/Notice";
 import { assertAdminUnlocked } from "@/lib/live/adminGuard";
 import {
   deleteLiveSession,
@@ -16,6 +15,7 @@ import {
 import { migrateLocalSessionsToSupabase } from "@/lib/live/migrateToSupabase";
 import type { LiveSessionV1 } from "@/lib/live/types";
 import { parseSongListText } from "@/lib/parser";
+import { Banner, buttonClass } from "@anchor-nights/kit/ui";
 
 
 function downloadBlob(blob: Blob, filename: string): void {
@@ -373,14 +373,14 @@ export default function HostDashboardPage() {
   }
 
   return (
-    <div className="host-root">
+    <div className="host-root theme-desk">
       <AppHeader
         title="Music Bingo"
         subtitle="Setup &amp; Manage"
         actions={
           <>
-            <a href="/brands" className="hbtn">Manage Brands</a>
-            <label className="hbtn" style={{ cursor: "pointer" }}>
+            <a href="/brands" className={buttonClass({ variant: "outline", size: "sm" })}>Manage Brands</a>
+            <label className={buttonClass({ variant: "outline", size: "sm" })} style={{ cursor: "pointer" }}>
               &#8595; Import Session JSON
               <input
                 type="file"
@@ -394,7 +394,7 @@ export default function HostDashboardPage() {
                 }}
               />
             </label>
-            <a href="/prep" className="hbtn hbtn--primary">+ New Game</a>
+            <a href="/prep" className={buttonClass({ variant: "primary", size: "sm" })}>+ New Game</a>
           </>
         }
       />
@@ -402,12 +402,12 @@ export default function HostDashboardPage() {
       <div className="host-main" style={{ display: "block" }}>
         {notice ? (
           <div style={{ marginBottom: 16 }}>
-            <Notice variant="success">{notice}</Notice>
+            <Banner tone="success">{notice}</Banner>
           </div>
         ) : null}
         {error ? (
           <div style={{ marginBottom: 16 }}>
-            <Notice variant="error">{error}</Notice>
+            <Banner tone="danger">{error}</Banner>
           </div>
         ) : null}
 
@@ -429,7 +429,7 @@ export default function HostDashboardPage() {
             <p style={{ margin: "12px 0 20px", opacity: 0.6, fontSize: 14 }}>
               Generate playlists on the prep screen, then click &ldquo;Save Live Session&rdquo;.
             </p>
-            <a href="/prep" className="hbtn hbtn--primary">+ New Game</a>
+            <a href="/prep" className={buttonClass({ variant: "primary", size: "sm" })}>+ New Game</a>
           </div>
         ) : (
           <div className="gtable-wrap">
@@ -487,7 +487,7 @@ export default function HostDashboardPage() {
                               setUpdatingBrand(null);
                             }
                           }}
-                          className="hbtn"
+                          className={buttonClass({ variant: "outline", size: "sm" })}
                         />
                       </td>
 
@@ -508,7 +508,7 @@ export default function HostDashboardPage() {
                         <span>{game1 ? (game1.totalSongs ?? game1.addedCount ?? 0) : 0} songs</span>
                         <div className="gt-game-actions">
                           <button
-                            className="hbtn gt-copy"
+                            className={buttonClass({ variant: "outline", size: "sm", className: "min-h-9 px-4 text-xs" })}
                             title="Copy Game 1 songs as plain text"
                             aria-label={`Copy Game 1 songs for ${session.name}`}
                             disabled={isCopyingGame1}
@@ -526,7 +526,7 @@ export default function HostDashboardPage() {
                         <span>{game2 ? (game2.totalSongs ?? game2.addedCount ?? 0) : 0} songs</span>
                         <div className="gt-game-actions">
                           <button
-                            className="hbtn gt-copy"
+                            className={buttonClass({ variant: "outline", size: "sm", className: "min-h-9 px-4 text-xs" })}
                             title="Copy Game 2 songs as plain text"
                             aria-label={`Copy Game 2 songs for ${session.name}`}
                             disabled={isCopyingGame2}
@@ -542,16 +542,16 @@ export default function HostDashboardPage() {
                         <div className="gt-actions">
                           <button
                             type="button"
-                            className="hbtn hbtn--primary"
+                            className={buttonClass({ variant: "primary", size: "sm" })}
                             onClick={() => void openController(session)}
                           >
                             &#9654; Control
                           </button>
-                          <a className="hbtn" href={`/prep?session=${session.id}`}>
+                          <a className={buttonClass({ variant: "outline", size: "sm" })} href={`/prep?session=${session.id}`}>
                             &#9998; Edit
                           </a>
                           <button
-                            className="hbtn"
+                            className={buttonClass({ variant: "outline", size: "sm" })}
                             title="Re-download event pack"
                             disabled={isDownloading || isBrandUpdating}
                             onClick={() => void onRedownload(session)}
@@ -559,21 +559,21 @@ export default function HostDashboardPage() {
                             {isDownloading ? "Generating…" : "Event Pack"}
                           </button>
                           <button
-                            className="hbtn iconbtn"
+                            className={buttonClass({ variant: "outline", size: "sm", className: "w-11 px-0" })}
                             title="Export session JSON"
                             onClick={() => onExportJson(session)}
                           >
                             &#8679;
                           </button>
                           <button
-                            className="hbtn iconbtn"
+                            className={buttonClass({ variant: "outline", size: "sm", className: "w-11 px-0" })}
                             title="Duplicate session"
                             onClick={() => void onDuplicate(session)}
                           >
                             &#10697;
                           </button>
                           <button
-                            className="hbtn iconbtn hbtn--danger"
+                            className={buttonClass({ variant: "outline", size: "sm", className: "w-11 px-0 border-danger-text text-danger-text hover:bg-danger-fill hover:text-danger-text" })}
                             title="Delete session"
                             onClick={() => void onDelete(session)}
                           >

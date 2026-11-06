@@ -1,12 +1,11 @@
 "use client";
 
-import { useMemo } from "react";
 import {
-  SUPPORTED_BRAND_FONTS,
   DEFAULT_DISPLAY_FONT,
   DEFAULT_BODY_FONT,
 } from "@/lib/brands/fonts";
 import type { BrandWithUrls } from "@/lib/brands/brandList";
+import { buttonClass, cn, fieldClass } from "@anchor-nights/kit/ui";
 
 /** A QR link as edited in the form. */
 export type QrItem = { label: string; url: string };
@@ -16,7 +15,7 @@ export type EditableLogoSlot = "logo-dark" | "logo-light" | "event-logo";
 
 /**
  * The editable shape of a brand, owned by the page (the live-preview draft).
- * Colours/name/fonts feed the preview directly; the API key and staged logo
+ * The name and messages feed the preview directly; the API key and staged logo
  * files are write-only and never surfaced in the preview.
  */
 export type EditableBrand = {
@@ -52,7 +51,7 @@ export type EditableBrand = {
 const THUMB_STYLE: React.CSSProperties = {
   marginTop: 4,
   borderRadius: 11,
-  border: "1px solid rgb(255 255 255 / .16)",
+  border: "1px solid var(--border)",
   minHeight: 72,
   display: "flex",
   alignItems: "center",
@@ -170,39 +169,6 @@ function Field({
   );
 }
 
-/** Colour swatch + hex text row. */
-function ColorRow({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-}): React.ReactElement {
-  return (
-    <div className="fg">
-      <label>{label}</label>
-      <div className="colorrow">
-        <input
-          type="color"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          aria-label={`${label} colour picker`}
-        />
-        <input
-          type="text"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          pattern="^#[0-9a-fA-F]{6}$"
-          maxLength={7}
-          aria-label={`${label} colour hex`}
-        />
-      </div>
-    </div>
-  );
-}
-
 /**
  * Dark-console brand editor. Fully controlled: it renders the parent's `draft`
  * and reports every change up via `onChange`, so the parent page can mirror the
@@ -215,21 +181,6 @@ export function BrandForm({
   apiKey,
   onApiKeyChange,
 }: BrandFormProps): React.ReactElement {
-  const displayFonts = useMemo(
-    () =>
-      Object.entries(SUPPORTED_BRAND_FONTS)
-        .filter(([, f]) => f.category === "display" || f.category === "both")
-        .map(([name]) => name),
-    []
-  );
-  const bodyFonts = useMemo(
-    () =>
-      Object.entries(SUPPORTED_BRAND_FONTS)
-        .filter(([, f]) => f.category === "body" || f.category === "both")
-        .map(([name]) => name),
-    []
-  );
-
   const feedDisabled = draft.eventFeedType === "none";
 
   function updateQr(index: number, patch: Partial<QrItem>): void {
@@ -262,7 +213,7 @@ export function BrandForm({
               onChange={(e) => onLogoFile("logo-dark", e.target.files?.[0] ?? null)}
             />
             {draft.logoDarkPreview ? (
-              <div style={{ ...THUMB_STYLE, background: draft.colorPrimary }}>
+              <div style={{ ...THUMB_STYLE, background: "var(--anchor-green)" }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={draft.logoDarkPreview}
@@ -283,7 +234,7 @@ export function BrandForm({
               onChange={(e) => onLogoFile("logo-light", e.target.files?.[0] ?? null)}
             />
             {draft.logoLightPreview ? (
-              <div style={{ ...THUMB_STYLE, background: "#f8fafc" }}>
+              <div style={{ ...THUMB_STYLE, background: "var(--anchor-paper)" }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={draft.logoLightPreview}
@@ -294,72 +245,9 @@ export function BrandForm({
             ) : null}
           </Field>
 
-          <div
-            className="fg span2"
-            style={{ flexDirection: "row", alignItems: "center", gap: 12 }}
-          >
-            <button
-              type="button"
-              className={`hbtn ${draft.isDefault ? "hbtn--on" : ""}`}
-              style={{ minHeight: 40 }}
-              onClick={() => onChange({ isDefault: true })}
-              disabled={draft.isDefault}
-            >
-              {draft.isDefault ? "★ Default venue" : "Set as default venue"}
-            </button>
-            <span className="help">Pre-selected when creating a new game.</span>
-          </div>
-
-          <ColorRow
-            label="Primary"
-            value={draft.colorPrimary}
-            onChange={(v) => onChange({ colorPrimary: v })}
-          />
-          <ColorRow
-            label="Primary light"
-            value={draft.colorPrimaryLight}
-            onChange={(v) => onChange({ colorPrimaryLight: v })}
-          />
-          <ColorRow
-            label="Accent"
-            value={draft.colorAccent}
-            onChange={(v) => onChange({ colorAccent: v })}
-          />
-          <ColorRow
-            label="Accent light"
-            value={draft.colorAccentLight}
-            onChange={(v) => onChange({ colorAccentLight: v })}
-          />
-
-          <Field label="Display font" help="Headlines and big numbers">
-            <select
-              value={draft.fontDisplay}
-              onChange={(e) => onChange({ fontDisplay: e.target.value })}
-            >
-              {displayFonts.map((font) => (
-                <option key={font} value={font}>
-                  {font}
-                </option>
-              ))}
-            </select>
-          </Field>
-
-          <Field label="Body font" help="Supporting copy and labels">
-            <select
-              value={draft.fontBody}
-              onChange={(e) => onChange({ fontBody: e.target.value })}
-            >
-              {bodyFonts.map((font) => (
-                <option key={font} value={font}>
-                  {font}
-                </option>
-              ))}
-            </select>
-          </Field>
-
           <Field
             label="Event logo (gold)"
-            help="WEBP only — the gold lockup used on the event pack"
+            help="WEBP only: the gold lockup used on the event pack"
             span2
           >
             <input
@@ -368,7 +256,7 @@ export function BrandForm({
               onChange={(e) => onLogoFile("event-logo", e.target.files?.[0] ?? null)}
             />
             {draft.eventLogoPreview ? (
-              <div style={{ ...THUMB_STYLE, background: draft.colorPrimary }}>
+              <div style={{ ...THUMB_STYLE, background: "var(--anchor-green)" }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={draft.eventLogoPreview}
@@ -434,16 +322,7 @@ export function BrandForm({
           draft.qrItems.map((q, i) => (
             <div key={i} style={{ display: "flex", gap: 8, marginBottom: 10 }}>
               <input
-                style={{
-                  flex: "0 0 36%",
-                  background: "rgb(0 0 0 / .3)",
-                  border: "1px solid rgb(255 255 255 / .16)",
-                  borderRadius: 11,
-                  color: "var(--cream)",
-                  fontFamily: "inherit",
-                  fontSize: 15,
-                  padding: "11px 13px",
-                }}
+                className={cn(fieldClass, "basis-[36%] shrink-0 grow-0")}
                 value={q.label}
                 onChange={(e) => updateQr(i, { label: e.target.value })}
                 placeholder="Label"
@@ -451,16 +330,7 @@ export function BrandForm({
                 aria-label={`QR link ${i + 1} label`}
               />
               <input
-                style={{
-                  flex: 1,
-                  background: "rgb(0 0 0 / .3)",
-                  border: "1px solid rgb(255 255 255 / .16)",
-                  borderRadius: 11,
-                  color: "var(--cream)",
-                  fontFamily: "inherit",
-                  fontSize: 15,
-                  padding: "11px 13px",
-                }}
+                className={cn(fieldClass, "flex-1")}
                 value={q.url}
                 onChange={(e) => updateQr(i, { url: e.target.value })}
                 placeholder="https://…"
@@ -468,7 +338,7 @@ export function BrandForm({
               />
               <button
                 type="button"
-                className="hbtn iconbtn hbtn--danger"
+                className={buttonClass({ variant: "outline", size: "sm", className: "w-11 px-0 border-danger-text text-danger-text hover:bg-danger-fill hover:text-danger-text" })}
                 title="Remove"
                 aria-label={`Remove QR link ${i + 1}`}
                 onClick={() =>
@@ -483,7 +353,7 @@ export function BrandForm({
         {draft.qrItems.length < 4 ? (
           <button
             type="button"
-            className="hbtn"
+            className={buttonClass({ variant: "outline", size: "sm" })}
             onClick={() => onChange({ qrItems: [...draft.qrItems, { label: "", url: "" }] })}
           >
             + Add QR link
@@ -543,16 +413,7 @@ export function BrandForm({
                 draft.eventFeedHasKey ? "Leave blank to keep existing" : "Enter API key"
               }
               disabled={feedDisabled}
-              style={{
-                flex: 1,
-                background: "rgb(0 0 0 / .3)",
-                border: "1px solid rgb(255 255 255 / .16)",
-                borderRadius: 11,
-                color: "var(--cream)",
-                fontFamily: "inherit",
-                fontSize: 15,
-                padding: "11px 13px",
-              }}
+                className={cn(fieldClass, "flex-1")}
               aria-label="Event feed API key"
             />
           </div>

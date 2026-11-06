@@ -62,13 +62,13 @@ export function Standings(props: ScreenProps): React.ReactElement {
         style={{ top: "46%", left: "50%", transform: "translate(-50%,-50%)", opacity: 0.3 }}
       />
       <div className="col center-all" style={{ gap: 12, position: "relative", zIndex: 2 }}>
-        <div className="kicker an-rise d1">Halfway There</div>
+        <div className="tv-kicker an-rise d1">Halfway There</div>
         <h1 className="display display--gold an-rise d2" style={{ fontSize: 118 }}>
           Where We Stand
         </h1>
         <div
           className="an-rise d3"
-          style={{ fontSize: 26, fontWeight: 700, color: "rgb(var(--cream-rgb) / .78)" }}
+          style={{ fontSize: 32, fontWeight: 700, color: "color-mix(in srgb, var(--anchor-cream-text) 78%, transparent)" }}
         >
           Positions only. The points stay secret until the end.
         </div>
@@ -115,20 +115,20 @@ export function Standings(props: ScreenProps): React.ReactElement {
                   padding: isLeader ? "20px 26px" : "15px 22px",
                   borderRadius: 18,
                   background: isLeader
-                    ? "linear-gradient(180deg, rgb(var(--brand-accent-rgb) / .92), rgb(var(--ink-rgb) / .55))"
+                    ? "linear-gradient(180deg, color-mix(in srgb, var(--anchor-gold) 92%, transparent), color-mix(in srgb, var(--anchor-green-deep) 55%, transparent))"
                     : "rgb(0 0 0 / .28)",
                   border: isLeader
-                    ? "3px solid var(--brand-accent-light)"
-                    : "2px solid rgb(var(--brand-accent-rgb) / .36)",
+                    ? "3px solid var(--anchor-gold-bright)"
+                    : "2px solid color-mix(in srgb, var(--anchor-gold) 36%, transparent)",
                   boxShadow: isLeader ? "0 26px 80px rgb(0 0 0 / .45)" : "none",
                 }}
               >
                 <div
                   style={{
-                    fontFamily: "var(--brand-display)",
+                    fontFamily: "var(--font-dm-serif), serif",
                     fontSize: isLeader ? size.rankLead : size.rank,
                     lineHeight: 0.9,
-                    color: isLeader ? "#fff6dd" : "var(--brand-accent-light)",
+                    color: isLeader ? "var(--anchor-cream-text)" : "var(--anchor-gold-bright)",
                   }}
                 >
                   #{position}
@@ -139,19 +139,19 @@ export function Standings(props: ScreenProps): React.ReactElement {
                     fontWeight: 900,
                     lineHeight: 1,
                     overflowWrap: "anywhere",
-                    color: "var(--cream)",
+                    color: "var(--anchor-cream-text)",
                   }}
                 >
                   {team.name}
                 </div>
                 <div
                   style={{
-                    fontSize: 20,
+                    fontSize: 32,
                     fontWeight: 800,
                     textAlign: "right",
                     color: sharesPosition
-                      ? "var(--brand-accent-light)"
-                      : "rgb(var(--cream-rgb) / .34)",
+                      ? "var(--anchor-gold-bright)"
+                      : "color-mix(in srgb, var(--anchor-cream-text) 34%, transparent)",
                     overflowWrap: "anywhere",
                   }}
                 >
@@ -181,7 +181,7 @@ export function Standings(props: ScreenProps): React.ReactElement {
               fontSize: 38,
               lineHeight: 1.15,
               fontWeight: 800,
-              color: "var(--cream)",
+              color: "var(--anchor-cream-text)",
             }}
           >
             Add teams and scores in Award Points to show the half-time standings.

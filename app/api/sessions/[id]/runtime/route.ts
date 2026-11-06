@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { hasAnySessionAccess, hasSessionAccess } from "@/lib/live/access";
 import { getRuntimeState, upsertRuntimeState } from "@/lib/live/sessionRepo";
 import { validateRuntimeState } from "@/lib/live/storage";
+import { reportError } from "@/lib/reportError";
 
 export const runtime = "nodejs";
 
@@ -21,6 +22,7 @@ export async function GET(
     }
     return NextResponse.json(state, { headers: { "Cache-Control": "no-store" } });
   } catch (err: any) {
+    await reportError({ scope: "api:session-runtime:get" }, err);
     return NextResponse.json({ error: err?.message ?? "Failed to get runtime state." }, { status: 500 });
   }
 }
@@ -42,6 +44,7 @@ export async function PUT(
     await upsertRuntimeState(id, runtime);
     return NextResponse.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
   } catch (err: any) {
+    await reportError({ scope: "api:session-runtime:put" }, err);
     return NextResponse.json({ error: err?.message ?? "Failed to save runtime state." }, { status: 500 });
   }
 }

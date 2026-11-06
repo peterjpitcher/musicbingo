@@ -24,6 +24,8 @@ type BrandRow = {
   event_feed_base_url: string | null;
   event_feed_venue_id: string | null;
   event_feed_api_key: string | null;
+  /** Absent until the 20261106210000 migration is applied. */
+  archived_at?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -51,9 +53,15 @@ function rowToBrand(row: BrandRow): Brand {
     event_feed_base_url: row.event_feed_base_url,
     event_feed_venue_id: row.event_feed_venue_id,
     event_feed_has_key: Boolean(row.event_feed_api_key),
+    archived_at: row.archived_at ?? null,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
+}
+
+/** True for a venue retired with `archived_at`. */
+function isArchived(row: Pick<BrandRow, "archived_at">): boolean {
+  return Boolean(row.archived_at);
 }
 
 export async function listBrands(): Promise<Brand[]> {
@@ -90,18 +98,19 @@ export async function getDefaultBrand(): Promise<Brand | null> {
     .maybeSingle();
 
   if (error) throw new Error(`Failed to get default brand: ${error.message}`);
-  if (data) return rowToBrand(data as BrandRow);
+  if (data && !isArchived(data as BrandRow)) return rowToBrand(data as BrandRow);
 
-  // Fallback: first brand by created_at
+  // Fallback: the first venue that is not archived, by created_at. Archived is
+  // checked here rather than in the query so this still works before the
+  // archived_at column exists.
   const { data: fallback, error: fallbackError } = await supabase
     .from("brands")
     .select("*")
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
+    .order("created_at", { ascending: true });
 
   if (fallbackError) throw new Error(`Failed to get fallback brand: ${fallbackError.message}`);
-  return fallback ? rowToBrand(fallback as BrandRow) : null;
+  const live = ((fallback ?? []) as BrandRow[]).find((row) => !isArchived(row));
+  return live ? rowToBrand(live) : null;
 }
 
 function brandToBrandConfig(brand: Brand): BrandConfig {
@@ -145,6 +154,31 @@ export async function resolveBrandConfig(brandId: string | null | undefined): Pr
   } catch (err) {
     console.warn(
       "[music-bingo] resolveBrandConfig failed; using default branding:",
+      err instanceof Error ? err.message : err,
+    );
+    return null;
+  }
+}
+
+/**
+ * Resolve the venue the TV screens and host console show for a session. Like
+ * resolveBrandConfig, but an archived venue (Barons Pubs) falls back to the
+ * default venue, so old games still render in The Anchor look. Printed packs
+ * keep using resolveBrandConfig.
+ */
+export async function resolveScreenBrandConfig(
+  brandId: string | null | undefined,
+): Promise<BrandConfig | null> {
+  try {
+    if (brandId) {
+      const brand = await getBrand(brandId);
+      if (brand && !brand.archived_at) return brandToBrandConfig(brand);
+    }
+    const defaultBrand = await getDefaultBrand();
+    return defaultBrand ? brandToBrandConfig(defaultBrand) : null;
+  } catch (err) {
+    console.warn(
+      "[music-bingo] resolveScreenBrandConfig failed; using default branding:",
       err instanceof Error ? err.message : err,
     );
     return null;

@@ -3,11 +3,10 @@
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { BrandProvider } from "@/components/brand/BrandProvider";
+import { Stage, useWakeLock } from "@anchor-nights/kit/tv";
 import { EditContext } from "@/components/motifs/EditContext";
 import { SCREEN_REGISTRY } from "@/components/screens/registry";
 import { ScoreToastOverlay } from "@/components/screens/ScoreToastOverlay";
-import { useWakeLock } from "@/hooks/useWakeLock";
 import { DEFAULT_BRAND_CONFIG } from "@/lib/brands/defaultBrand";
 import type { BrandConfig } from "@/lib/brands/types";
 import { matchChallengeSong } from "@/lib/live/challenge";
@@ -34,17 +33,6 @@ type DisplaySnapshot = {
   brand: BrandConfig | null;
 };
 
-function useStageScale(): number {
-  const [scale, setScale] = useState(1);
-  useEffect(() => {
-    const fit = () => setScale(Math.min(window.innerWidth / 1920, window.innerHeight / 1080));
-    fit();
-    window.addEventListener("resize", fit);
-    return () => window.removeEventListener("resize", fit);
-  }, []);
-  return scale;
-}
-
 export default function PrivateDisplayPage() {
   const params = useParams<{ sessionId: string }>();
   const sessionId = useMemo(
@@ -67,7 +55,6 @@ export default function PrivateDisplayPage() {
   // The TV's song clock: re-anchored when a new host save arrives, counted
   // up locally in between (see lib/live/displayClock).
   const [songClock, setSongClock] = useState<{ anchor: ProgressAnchor; now: number } | null>(null);
-  const scale = useStageScale();
 
   useEffect(() => {
     if (!sessionId) {
@@ -205,38 +192,23 @@ export default function PrivateDisplayPage() {
   };
 
   return (
-    <BrandProvider brand={brand}>
-      <EditContext.Provider value={editValue}>
-        <div className="viewport">
-          {connectionWarning ? (
-            <div style={{
-              position: "fixed",
-              top: 16,
-              left: "50%",
-              transform: "translateX(-50%)",
-              zIndex: 20,
-              padding: "10px 14px",
-              borderRadius: 8,
-              background: "rgba(0,0,0,0.78)",
-              color: "#fff",
-              fontSize: 14,
-            }}>
-              {connectionWarning}
-            </div>
-          ) : null}
-          <div
-            className="stage-scaler"
-            style={{ transform: `translate(-50%, -50%) scale(${scale})` }}
-          >
-            <div className="stage">
-              <div className="screen-wrap in" key={screenId}>
-                {renderScreen({ brand: effectiveBrand, runtime: screenRuntime, progressMs: interpolatedProgress })}
-                <ScoreToastOverlay toast={screenRuntime.scoreToast} />
-              </div>
-            </div>
-          </div>
+    <EditContext.Provider value={editValue}>
+      {/* The kit's 1920x1080 stage, scaled to the window (spec S3.3). Every
+          screen is designed in canvas pixels. */}
+      <Stage>
+        <div className="screen-wrap in" key={screenId}>
+          {renderScreen({ brand: effectiveBrand, runtime: screenRuntime, progressMs: interpolatedProgress })}
+          <ScoreToastOverlay toast={screenRuntime.scoreToast} />
         </div>
-      </EditContext.Provider>
-    </BrandProvider>
+        {connectionWarning ? (
+          <div
+            role="status"
+            className="absolute left-1/2 top-6 z-[80] -translate-x-1/2 rounded-full border border-line-gold bg-scrim px-8 py-3 font-sans text-[32px] font-semibold text-anchor-cream-text"
+          >
+            {connectionWarning}
+          </div>
+        ) : null}
+      </Stage>
+    </EditContext.Provider>
   );
 }

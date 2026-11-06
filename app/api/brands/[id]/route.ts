@@ -6,6 +6,7 @@ import { brandInputSchema } from "@/lib/brands/types";
 import type { Brand } from "@/lib/brands/types";
 import { validateEventFeedUrl } from "@/lib/brands/validation";
 import { hasAdminAccess } from "@/lib/live/access";
+import { reportError } from "@/lib/reportError";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -38,6 +39,7 @@ export async function GET(request: NextRequest, { params }: RouteParams): Promis
     if (!brand) return NextResponse.json({ error: "Brand not found" }, { status: 404 });
     return NextResponse.json(resolveLogoUrls(brand));
   } catch (err: any) {
+    await reportError({ scope: "api:brand:get" }, err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
@@ -123,6 +125,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams): Promis
     const brand = await updateBrand(id, dbInput);
     return NextResponse.json(resolveLogoUrls(brand));
   } catch (err: any) {
+    await reportError({ scope: "api:brand:put" }, err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
@@ -137,6 +140,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams): Pro
     return new NextResponse(null, { status: 204 });
   } catch (err: any) {
     const status = err.message?.includes("Cannot delete") ? 409 : 500;
+    if (status === 500) await reportError({ scope: "api:brand:delete" }, err);
     return NextResponse.json({ error: err.message }, { status });
   }
 }

@@ -29,7 +29,7 @@ export function WinnerEntry({ brand }: ScreenProps): React.ReactElement {
         className="col center-all fill"
         style={{ gap: 26, position: "relative", zIndex: 2 }}
       >
-        <div className="kicker an-rise d1">Drum Roll, Please</div>
+        <div className="tv-kicker an-rise d1">Drum Roll, Please</div>
         <h1
           className="display display--gold an-rise d2"
           style={{

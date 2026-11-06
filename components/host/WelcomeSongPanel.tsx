@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { Banner, buttonClass } from "@anchor-nights/kit/ui";
 
 interface WelcomeSongPanelProps {
   /** Current welcome song label, e.g. "Yes Sir, I Can Boogie — Baccara". */
@@ -24,7 +25,7 @@ interface WelcomeSongPanelProps {
  * Host-only control for the Welcome (idle) screen's song. The host pastes a
  * Spotify track link to set the on-screen song line live, then plays or pauses
  * that track through their Spotify device. Mirrors the surrounding content
- * panel styling (.panel / .ed / .ed-grp / .hbtn).
+ * panel styling (.panel / .ed / .ed-grp) and the kit button.
  */
 export function WelcomeSongPanel({
   title,
@@ -67,7 +68,7 @@ export function WelcomeSongPanel({
             />
             <button
               type="button"
-              className="hbtn hbtn--primary"
+              className={buttonClass({ variant: "primary", size: "sm" })}
               onClick={handleSet}
               disabled={busy || !link.trim()}
             >
@@ -83,7 +84,7 @@ export function WelcomeSongPanel({
         <div className="btn-row">
           <button
             type="button"
-            className="hbtn hbtn--primary"
+            className={buttonClass({ variant: "primary", size: "sm" })}
             onClick={onPlay}
             disabled={busy || playDisabled}
             aria-label="Play welcome song"
@@ -92,7 +93,7 @@ export function WelcomeSongPanel({
           </button>
           <button
             type="button"
-            className="hbtn"
+            className={buttonClass({ variant: "outline", size: "sm" })}
             onClick={onPause}
             disabled={busy}
             aria-label="Pause playback"
@@ -102,8 +103,8 @@ export function WelcomeSongPanel({
         </div>
 
         {error ? (
-          <div className="banner banner--danger" role="alert" style={{ marginTop: 8 }}>
-            {error}
+          <div className="mt-2">
+            <Banner tone="danger">{error}</Banner>
           </div>
         ) : null}
       </div>

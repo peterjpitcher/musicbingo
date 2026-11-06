@@ -33,7 +33,7 @@ export function VenueLogo({ brand, size = "md" }: VenueLogoProps): React.ReactEl
   return (
     <div
       className="logo-fallback"
-      style={{ fontSize: size === "sm" ? 26 : 40 }}
+      style={{ fontSize: size === "sm" ? 32 : 40 }}
     >
       {brand.name}
     </div>

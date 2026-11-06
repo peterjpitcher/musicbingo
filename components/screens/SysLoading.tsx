@@ -34,7 +34,7 @@ export function SysLoading({ brand }: ScreenProps): React.ReactElement {
         <div style={{ position: "relative" }}>
           <Vinyl size={220} />
         </div>
-        <div className="kicker an-rise d1" style={{ marginTop: 10 }}>
+        <div className="tv-kicker an-rise d1" style={{ marginTop: 10 }}>
           One Moment
         </div>
         <h1

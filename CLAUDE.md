@@ -4,12 +4,14 @@ Workspace standards live in `/Users/peterpitcher/Cursor/CLAUDE.md`. Read that fi
 
 ## What this is
 
-A single-operator internal tool for running Music Bingo nights at The Anchor and other brands. The prep wizard turns two song lists into an event pack (card PDFs, run sheet, DOCX host clipboard) and two private Spotify playlists; the host controller at `/host/[sessionId]` then drives a private TV display at `/display/[sessionId]` through a fixed run of show. Players use printed cards; there is no per-player screen. Production: `https://music-bingo.vercel.app`.
+A single-operator internal tool for running Music Bingo nights at The Anchor (the only venue since 6 November 2026; Barons Pubs is archived, not deleted). The prep wizard turns two song lists into an event pack (card PDFs, run sheet, DOCX host clipboard) and two private Spotify playlists; the host controller at `/host/[sessionId]` then drives a private TV display at `/display/[sessionId]` through a fixed run of show. Players use printed cards; there is no per-player screen. Production: `https://music-bingo.vercel.app`.
 
 ## Stack, where it differs from the workspace default
 
 - **Next.js 16.4.1** (not 15), React 19.2, TypeScript 5.5, no middleware. Node 24 (`.nvmrc`, matching the Vercel project's Node.js 24.x).
-- Tailwind 4: tokens live in `@theme inline` in `app/globals.css` (no `tailwind.config.ts`); brand colours are runtime CSS variables exposed as `brand-primary`, `brand-accent`, `ink`, `cream`. A small `@layer base` block keeps Tailwind 3's form and border defaults until the Anchor look (M-6).
+- Tailwind 4 with the shared kit `@anchor-nights/kit` (git tag in `package.json`, TypeScript source, so `transpilePackages`). `app/globals.css` imports the kit's `tokens.css`: The Anchor's look (DM Serif Display, Outfit, Clicker Script; deep green, cream, gold). The TV and the host console use the night register; prep, the games list, venue and admin pages add `theme-desk`. No `tailwind.config.ts`.
+- Kit pieces in use: `ui` (Button, `buttonClass`, Card, Banner, `fieldClass`, AnchorLogo), `tv` (Stage, `useWakeLock`, `useFitStep`), `qr` (the QR guard), `errors` (`reportError`) and `env` (build checks). Prefer them to local copies.
+- TV screens sit on the kit Stage (a 1920 by 1080 canvas scaled to the TV), so their text sizes are canvas pixels from `lib/tvType.ts` (the kit's TV sizes at 1080p), never below 32px. The kit's vh-based TV tokens would scale twice there. Fit text with `useFitStep` and `fitsInCanvas` (`lib/tvFit.ts`), not the kit's `measureLayout`, which misjudges a scaled Stage.
 - **No user auth, no Supabase Auth, no server actions.** Every route uses the service-role client (`lib/supabase.ts`); mutations are API route handlers; RLS is on with `anon` and `authenticated` revoked. The workspace auth, RLS-policy and audit-log rules do not apply; the admin secret gates access (below).
 - Tests: **Vitest**, **Playwright** flows (`scripts/e2e-flows.mjs`) and **pytest** for the legacy Python module; not Jest. ESLint 9 flat config, `no-explicit-any` off.
 
@@ -19,6 +21,7 @@ A single-operator internal tool for running Music Bingo nights at The Anchor and
 npm run dev | build | start   # via scripts/next-with-localstorage.mjs
 npm run lint                  # eslint . --max-warnings=0
 npm run typecheck
+npm test                      # vitest under TZ=Europe/London (npm run test:utc runs it under UTC)
 npm run test:unit             # vitest run
 npm run test:py               # python3 -m pytest -q (Python 3.11+)
 npm run test:e2e              # Playwright; boots its own server on 127.0.0.1:3100
@@ -67,17 +70,20 @@ supabase/migrations/     Nothing runs them at deploy; production applies them on
 - **Spotify:** tokens live in httpOnly cookies, not the database. The redirect URI defaults to `{origin}/api/spotify/callback` (`SPOTIFY_WEB_REDIRECT_URI` overrides it). Register both the `127.0.0.1:3000` and `localhost:3000` callbacks in the Spotify app or local auth fails with a redirect mismatch; production must match the deployed origin exactly. After a scope change, Disconnect then Connect again.
 - **Spotify 403 "Restriction violated"** means the command does not fit the player's state (pause when paused, skip with nothing loaded), not a Premium or permission problem; it maps to `RESTRICTED` and the command route explains it from the player state. Failures log `[spotify-live]` lines to Vercel. Spotify-owned playlists (ids starting `37i9dQZF1`) return 404 to this app and may refuse to play, so break playlists must be ones the operator owns.
 - **Event feeds per brand** (`lib/eventFeed/`): `anchor_management` (Anchor Management Tools API, key needs `read:events`) or `baronshub`, configured on `brands`; Anchor brands without their own URL and key fall back to the `MANAGEMENT_API_*` env vars. Feeds return an empty list on any error; the event pack must still generate when brand or feed resolution fails, and a failed QR render is skipped silently.
-- Brand logos live in `brand-assets` and default logo paths are confined to `public/`; brand fonts come from the allowlist in `lib/brands/fonts.ts`.
+- Brand logos live in `brand-assets` and default logo paths are confined to `public/`. Screens no longer take per-venue colours or fonts: every screen uses The Anchor look, and the venue page edits only the name, logos, messages, QR links and event feed.
+- **Archived venues:** `brands.archived_at` hides a venue from every selector and the venue page, and `PUT /api/sessions/[id]/brand` refuses one. Games that still point at an archived venue render in the default venue's look on screen (`resolveScreenBrandConfig`); printed packs keep `resolveBrandConfig`.
+- **Error sink:** `lib/reportError.ts` (the kit reporter) logs redacted failures from the API routes and, when `ERROR_SINK_URL` and `ERROR_SINK_TOKEN` are set, posts them to `/api/errors`, which stores them in `public.app_errors` (service role only, RLS on, anon and authenticated revoked).
 
 ## Environment variables
 
-All server-side; none are `NEXT_PUBLIC_`. Next reads `.env.local` only at startup, so restart `npm run dev` after changing them.
+All server-side; none are `NEXT_PUBLIC_`. Next reads `.env.local` only at startup, so restart `npm run dev` after changing them. `lib/buildEnv.mjs` checks them when `next.config.mjs` loads: a production build (`VERCEL_ENV=production`) fails naming every missing or malformed one; local, preview and CI builds need none.
 
 | Variable | Purpose |
 |---|---|
 | `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SPOTIFY_WEB_REDIRECT_URI` | Playlists and live control; the redirect URI is an optional override |
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Required; routes throw `Missing env var` without them. Project ref `ihyazjaklyhacxixhwww` |
 | `APP_ADMIN_SECRET` | Required in production |
+| `ERROR_SINK_URL`, `ERROR_SINK_TOKEN` | Optional. Set both to store reports in `app_errors`: the URL is this app's `/api/errors` (https), the token a random value of at least 32 characters |
 | `MANAGEMENT_API_BASE_URL`, `MANAGEMENT_API_TOKEN`, `MANAGEMENT_PUBLIC_EVENTS_BASE_URL` | Optional Anchor feed fallback; events site defaults to `https://www.the-anchor.pub` |
 
 ## Known gotchas

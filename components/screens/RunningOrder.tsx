@@ -41,7 +41,7 @@ export function RunningOrder({ brand }: ScreenProps): React.JSX.Element {
     >
       {/* Header */}
       <div className="col" style={{ alignItems: "center", gap: 12 }}>
-        <div className="kicker an-rise d1">Here&apos;s The Plan</div>
+        <div className="tv-kicker an-rise d1">Here&apos;s The Plan</div>
         <h1
           className="display display--gold an-rise d2"
           style={{ fontSize: 104, marginTop: 4 }}
@@ -75,17 +75,16 @@ export function RunningOrder({ brand }: ScreenProps): React.JSX.Element {
               padding: "0 26px",
               borderRadius: 18,
               background: "rgba(0,0,0,.26)",
-              border: "1px solid rgb(var(--brand-accent-rgb) / .4)",
+              border: "1px solid color-mix(in srgb, var(--anchor-gold) 40%, transparent)",
             }}
           >
             <Ball n={r.n} size={62} />
             <div
               style={{
-                fontFamily: "var(--brand-display)",
-                fontSize: 46,
+                fontFamily: "var(--font-dm-serif), serif",
+                fontSize: 52,
                 lineHeight: 1,
-                textTransform: "uppercase",
-                color: "var(--cream)",
+                color: "var(--anchor-cream-text)",
                 whiteSpace: "nowrap",
                 minWidth: 0,
               }}
