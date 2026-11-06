@@ -21,7 +21,7 @@ export const DEFAULT_BRAND_CONFIG: BrandConfig = {
   event_logo_url: null,
   break_message: null,
   end_message: null,
-  website_url: "theanchor.pub",
+  website_url: "https://www.the-anchor.pub",
   qr_items: null,
   event_feed_type: "none",
   event_feed_base_url: null,
