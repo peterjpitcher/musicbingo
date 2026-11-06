@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { assertAdminUnlocked } from "@/lib/live/adminGuard";
+import { assertSignedIn } from "@/lib/live/signInGuard";
 import type { Brand } from "./types";
 
 /** A brand row as `GET /api/brands` returns it: logo keys resolved to URLs. */
@@ -66,10 +66,10 @@ function publish(): void {
 
 async function requestBrands(): Promise<BrandWithUrls[]> {
   const res = await fetch("/api/brands");
-  // A lapsed admin cookie bounces to the unlock page and aborts here, so a 401
+  // An ended sign-in bounces to the sign-in page and aborts here, so a 401
   // never reaches consumers dressed up as "this venue has no brands". One
   // shared request means one redirect per page rather than one per selector.
-  assertAdminUnlocked(res);
+  assertSignedIn(res);
   if (!res.ok) throw new BrandListRequestError(res.status);
   return (await res.json()) as BrandWithUrls[];
 }
@@ -82,8 +82,8 @@ async function requestBrands(): Promise<BrandWithUrls[]> {
  * while a request is in flight join it; callers that arrive afterwards read the
  * cache until `invalidateBrandList()` or `refreshBrandList()` clears it.
  *
- * Failures are never cached: an admin gate that refuses once the unlock cookie
- * has lapsed must be re-checked on the next load, not remembered for the
+ * Failures are never cached: a staff gate that refuses once the sign-in has
+ * ended must be re-checked on the next load, not remembered for the
  * lifetime of the tab.
  */
 export function loadBrandList(): Promise<BrandWithUrls[]> {

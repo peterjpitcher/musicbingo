@@ -34,8 +34,9 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
 
+      # --allow-git=all: @anchor-nights/kit is a git dependency (a pinned tag).
       - name: Install
-        run: npm ci
+        run: npm ci --allow-git=all
 
       - name: Lint
         run: npm run lint
@@ -52,9 +53,19 @@ jobs:
       - name: Unit tests (UTC)
         run: npm run test:utc
 
-      # Every variable is server-side and read at request time, so the build
-      # needs none of them. No secrets are given to CI.
+      # Staff sign-in (M-8) needs the kit's auth variables on every build
+      # (lib/buildEnv.mjs). These are placeholders, not secrets: a dummy
+      # Supabase project, Cloudflare's published always-pass Turnstile test
+      # keys and a throwaway HMAC key. Nothing here can reach a real service.
       - name: Build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://ci-placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+          SUPABASE_SERVICE_ROLE_KEY: ci-placeholder-service-role-key
+          NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
+          NEXT_PUBLIC_TURNSTILE_SITE_KEY: 1x00000000000000000000AA
+          TURNSTILE_SECRET_KEY: 1x0000000000000000000000000000000AA
+          AUDIT_HMAC_KEY: v1:ci-placeholder-not-a-secret-0123456789abcdef
         run: npm run build
 
   database:
@@ -85,3 +96,18 @@ jobs:
           PGUSER: postgres
           PGPASSWORD: postgres
         run: bash supabase/tests/replay.sh
+
+      # The anon guard (scripts/check-anon-access.mjs) proves its own
+      # comparison, then reads the replayed database's catalogue: the public
+      # key must reach nothing beyond supabase/anon-access-allowlist.mjs.
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Anon access guard (self-test)
+        run: node scripts/check-anon-access.mjs --self-test
+
+      - name: Anon access guard (replayed database)
+        env:
+          SUPABASE_DB_URL: postgresql://postgres:postgres@127.0.0.1:5432/music_bingo_replay_test
+        run: node scripts/check-anon-access.mjs

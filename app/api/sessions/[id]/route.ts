@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { deleteSession, getSession } from "@/lib/live/sessionRepo";
 import { resolveScreenBrandConfig } from "@/lib/brands/brandRepo";
 import { getBrandLogoPublicUrl } from "@/lib/brands/brandStorage";
-import { hasAnySessionAccess, hasSessionAccess } from "@/lib/live/access";
+import { requireStaff } from "@/lib/auth/routeGuard";
 import { reportError } from "@/lib/reportError";
 
 export const runtime = "nodejs";
@@ -14,9 +14,8 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    if (!hasAnySessionAccess(request, id, ["host", "display"])) {
-      return NextResponse.json({ error: "Session access required." }, { status: 401 });
-    }
+    const gate = await requireStaff(request);
+    if (!gate.ok) return gate.response;
     const session = await getSession(id);
     if (!session) {
       return NextResponse.json({ error: "Session not found." }, { status: 404 });
@@ -46,9 +45,10 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    if (!hasSessionAccess(request, id, "host")) {
-      return NextResponse.json({ error: "Host access required." }, { status: 401 });
-    }
+    // Same gate as saving (PUT /api/sessions): deleting a game used to need
+    // only a host link token while saving needed the admin cookie (M-8).
+    const gate = await requireStaff(request);
+    if (!gate.ok) return gate.response;
     await deleteSession(id);
     return NextResponse.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
   } catch (err: any) {

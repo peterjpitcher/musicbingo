@@ -5,6 +5,10 @@ import { spotifyApiRequest } from "@/lib/spotifyWeb";
 
 import { POST } from "./route";
 
+// The staff gate itself is proved in lib/auth/routeRegistry.test.ts.
+vi.mock("@/lib/auth/routeGuard", () => ({
+  requireStaff: vi.fn(async () => ({ ok: true, via: "staff", userId: "u1", role: "host" })),
+}));
 vi.mock("@/lib/spotifyWeb", () => ({
   SPOTIFY_COOKIE_ACCESS: "spotify_access_cache",
   getOrRefreshAccessToken: vi.fn(async () => ({

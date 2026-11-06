@@ -12,8 +12,8 @@ type BrandSelectorProps = {
 export function BrandSelector({ value, onChange, className, disabled }: BrandSelectorProps): React.ReactNode {
   // Shared across every mounted selector: /host renders one per game row, and
   // fetching per row meant a dozen identical GET /api/brands on a page load.
-  // The store calls assertAdminUnlocked, so a lapsed cookie still bounces to
-  // the unlock page, once for the page rather than once per row.
+  // The store calls assertSignedIn, so an ended sign-in still bounces to
+  // the sign-in page, once for the page rather than once per row.
   const { brands, loading, error, errorStatus } = useBrandList();
 
   if (loading) {
@@ -24,8 +24,8 @@ export function BrandSelector({ value, onChange, className, disabled }: BrandSel
     );
   }
 
-  // A server that answered and refused (the admin gate's 401 once the unlock
-  // cookie has lapsed) still reads as "nothing to pick", as it did when this
+  // A server that answered and refused (the staff gate's 401 once the
+  // sign-in has ended) still reads as "nothing to pick", as it did when this
   // component fetched for itself. Only a request that never landed is an error.
   const requestFailed = error !== null && errorStatus === null;
 

@@ -5,7 +5,7 @@ import { getBrandLogoPublicUrl } from "@/lib/brands/brandStorage";
 import { brandInputSchema } from "@/lib/brands/types";
 import type { Brand } from "@/lib/brands/types";
 import { validateEventFeedUrl } from "@/lib/brands/validation";
-import { hasAdminAccess } from "@/lib/live/access";
+import { requireStaff } from "@/lib/auth/routeGuard";
 import { reportError } from "@/lib/reportError";
 
 function resolveLogoUrls(
@@ -27,11 +27,10 @@ function resolveLogoUrls(
   };
 }
 
-export async function GET(request: NextRequest): Promise<NextResponse> {
+export async function GET(request: NextRequest): Promise<Response> {
   try {
-    if (!hasAdminAccess(request)) {
-      return NextResponse.json({ error: "Admin access required." }, { status: 401 });
-    }
+    const gate = await requireStaff(request);
+    if (!gate.ok) return gate.response;
     const brands = await listBrands();
     return NextResponse.json(brands.map(resolveLogoUrls));
   } catch (err: any) {
@@ -40,11 +39,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 }
 
-export async function POST(request: NextRequest): Promise<NextResponse> {
+export async function POST(request: NextRequest): Promise<Response> {
   try {
-    if (!hasAdminAccess(request)) {
-      return NextResponse.json({ error: "Admin access required." }, { status: 401 });
-    }
+    const gate = await requireStaff(request);
+    if (!gate.ok) return gate.response;
     const body = await request.json();
     const parsed = brandInputSchema.safeParse(body);
     if (!parsed.success) {

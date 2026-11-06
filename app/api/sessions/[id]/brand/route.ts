@@ -1,17 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { updateSessionBrand } from "@/lib/live/sessionRepo";
 import { getBrand, resolveScreenBrandConfig } from "@/lib/brands/brandRepo";
-import { hasSessionAccess } from "@/lib/live/access";
+import { requireStaff } from "@/lib/auth/routeGuard";
 import { reportError } from "@/lib/reportError";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
-export async function PUT(request: NextRequest, { params }: RouteParams): Promise<NextResponse> {
+export async function PUT(request: NextRequest, { params }: RouteParams): Promise<Response> {
   try {
     const { id } = await params;
-    if (!hasSessionAccess(request, id, "host")) {
-      return NextResponse.json({ error: "Host access required." }, { status: 401 });
-    }
+    const gate = await requireStaff(request);
+    if (!gate.ok) return gate.response;
     const body = await request.json();
     const brandId = body?.brand_id;
     if (!brandId || typeof brandId !== "string") {

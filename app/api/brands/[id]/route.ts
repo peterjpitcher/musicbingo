@@ -5,7 +5,7 @@ import { getBrandLogoPublicUrl } from "@/lib/brands/brandStorage";
 import { brandInputSchema } from "@/lib/brands/types";
 import type { Brand } from "@/lib/brands/types";
 import { validateEventFeedUrl } from "@/lib/brands/validation";
-import { hasAdminAccess } from "@/lib/live/access";
+import { requireStaff } from "@/lib/auth/routeGuard";
 import { reportError } from "@/lib/reportError";
 
 type RouteParams = { params: Promise<{ id: string }> };
@@ -29,11 +29,10 @@ function resolveLogoUrls(
   };
 }
 
-export async function GET(request: NextRequest, { params }: RouteParams): Promise<NextResponse> {
+export async function GET(request: NextRequest, { params }: RouteParams): Promise<Response> {
   try {
-    if (!hasAdminAccess(request)) {
-      return NextResponse.json({ error: "Admin access required." }, { status: 401 });
-    }
+    const gate = await requireStaff(request);
+    if (!gate.ok) return gate.response;
     const { id } = await params;
     const brand = await getBrand(id);
     if (!brand) return NextResponse.json({ error: "Brand not found" }, { status: 404 });
@@ -44,11 +43,10 @@ export async function GET(request: NextRequest, { params }: RouteParams): Promis
   }
 }
 
-export async function PUT(request: NextRequest, { params }: RouteParams): Promise<NextResponse> {
+export async function PUT(request: NextRequest, { params }: RouteParams): Promise<Response> {
   try {
-    if (!hasAdminAccess(request)) {
-      return NextResponse.json({ error: "Admin access required." }, { status: 401 });
-    }
+    const gate = await requireStaff(request);
+    if (!gate.ok) return gate.response;
     const { id } = await params;
     const body = await request.json();
     const parsed = brandInputSchema.partial().safeParse(body);
@@ -130,11 +128,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams): Promis
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: RouteParams): Promise<NextResponse> {
+export async function DELETE(request: NextRequest, { params }: RouteParams): Promise<Response> {
   try {
-    if (!hasAdminAccess(request)) {
-      return NextResponse.json({ error: "Admin access required." }, { status: 401 });
-    }
+    const gate = await requireStaff(request);
+    if (!gate.ok) return gate.response;
     const { id } = await params;
     await deleteBrand(id);
     return new NextResponse(null, { status: 204 });

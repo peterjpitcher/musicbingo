@@ -1,15 +1,40 @@
+import { securityHeaders } from "@anchor-nights/kit/auth/headers";
 import { buildIdFromEnv } from "@anchor-nights/kit/env";
 
 import { validateMusicBingoEnv } from "./lib/buildEnv.mjs";
 
 // Fails the build (and `next dev` start-up) naming every missing or malformed
-// variable. See lib/buildEnv.mjs for what a production build needs.
+// variable. See lib/buildEnv.mjs for what each build needs.
 validateMusicBingoEnv();
+
+/**
+ * The auth standard's security headers on every response (section 3): HSTS,
+ * nosniff, frame denial, referrer and permissions policies, and the CSP as
+ * Report-Only until two weeks of clean reports (then cspMode: "enforce").
+ * App exceptions, each with its reason (recorded in CLAUDE.md):
+ *   scriptSrc 'unsafe-inline'  Next's inline bootstrap scripts carry no nonce yet.
+ *   styleSrc 'unsafe-inline'   React style props and Next's injected styles.
+ *   imgSrc i.scdn.co           Spotify album art.
+ *   imgSrc the Supabase origin venue logos in the brand-assets bucket.
+ */
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const headers = securityHeaders({
+  supabaseUrl,
+  cspMode: "report-only",
+  extra: {
+    scriptSrc: ["'unsafe-inline'"],
+    styleSrc: ["'unsafe-inline'"],
+    imgSrc: ["https://i.scdn.co", new URL(supabaseUrl).origin],
+  },
+});
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // Stop `next dev` writing its agent block into CLAUDE.md (AGENTS.md is a
+  // symlink to it); the project's own rules live there.
+  agentRules: false,
   compress: true,
   // The shared kit ships TypeScript source.
   transpilePackages: ["@anchor-nights/kit"],
@@ -20,6 +45,9 @@ const nextConfig = {
     remotePatterns: [
       { protocol: "https", hostname: "i.scdn.co" }, // Spotify CDN album art
     ],
+  },
+  async headers() {
+    return [{ source: "/:path*", headers }];
   },
 };
 

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { getBrandLogoPublicUrl } from "@/lib/brands/brandStorage";
 import { resolveScreenBrandConfig } from "@/lib/brands/brandRepo";
-import { hasSessionAccess } from "@/lib/live/access";
+import { requireStaffOrDisplayToken } from "@/lib/auth/routeGuard";
 import { getRuntimeState, getSession } from "@/lib/live/sessionRepo";
 import { makeEmptyRuntimeState } from "@/lib/live/types";
 import { reportError } from "@/lib/reportError";
@@ -12,12 +12,12 @@ export const runtime = "nodejs";
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
-): Promise<NextResponse> {
+): Promise<Response> {
   try {
     const { id } = await params;
-    if (!hasSessionAccess(request, id, "display")) {
-      return NextResponse.json({ error: "Private display access required." }, { status: 401 });
-    }
+    // The TV's own route: its link token, or a signed-in host or admin.
+    const gate = await requireStaffOrDisplayToken(request, id);
+    if (!gate.ok) return gate.response;
 
     const session = await getSession(id);
     if (!session) {

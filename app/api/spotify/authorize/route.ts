@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { requireStaff } from "@/lib/auth/routeGuard";
+
 import {
   buildSpotifyAuthorizeUrl,
   getSpotifyWebConfig,
@@ -12,6 +14,9 @@ export const runtime = "nodejs";
 const COOKIE_STATE = "spotify_oauth_state";
 
 export async function GET(request: NextRequest) {
+  // Signed-in host or admin only (M-8); the Spotify logic below is unchanged.
+  const gate = await requireStaff(request);
+  if (!gate.ok) return gate.response;
   const origin = new URL(request.url).origin;
   const secure = process.env.NODE_ENV === "production";
 

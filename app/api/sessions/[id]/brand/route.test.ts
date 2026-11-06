@@ -5,7 +5,10 @@ const updateSessionBrand = vi.fn(async () => undefined);
 const getBrand = vi.fn();
 const resolveScreenBrandConfig = vi.fn(async (id: string) => ({ id }));
 
-vi.mock("@/lib/live/access", () => ({ hasSessionAccess: () => true }));
+// The staff gate itself is proved in lib/auth/routeRegistry.test.ts.
+vi.mock("@/lib/auth/routeGuard", () => ({
+  requireStaff: vi.fn(async () => ({ ok: true, via: "staff", userId: "u1", role: "host" })),
+}));
 vi.mock("@/lib/live/sessionRepo", () => ({ updateSessionBrand }));
 vi.mock("@/lib/brands/brandRepo", () => ({ getBrand, resolveScreenBrandConfig }));
 vi.mock("@/lib/reportError", () => ({ reportError: vi.fn(async () => undefined) }));

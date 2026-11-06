@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AdminUnlockRequiredError } from "@/lib/live/adminGuard";
+import { SignInRequiredError } from "@/lib/live/signInGuard";
 
 import {
   BrandListRequestError,
@@ -65,25 +65,25 @@ describe("brandList", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it("lets the admin gate's 401 through so the unlock redirect still fires", async () => {
-    fetchMock.mockResolvedValueOnce(jsonResponse({ error: "Admin access required." }, 401));
+  it("lets the staff gate's 401 through so the sign-in redirect still fires", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: "unauthenticated" }, 401));
 
     // Sharing the request must not swallow the 401 into an empty brand list.
-    await expect(loadBrandList()).rejects.toBeInstanceOf(AdminUnlockRequiredError);
+    await expect(loadBrandList()).rejects.toBeInstanceOf(SignInRequiredError);
   });
 
-  it("reports the status for a refusal that is not an expired unlock", async () => {
+  it("reports the status for a refusal that is not an ended sign-in", async () => {
     fetchMock.mockResolvedValue(jsonResponse({ error: "Boom" }, 500));
 
     await expect(loadBrandList()).rejects.toBeInstanceOf(BrandListRequestError);
     await expect(loadBrandList()).rejects.toMatchObject({ status: 500 });
   });
 
-  it("never caches a failure, so a lapsed admin cookie is re-checked", async () => {
-    fetchMock.mockResolvedValueOnce(jsonResponse({ error: "Admin access required." }, 401));
+  it("never caches a failure, so an ended sign-in is re-checked", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: "unauthenticated" }, 401));
 
-    await expect(loadBrandList()).rejects.toBeInstanceOf(AdminUnlockRequiredError);
-    // Cookie restored: the very next load must hit the server again.
+    await expect(loadBrandList()).rejects.toBeInstanceOf(SignInRequiredError);
+    // Signed in again: the very next load must hit the server again.
     await expect(loadBrandList()).resolves.toEqual(BRANDS);
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
