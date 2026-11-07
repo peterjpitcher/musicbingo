@@ -242,8 +242,8 @@ export function LiveDisplay({ sessionId, mode = "link" }: LiveDisplayProps): Rea
   // upcoming events (spec M-7, S7.4 and S7.5); every other screen is drawn
   // on its own. The feed and the review link come from PromoProvider.
   const promoMode = loading || error ? null : resolvePromoMode(screenId, readPromoHides((key) => editValue.get(key, "")));
-  const screenProps = { brand: effectiveBrand, runtime: screenRuntime, progressMs: interpolatedProgress };
   const eventDateInput = session?.eventDateInput ?? null;
+  const screenProps = { brand: effectiveBrand, runtime: screenRuntime, progressMs: interpolatedProgress, eventDateInput };
   const sessionDate = useCallback((nowMs: number) => sessionDateFor(eventDateInput, nowMs), [eventDateInput]);
   const renderLead = (lead: PromoLead) => SCREEN_REGISTRY[lead](screenProps);
 

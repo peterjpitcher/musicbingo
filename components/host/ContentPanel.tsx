@@ -70,8 +70,8 @@ export function ContentPanel({ get, set, collapsed, onToggle }: ContentPanelProp
       </h2>
       <div className="ed">
         <div className="ed-two">
-          <Row field="winPrize" label="1st place prize" ph="£25 bar voucher" get={get} set={set} />
-          <Row field="spoonPrize" label="Wooden spoon prize" ph="Bottle of house wine" get={get} set={set} />
+          <Row field="winPrize" label="1st place prize" ph="Leave blank to hide" get={get} set={set} />
+          <Row field="spoonPrize" label="Wooden spoon prize" ph="Leave blank to hide" get={get} set={set} />
         </div>
 
         <Row field="hostName" label="Host name" ph="Leave blank to say 'your host'" get={get} set={set} />
@@ -86,8 +86,8 @@ export function ContentPanel({ get, set, collapsed, onToggle }: ContentPanelProp
 
         {/* Game themes side-by-side */}
         <div className="ed-two">
-          <Row field="g1theme" label="Game 1 theme" ph="Pop Anthems" get={get} set={set} />
-          <Row field="g2theme" label="Game 2 theme" ph="Throwbacks" get={get} set={set} />
+          <Row field="g1theme" label="Game 1 theme" ph="From the game's set-up" get={get} set={set} />
+          <Row field="g2theme" label="Game 2 theme" ph="From the game's set-up" get={get} set={set} />
         </div>
 
         <Row field="breakMins" label="Break — minutes" ph="10" get={get} set={set} />

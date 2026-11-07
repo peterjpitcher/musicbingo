@@ -48,14 +48,19 @@ const CONTENT_KEY_SET = new Set<string>(CONTENT_KEYS);
  * are empty unless the host types them, and an empty value hides that element
  * on the TV. The next event comes only from the events feed (spec M-7). Until 6 November 2026 these held design sample
  * values ("Fri 27 June · 8PM", a sample host name and sample prizes), which
- * the TV showed whenever the host left the fields blank.
+ * the TV showed whenever the host left the fields blank. Until 7 November
+ * 2026 the welcome date ("Friday · 8:00 PM"), the songs and the game themes
+ * did the same; they now come from the session, the events feed and Spotify
+ * (lib/live/welcomeWhen.ts), and are blank without them.
  */
 export const CONTENT_PLACEHOLDERS: Record<ContentKey, string> = {
   venueName: "The Anchor", venuePresents: "The Anchor Presents", venueWeb: "", hostName: "",
   welcomeTitle: "Music", welcomeTitle2: "Bingo", welcomeTitleC: "Welcome To The Show",
   welcomeLede: "Grab a drink, find your table and settle in — your host", welcomeLedeA: "Grab a drink, settle in —",
-  welcomeDate: "Friday · 8:00 PM", introTitle: "Yes Sir, I Can Boogie", introArtist: "Baccara",
-  titleTagline: "Five Lines · One Full House · Two Games",
+  // The welcome date, the songs and the game themes come only from real
+  // data (the session, the events feed, Spotify) or the host: never a sample.
+  welcomeDate: "", introTitle: "", introArtist: "",
+  titleTagline: "Lines · Full House · Two Games",
   ro1t: "Quiz · Round One", ro1s: "Grab your phones — KaraFun mobile quiz",
   ro2t: "Music Bingo · Game 1", ro2s: "Warm up, then 50 songs to dab",
   ro3t: "The Interval", ro3s: "Refill at the bar — back in 10",
@@ -70,10 +75,10 @@ export const CONTENT_PLACEHOLDERS: Record<ContentKey, string> = {
   hr2t: "Dab your matches", hr2s: "Cross off each one as you hear it. Blank squares are free and count towards your line.",
   hr3t: "Lines & full house", hr3s: "One line: any line on any card. Two lines: two lines on one card. Full house: all three lines on one card.",
   hr4t: "Shout BINGO!", hr4s: "Got a win? Shout BINGO! as loud as you can — we'll stop and check your claim.",
-  danceLede: "On your feet — this one's just for fun. Game 1 starts the moment it ends.", danceTitle: "Dancing Queen", danceArtist: "ABBA",
-  singLede: "Lungs ready! A big sing-along to warm up. Game 2 kicks off right after.", singTitle: "Don't Look Back in Anger", singArtist: "Oasis",
-  g1theme: "Pop Anthems", g1title: "Mr. Brightside", g1artist: "The Killers",
-  g2theme: "Throwback Bangers", g2title: "Take On Me", g2artist: "a-ha",
+  danceLede: "On your feet — this one's just for fun. Game 1 starts the moment it ends.", danceTitle: "", danceArtist: "",
+  singLede: "Lungs ready! A big sing-along to warm up. Game 2 kicks off right after.", singTitle: "", singArtist: "",
+  g1theme: "", g1title: "", g1artist: "",
+  g2theme: "", g2title: "", g2artist: "",
   breakL1: "We're On", breakL2: "A Break", breakLede: "Grab a refill, stretch your legs and keep your cards safe.", breakMins: "10",
   winPrize: "", spoonPrize: "",
   tyHideReview: "", tyHideNext: "",
@@ -84,14 +89,26 @@ export function isContentKey(value: unknown): value is ContentKey {
   return typeof value === "string" && CONTENT_KEY_SET.has(value);
 }
 
-/** Keep only allowlisted keys; trim; cap length; drop empties. Returns a safe partial map. */
+/**
+ * The old design samples a stored game may still hold. Pressing "Edit live"
+ * and leaving one of these fields saved the sample shown in it as if the host
+ * had typed it, so a stored copy is dropped and the real value shows instead.
+ */
+export const RETIRED_SAMPLE_VALUES: Readonly<Partial<Record<ContentKey, readonly string[]>>> = Object.freeze({
+  welcomeDate: ["Friday · 8:00 PM"],
+  g1theme: ["Pop Anthems"],
+  g2theme: ["Throwback Bangers"],
+});
+
+/** Keep only allowlisted keys; trim; cap length; drop empties and retired samples. Returns a safe partial map. */
 export function sanitizeContent(input: unknown): Partial<Record<ContentKey, string>> {
   if (!input || typeof input !== "object" || Array.isArray(input)) return {};
   const out: Partial<Record<ContentKey, string>> = {};
   for (const [k, v] of Object.entries(input as Record<string, unknown>)) {
     if (!isContentKey(k) || typeof v !== "string") continue;
     const trimmed = v.trim().slice(0, CONTENT_MAX_LENGTH);
-    if (trimmed) out[k] = trimmed;
+    if (!trimmed || RETIRED_SAMPLE_VALUES[k]?.includes(trimmed)) continue;
+    out[k] = trimmed;
   }
   return out;
 }
