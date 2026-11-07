@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Stage, useWakeLock } from "@anchor-nights/kit/tv";
 import { EditContext } from "@/components/motifs/EditContext";
+import { PromoLoop } from "@/components/promo/PromoLoop";
 import { SCREEN_REGISTRY } from "@/components/screens/registry";
 import { ScoreToastOverlay } from "@/components/screens/ScoreToastOverlay";
 import { DEFAULT_BRAND_CONFIG } from "@/lib/brands/defaultBrand";
@@ -16,6 +17,7 @@ import { nextProgressAnchor, progressAt, type ProgressAnchor } from "@/lib/live/
 import { decideBroadcast, decidePoll, NOTHING_APPLIED, type AppliedMark } from "@/lib/live/snapshotOrder";
 import { computeRevealState } from "@/lib/live/reveal";
 import { normalizeScreenId, type ScreenId } from "@/lib/live/runOfShow";
+import { readPromoHides, resolvePromoMode, sessionDateFor, type PromoLead } from "@/lib/promo/promoMode";
 import {
   CHALLENGE_REVEAL_CONFIG,
   DEFAULT_CHALLENGE_BONUS_POINTS,
@@ -236,6 +238,14 @@ export function LiveDisplay({ sessionId, mode = "link" }: LiveDisplayProps): Rea
       }) || (fallback ?? ""),
     set: () => {},
   };
+  // Welcome, the interval and the end of the night loop the management app's
+  // upcoming events (spec M-7, S7.4 and S7.5); every other screen is drawn
+  // on its own. The feed and the review link come from PromoProvider.
+  const promoMode = loading || error ? null : resolvePromoMode(screenId, readPromoHides((key) => editValue.get(key, "")));
+  const eventDateInput = session?.eventDateInput ?? null;
+  const screenProps = { brand: effectiveBrand, runtime: screenRuntime, progressMs: interpolatedProgress, eventDateInput };
+  const sessionDate = useCallback((nowMs: number) => sessionDateFor(eventDateInput, nowMs), [eventDateInput]);
+  const renderLead = (lead: PromoLead) => SCREEN_REGISTRY[lead](screenProps);
 
   return (
     <EditContext.Provider value={editValue}>
@@ -243,7 +253,11 @@ export function LiveDisplay({ sessionId, mode = "link" }: LiveDisplayProps): Rea
           screen is designed in canvas pixels. */}
       <Stage>
         <div className="screen-wrap in" key={screenId}>
-          {renderScreen({ brand: effectiveBrand, runtime: screenRuntime, progressMs: interpolatedProgress })}
+          {promoMode ? (
+            <PromoLoop mode={promoMode} brand={effectiveBrand} sessionDate={sessionDate} renderLead={renderLead} />
+          ) : (
+            renderScreen(screenProps)
+          )}
           <ScoreToastOverlay toast={screenRuntime.scoreToast} />
         </div>
         {connectionWarning ? (

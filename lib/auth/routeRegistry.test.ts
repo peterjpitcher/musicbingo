@@ -106,8 +106,8 @@ describe("the route registry", () => {
     expect(onDisk).not.toContain("/api/admin/unlock");
   });
 
-  test("30 routes, 24 of them for signed-in staff only (including all 12 Spotify routes)", () => {
-    expect(ROUTE_REGISTRY).toHaveLength(30);
+  test("31 routes, 24 of them for signed-in staff only (including all 12 Spotify routes)", () => {
+    expect(ROUTE_REGISTRY).toHaveLength(31);
     expect(ROUTE_REGISTRY.filter((r) => r.protection === "staff")).toHaveLength(24);
     const spotify = ROUTE_REGISTRY.filter((r) => r.path.startsWith("/api/spotify/"));
     expect(spotify).toHaveLength(12);
@@ -118,8 +118,11 @@ describe("the route registry", () => {
 const everyCall = ROUTE_REGISTRY.flatMap((entry) => entry.methods.map((method) => ({ ...entry, method })));
 const staffCalls = everyCall.filter((c) => c.protection === "staff" || c.protection === "tv-display");
 // The pairing endpoint is open by design (it hands an unpaired TV a code);
-// what it must never do for an anonymous caller is pair it. Proved below.
-const guardedCalls = everyCall.filter((c) => c.protection !== "tv-pairing");
+// what it must never do for an anonymous caller is pair it. The events route
+// is open by design too (the website's own events, no game or key). Both are
+// proved below.
+const OPEN_BY_DESIGN = new Set(["tv-pairing", "public-events"]);
+const guardedCalls = everyCall.filter((c) => !OPEN_BY_DESIGN.has(c.protection));
 
 describe("an anonymous caller is refused by every route", () => {
   test.each(guardedCalls.map((c) => [`${c.method} ${c.path}`, c] as const))("%s", async (_name, call) => {
@@ -214,5 +217,21 @@ describe("the TV pairing endpoint gives an anonymous caller nothing", () => {
     expect(res.status).toBe(503);
     expect(await res.json()).toEqual({ status: "unavailable" });
     expect(res.headers.get("set-cookie") ?? "").not.toMatch(/anchor-tv=/);
+  });
+});
+
+describe("the events route gives an anonymous caller only the public events", () => {
+  test("GET /api/screen/events reads no game data, sends no key without one, and caches at the CDN", async () => {
+    vi.stubEnv("ANCHOR_API_KEY", "");
+    vi.stubEnv("MANAGEMENT_API_TOKEN", "");
+    vi.resetModules();
+    const { GET } = (await import("@/app/api/screen/events/route")) as { GET: () => Promise<Response> };
+    const res = await GET();
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { status: string; events: unknown[]; nights: unknown[] };
+    // No key: the screens show their "See what's on" loop, never invented events.
+    expect(body).toMatchObject({ status: "missing_config", events: [], nights: [] });
+    expect(res.headers.get("cache-control")).toBe("public, s-maxage=60, stale-while-revalidate=300");
+    expect(dataTouched).not.toHaveBeenCalled();
   });
 });

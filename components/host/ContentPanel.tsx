@@ -41,6 +41,22 @@ function Row({ field, label, ph, area = false, get, set }: RowProps): React.Reac
   );
 }
 
+/** A switch for tonight only, stored as "1" (on) or removed (off). */
+function Toggle({ field, label, get, set }: { field: string; label: string; get: ContentPanelProps['get']; set: ContentPanelProps['set'] }): React.ReactElement {
+  const checked = get(field, '') === '1';
+  return (
+    <label className="ed-grp" style={{ flexDirection: 'row', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => set(field, e.target.checked ? '1' : '')}
+        style={{ width: 22, height: 22 }}
+      />
+      <span className="k" style={{ margin: 0 }}>{label}</span>
+    </label>
+  );
+}
+
 /**
  * Live-content editor that pushes field values to the TV display.
  * Collapsible via the header click.
@@ -54,22 +70,24 @@ export function ContentPanel({ get, set, collapsed, onToggle }: ContentPanelProp
       </h2>
       <div className="ed">
         <div className="ed-two">
-          <Row field="winPrize" label="1st place prize" ph="£25 bar voucher" get={get} set={set} />
-          <Row field="spoonPrize" label="Wooden spoon prize" ph="Bottle of house wine" get={get} set={set} />
+          <Row field="winPrize" label="1st place prize" ph="Leave blank to hide" get={get} set={set} />
+          <Row field="spoonPrize" label="Wooden spoon prize" ph="Leave blank to hide" get={get} set={set} />
         </div>
 
-        <Row field="nextDate" label="Next event date" ph="Day, date and time" get={get} set={set} />
         <Row field="hostName" label="Host name" ph="Leave blank to say 'your host'" get={get} set={set} />
 
+        {/* The Thank You screen fills itself in (spec M-7): the review link and
+            the next Music Bingo from the events feed. The host can only hide
+            a card for tonight, never type a date or a link. */}
         <div className="ed-two">
-          <Row field="reviewQrUrl" label="Review QR URL" ph="https://g.page/r/..." get={get} set={set} />
-          <Row field="bookQrUrl" label="Book again QR URL" ph="https://www.the-anchor.pub/whats-on" get={get} set={set} />
+          <Toggle field="tyHideReview" label="Hide 'Review us' tonight" get={get} set={set} />
+          <Toggle field="tyHideNext" label="Hide 'What's on next' tonight" get={get} set={set} />
         </div>
 
         {/* Game themes side-by-side */}
         <div className="ed-two">
-          <Row field="g1theme" label="Game 1 theme" ph="Pop Anthems" get={get} set={set} />
-          <Row field="g2theme" label="Game 2 theme" ph="Throwbacks" get={get} set={set} />
+          <Row field="g1theme" label="Game 1 theme" ph="From the game's set-up" get={get} set={set} />
+          <Row field="g2theme" label="Game 2 theme" ph="From the game's set-up" get={get} set={set} />
         </div>
 
         <Row field="breakMins" label="Break — minutes" ph="10" get={get} set={set} />

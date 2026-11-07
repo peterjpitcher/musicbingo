@@ -67,7 +67,6 @@ function BrandsEditor(): React.ReactElement {
   const [brands, setBrands] = useState<BrandWithUrls[]>([]);
   const [loadingList, setLoadingList] = useState(true);
   const [draft, setDraft] = useState<EditableBrand>(() => blankEditableBrand());
-  const [apiKey, setApiKey] = useState("");
   const [staged, setStaged] = useState<StagedFiles>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -124,7 +123,6 @@ function BrandsEditor(): React.ReactElement {
   useEffect(() => {
     setError("");
     setNotice("");
-    setApiKey("");
     setStaged({});
     if (isNew) {
       setDraft(blankEditableBrand());
@@ -198,10 +196,6 @@ function BrandsEditor(): React.ReactElement {
         setError("API base URL is required for this event feed.");
         return;
       }
-      if (!draft.eventFeedHasKey && !apiKey.trim()) {
-        setError("API key is required for this event feed.");
-        return;
-      }
     }
 
     setSaving(true);
@@ -233,9 +227,6 @@ function BrandsEditor(): React.ReactElement {
       };
 
       const body: Record<string, unknown> = { ...payload };
-      if (draft.eventFeedType !== "none" && apiKey.trim()) {
-        body.event_feed_api_key = apiKey.trim();
-      }
 
       const res = await fetch(isNew ? "/api/brands" : `/api/brands/${selId}`, {
         method: isNew ? "POST" : "PUT",
@@ -257,8 +248,7 @@ function BrandsEditor(): React.ReactElement {
       const fresh = list.find((b) => b.id === saved.id) ?? saved;
       setDraft(brandToEditable(fresh));
       setStaged({});
-      setApiKey("");
-      setNotice(isNew ? "Venue created." : "Venue saved.");
+        setNotice(isNew ? "Venue created." : "Venue saved.");
 
       if (isNew) {
         router.push(`/brands?id=${saved.id}`);
@@ -349,8 +339,6 @@ function BrandsEditor(): React.ReactElement {
             draft={draft}
             onChange={onChange}
             onLogoFile={onLogoFile}
-            apiKey={apiKey}
-            onApiKeyChange={setApiKey}
           />
 
           <div className="panel">

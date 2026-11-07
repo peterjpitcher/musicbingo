@@ -20,10 +20,10 @@ Next.js app to generate a full Music Bingo event pack from two plain-text song l
      - `http://localhost:3000/api/spotify/callback`
      - `https://musicbingo.orangejelly.co.uk/api/spotify/callback` (production)
      - `https://music-bingo.vercel.app/api/spotify/callback` (production alias)
-4) (Optional) Configure upcoming event QR codes (from The Anchor management API):
+4) (Optional) Configure upcoming events (from The Anchor management API) for the TV loops and the printed pack:
    - Copy `.env.example` to `.env.local`
-   - Set `MANAGEMENT_API_BASE_URL` (e.g. `https://management.orangejelly.co.uk`)
-   - Set `MANAGEMENT_API_TOKEN` (API key with `read:events`)
+   - Set `ANCHOR_API_KEY` (Music Bingo's own API key with `read:events`); `ANCHOR_API_BASE_URL` defaults to `https://management.orangejelly.co.uk/api`
+   - The old names `MANAGEMENT_API_TOKEN` and `MANAGEMENT_API_BASE_URL` are still read for one release
    - Optional: set `MANAGEMENT_PUBLIC_EVENTS_BASE_URL` if your customer-facing event site is not `https://www.the-anchor.pub`
    - Restart `npm run dev` after changing env vars
 5) Run:

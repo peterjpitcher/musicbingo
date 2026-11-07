@@ -13,6 +13,7 @@ import {
   getRevealConfigWithExtension,
 } from "@/lib/live/types";
 import { Editable } from "@/components/motifs/Editable";
+import { useEdit } from "@/components/motifs/EditContext";
 import { Ball } from "@/components/motifs/Ball";
 import { Eq } from "@/components/motifs/Eq";
 import { Chrome } from "@/components/motifs/Chrome";
@@ -131,8 +132,10 @@ function challengePresentation(type: LiveRuntimeState["challengeType"]): {
  * - Artist: shown only when `runtime.revealState.showArtist` is true.
  * - Reveal badges: each badge is lit (accent style) per its corresponding
  *   `showAlbum` / `showTitle` / `showArtist` flag; unlit badges use a dim style.
- * - When `runtime` is absent the Editable placeholders fill every field and
- *   all badges render as lit (matching the source's static demo view).
+ * - With no live track the title and artist are blank and the badges hidden:
+ *   never a sample song (the design's "Mr. Brightside" demo view was removed
+ *   on 7 November 2026, spec M-7: the TV never shows invented content).
+ * - The theme shows only when the game has one (the session or the host).
  */
 export function GameLive({
   brand,
@@ -141,8 +144,8 @@ export function GameLive({
   progressMs,
 }: ScreenProps & { game?: 1 | 2 }): React.JSX.Element {
   const themeField = game === 1 ? "g1theme" : "g2theme";
-  const themePH = game === 1 ? "Pop Anthems" : "Throwback Bangers";
-  const t = game === 1 ? "g1" : "g2";
+  const { editing, get } = useEdit();
+  const showTheme = Boolean(get(themeField, "").trim()) || editing;
 
   const expectedScreen = game === 1 ? "game1" : "game2";
   const showLiveTrack = Boolean(
@@ -155,7 +158,6 @@ export function GameLive({
   const liveRuntime = showLiveTrack ? runtime : null;
   const track = liveRuntime?.currentTrack ?? null;
   const reveal = liveRuntime?.revealState ?? null;
-  const showDesignPlaceholders = !runtime;
 
   /*
    * Default every reveal to hidden until the runtime/reveal state has loaded.
@@ -465,7 +467,7 @@ export function GameLive({
           <AlbumArt
             size={600}
             imageUrl={track && showAlbum ? track.albumImageUrl : null}
-            revealed={showAlbum || showDesignPlaceholders}
+            revealed={showAlbum}
           />
         </div>
       </div>
@@ -491,14 +493,17 @@ export function GameLive({
             >
               Game {game} · Now Playing
             </div>
-            <div style={{ fontSize: 32, fontWeight: 600 }} className="muted">
-              Theme:{" "}
-              <Editable
-                field={themeField}
-                placeholder={themePH}
-                style={{ color: "var(--anchor-cream-text)", fontWeight: 700 }}
-              />
-            </div>
+            {showTheme && (
+              <div style={{ fontSize: 32, fontWeight: 600 }} className="muted">
+                Theme:{" "}
+                <Editable
+                  optional
+                  field={themeField}
+                  placeholder="Game theme"
+                  style={{ color: "var(--anchor-cream-text)", fontWeight: 700 }}
+                />
+              </div>
+            )}
           </div>
         </div>
 
@@ -520,12 +525,6 @@ export function GameLive({
           ) : track && !showTitle ? (
             /* Title not yet revealed — show nothing but hold layout space */
             <span style={{ display: "block", opacity: 0, whiteSpace: "normal" }}>&#8203;</span>
-          ) : showDesignPlaceholders ? (
-            <Editable
-              field={`${t}title`}
-              placeholder="Mr. Brightside"
-              style={{ display: "block", overflowWrap: "anywhere", whiteSpace: "normal" }}
-            />
           ) : (
             <span style={{ display: "block", opacity: 0, whiteSpace: "normal" }}>&#8203;</span>
           )}
@@ -552,19 +551,13 @@ export function GameLive({
           ) : track && !showArtist ? (
             /* Artist not yet revealed */
             <span style={{ display: "block", opacity: 0, whiteSpace: "normal" }}>&#8203;</span>
-          ) : showDesignPlaceholders ? (
-            <Editable
-              field={`${t}artist`}
-              placeholder="The Killers"
-              style={{ display: "block", overflowWrap: "anywhere", whiteSpace: "normal" }}
-            />
           ) : (
             <span style={{ display: "block", opacity: 0, whiteSpace: "normal" }}>&#8203;</span>
           )}
         </p>
 
         {/* Reveal timeline badges */}
-        {(track || showDesignPlaceholders) && (
+        {track && (
           <div
             className="an-rise d4"
             style={{ display: "flex", gap: 14, marginTop: 14, flexWrap: "wrap" }}

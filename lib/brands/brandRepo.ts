@@ -1,5 +1,6 @@
 // lib/brands/brandRepo.ts
 import { getSupabaseClient } from "@/lib/supabase/service";
+import { resolveAnchorApiEnv } from "@/lib/anchorApiEnv";
 import type { Brand, BrandConfig, BrandFeedConfig } from "@/lib/brands/types";
 
 type BrandRow = {
@@ -185,7 +186,7 @@ export async function resolveScreenBrandConfig(
   }
 }
 
-/** Input type for createBrand — matches DB columns, includes event_feed_api_key. */
+/** Input type for createBrand: the DB columns it writes (never event_feed_api_key, spec M-7). */
 type CreateBrandInput = {
   name: string;
   is_default: boolean;
@@ -206,7 +207,6 @@ type CreateBrandInput = {
   event_feed_type?: string;
   event_feed_base_url?: string | null;
   event_feed_venue_id?: string | null;
-  event_feed_api_key?: string | null;
 };
 
 export async function createBrand(input: CreateBrandInput): Promise<Brand> {
@@ -250,48 +250,61 @@ export async function updateBrand(
 }
 
 /**
- * Server-only: returns the full feed configuration for a brand, including
- * the secret API key. For anchor_management brands without per-brand
- * credentials, falls back to environment variables.
+ * Server-only: the event pack's feed configuration for a brand (spec M-7).
+ *
+ * The Anchor Management key comes only from the environment (ANCHOR_API_KEY,
+ * or MANAGEMENT_API_TOKEN for one more release; lib/anchorApiEnv.ts), never
+ * from brands.event_feed_api_key, which a later migration clears. The env key
+ * is only ever sent to the env base URL (or the kit's default): a brand that
+ * stores a different base URL gets no key, so the global key can never be
+ * sent to a host a venue setting names. BaronsHub (the archived Barons venue)
+ * has no env key, so its pack builds without events.
  */
 export async function getBrandFeedConfig(brandId: string): Promise<BrandFeedConfig | null> {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from("brands")
-    .select("event_feed_type, event_feed_base_url, event_feed_venue_id, event_feed_api_key, website_url")
+    .select("event_feed_type, event_feed_base_url, event_feed_venue_id, website_url")
     .eq("id", brandId)
     .maybeSingle();
 
   if (error) throw new Error(`Failed to get brand feed config: ${error.message}`);
   if (!data) return null;
+  return feedConfigFromRow(data);
+}
 
-  const feedType = (data.event_feed_type ?? "none") as BrandFeedConfig["type"];
-
+/** The pure part of getBrandFeedConfig, for tests. */
+export function feedConfigFromRow(
+  row: { event_feed_type: string | null; event_feed_base_url: string | null; event_feed_venue_id: string | null; website_url: string | null },
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): BrandFeedConfig {
+  const feedType = (row.event_feed_type ?? "none") as BrandFeedConfig["type"];
   if (feedType === "none") {
     return { type: "none", baseUrl: null, apiKey: null, websiteUrl: null, venueId: null };
   }
-
-  let baseUrl: string | null = data.event_feed_base_url;
-  let apiKey: string | null = data.event_feed_api_key;
-  let websiteUrl: string | null = data.website_url;
-
-  if (feedType === "anchor_management") {
-    const envBaseUrl = process.env.MANAGEMENT_API_BASE_URL ?? null;
-    // Only pair the env-var token with the env-var URL (or no stored URL).
-    // A custom base URL with no per-brand key must NOT receive the global token.
-    if (!baseUrl) {
-      baseUrl = envBaseUrl;
-    }
-    if (!apiKey) {
-      const isEnvUrl = !data.event_feed_base_url || data.event_feed_base_url === envBaseUrl;
-      apiKey = isEnvUrl ? (process.env.MANAGEMENT_API_TOKEN ?? null) : null;
-    }
-    if (!websiteUrl) {
-      websiteUrl = process.env.MANAGEMENT_PUBLIC_EVENTS_BASE_URL ?? "https://www.the-anchor.pub";
-    }
+  const venueId = row.event_feed_venue_id ?? null;
+  if (feedType !== "anchor_management") {
+    return { type: feedType, baseUrl: row.event_feed_base_url, apiKey: null, websiteUrl: row.website_url, venueId };
   }
 
-  return { type: feedType, baseUrl, apiKey, websiteUrl, venueId: data.event_feed_venue_id ?? null };
+  const anchorApi = resolveAnchorApiEnv(env);
+  const stored = row.event_feed_base_url?.trim().replace(/\/+$/, "") || null;
+  const sameHost = !stored || originOf(stored) === originOf(anchorApi.baseUrl);
+  return {
+    type: feedType,
+    baseUrl: stored ?? anchorApi.baseUrl,
+    apiKey: sameHost ? anchorApi.apiKey : null,
+    websiteUrl: row.website_url || env.MANAGEMENT_PUBLIC_EVENTS_BASE_URL || "https://www.the-anchor.pub",
+    venueId,
+  };
+}
+
+function originOf(value: string): string | null {
+  try {
+    return new URL(value).origin;
+  } catch {
+    return null;
+  }
 }
 
 export async function deleteBrand(id: string): Promise<void> {
