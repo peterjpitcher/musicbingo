@@ -17,11 +17,13 @@
 # written to be re-run, and history is not rewritten to change that. The kit
 # auth migrations (*_kit_auth_*) are the exception: they are applied a second
 # time, because the kit promises they are safe to re-run after a partial
-# failure.
+# failure. The kit TV pairing migrations (*_kit_tv_pairing_*, M-9) are
+# applied twice for the same reason.
 #
 # After the end state, supabase/tests/auth-checks.sh runs the sign-in
-# behaviour checks (M-8). To prove those checks bite, they are also run once
-# against a second database replayed WITHOUT the kit auth migrations, and
+# behaviour checks (M-8) and supabase/tests/live-checks.sh the live console
+# and pairing checks (M-9). To prove each set bites, it is also run once
+# against a second database replayed WITHOUT the migrations it covers, and
 # that run must fail.
 
 set -euo pipefail
@@ -46,7 +48,7 @@ for f in "$MIGRATIONS"/*.sql; do
 done
 echo "==> replayed $COUNT migrations"
 
-for f in "$MIGRATIONS"/*_kit_auth_*.sql; do
+for f in "$MIGRATIONS"/*_kit_auth_*.sql "$MIGRATIONS"/*_kit_tv_pairing_*.sql "$MIGRATIONS"/*_live_control_lock_and_versions.sql; do
   echo "==> again: $(basename "$f")"
   psql_strict --single-transaction -d "$DB" -f "$f" >/dev/null
 done
@@ -62,7 +64,8 @@ begin
   -- The tables the app reads and writes (CLAUDE.md, data and sync model).
   select string_agg(t, ', ') into missing
     from unnest(array['brands', 'live_sessions', 'session_events', 'session_runtime_snapshots',
-                      'profiles', 'auth_audit', 'invites', 'recovery_grants']) t
+                      'profiles', 'auth_audit', 'invites', 'recovery_grants',
+                      'tv_devices', 'tv_pairing_codes', 'tv_pairing_attempts']) t
    where to_regclass('public.' || t) is null;
   if missing is not null then
     raise exception 'replay: tables missing after replay: %', missing;
@@ -104,15 +107,19 @@ echo "==> end state OK"
 echo "==> sign-in behaviour checks"
 TEST_DB_NAME="$DB" bash "$HERE/auth-checks.sh"
 
+echo "==> live console and pairing checks"
+TEST_DB_NAME="$DB" bash "$HERE/live-checks.sh"
+
 # Prove the checks catch the problem: replay everything except the kit auth
-# migrations and expect the same checks to fail.
+# migrations (and the pairing ones, which refuse to run without them) and
+# expect the same checks to fail.
 BASELINE="${DB}_without_auth"
 echo "==> proving the checks bite: replaying into $BASELINE without the kit auth migrations"
 psql_strict -d postgres -c "drop database if exists $BASELINE;"
 psql_strict -d postgres -c "create database $BASELINE encoding 'UTF8' template template0;"
 psql_strict -d "$BASELINE" -f "$HERE/supabase-bootstrap.sql" >/dev/null
 for f in "$MIGRATIONS"/*.sql; do
-  case "$(basename "$f")" in *_kit_auth_*) continue ;; esac
+  case "$(basename "$f")" in *_kit_auth_* | *_kit_tv_pairing_*) continue ;; esac
   psql_strict --single-transaction -d "$BASELINE" -f "$f" >/dev/null
 done
 if TEST_DB_NAME="$BASELINE" bash "$HERE/auth-checks.sh" >/dev/null 2>&1; then
@@ -121,3 +128,21 @@ if TEST_DB_NAME="$BASELINE" bash "$HERE/auth-checks.sh" >/dev/null 2>&1; then
 fi
 psql_strict -d postgres -c "drop database if exists $BASELINE;"
 echo "==> the checks fail without the kit auth migrations, as they should"
+
+# The same for the live console: replay everything except its migration and
+# expect live-checks.sh to fail.
+BASELINE_LIVE="${DB}_without_live"
+echo "==> proving the live checks bite: replaying into $BASELINE_LIVE without the control lock migration"
+psql_strict -d postgres -c "drop database if exists $BASELINE_LIVE;"
+psql_strict -d postgres -c "create database $BASELINE_LIVE encoding 'UTF8' template template0;"
+psql_strict -d "$BASELINE_LIVE" -f "$HERE/supabase-bootstrap.sql" >/dev/null
+for f in "$MIGRATIONS"/*.sql; do
+  case "$(basename "$f")" in *_live_control_lock_and_versions.sql) continue ;; esac
+  psql_strict --single-transaction -d "$BASELINE_LIVE" -f "$f" >/dev/null
+done
+if TEST_DB_NAME="$BASELINE_LIVE" bash "$HERE/live-checks.sh" >/dev/null 2>&1; then
+  echo "replay: the live checks passed on a database with no control lock, so they prove nothing"
+  exit 1
+fi
+psql_strict -d postgres -c "drop database if exists $BASELINE_LIVE;"
+echo "==> the live checks fail without the control lock migration, as they should"
