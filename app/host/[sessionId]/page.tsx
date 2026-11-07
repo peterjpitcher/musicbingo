@@ -1978,6 +1978,7 @@ export default function HostSessionControllerPage() {
                       {SCREEN_REGISTRY[currentScreenId]({
                         brand: effectiveBrand,
                         runtime,
+                        eventDateInput: session?.eventDateInput ?? null,
                       })}
                       <ScoreToastOverlay toast={runtime.scoreToast} />
                     </div>

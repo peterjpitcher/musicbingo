@@ -30,7 +30,10 @@ export function Warmup({
       (!runtime.screenId || runtime.screenId === expectedScreen)
   );
   const track = showLiveTrack ? runtime?.currentTrack ?? null : null;
-  const showNowPlaying = !runtime || showLiveTrack;
+  // Only the song actually playing: never a sample song (spec M-7; the design
+  // demo's "Dancing Queen" and "Don't Look Back in Anger" were removed on
+  // 7 November 2026).
+  const showNowPlaying = Boolean(track);
 
   return (
     <div
@@ -144,41 +147,11 @@ export function Warmup({
                     whiteSpace: "normal",
                   }}
                 >
-                  {/* Live track title — falls back to Editable placeholder when no runtime */}
-                  {track ? (
-                    <span style={{ overflowWrap: "anywhere", whiteSpace: "normal" }}>
-                      {track.title}
-                    </span>
-                  ) : (
-                    <Editable
-                      field={dance ? "danceTitle" : "singTitle"}
-                      placeholder={dance ? "Dancing Queen" : "Don't Look Back in Anger"}
-                      style={{ overflowWrap: "anywhere", whiteSpace: "normal" }}
-                    />
-                  )}
+                  <span style={{ overflowWrap: "anywhere", whiteSpace: "normal" }}>{track?.title}</span>
                   <span style={{ opacity: 0.5, margin: "0 10px" }}>·</span>
-                  {/* Live track artist — falls back to Editable placeholder when no runtime */}
-                  {track ? (
-                    <span
-                      style={{
-                        fontWeight: 500,
-                        overflowWrap: "anywhere",
-                        whiteSpace: "normal",
-                      }}
-                    >
-                      {track.artist}
-                    </span>
-                  ) : (
-                    <Editable
-                      field={dance ? "danceArtist" : "singArtist"}
-                      placeholder={dance ? "ABBA" : "Oasis"}
-                      style={{
-                        fontWeight: 500,
-                        overflowWrap: "anywhere",
-                        whiteSpace: "normal",
-                      }}
-                    />
-                  )}
+                  <span style={{ fontWeight: 500, overflowWrap: "anywhere", whiteSpace: "normal" }}>
+                    {track?.artist}
+                  </span>
                 </div>
               </div>
             </div>

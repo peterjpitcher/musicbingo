@@ -2,31 +2,25 @@
 
 import { Vinyl } from "@/components/motifs/Vinyl";
 import { Eq } from "@/components/motifs/Eq";
-import { Editable } from "@/components/motifs/Editable";
 
 export type NowPlayingProps = {
   /** Label shown above the track title (defaults to "Now Playing"). */
   label?: string;
-  /** Editable store key for the track title. */
-  titleField: string;
-  /** Editable store key for the artist name. */
-  artistField: string;
-  /** Placeholder text for the track title. */
-  titlePH: string;
-  /** Placeholder text for the artist name. */
-  artistPH: string;
+  /** The playing song's title, from the runtime (never a sample). */
+  title: string;
+  /** The playing song's artist, from the runtime. */
+  artist: string;
 };
 
 /**
  * Shared "now playing" strip used by Welcome and warm-up screens.
  * Renders a pill containing a spinning vinyl, track/artist text, and an EQ bar.
+ * Callers show it only while a real song is playing (spec M-7).
  */
 export function NowPlaying({
   label = "Now Playing",
-  titleField,
-  artistField,
-  titlePH,
-  artistPH,
+  title,
+  artist,
 }: NowPlayingProps): React.JSX.Element {
   return (
     <div
@@ -66,17 +60,11 @@ export function NowPlaying({
             whiteSpace: "normal",
           }}
         >
-          <Editable
-            field={titleField}
-            placeholder={titlePH}
-            style={{ overflowWrap: "anywhere", whiteSpace: "normal" }}
-          />
+          <span style={{ overflowWrap: "anywhere", whiteSpace: "normal" }}>{title}</span>
           <span style={{ opacity: 0.45, margin: "0 12px" }}>·</span>
-          <Editable
-            field={artistField}
-            placeholder={artistPH}
-            style={{ fontWeight: 500, opacity: 0.8, overflowWrap: "anywhere", whiteSpace: "normal" }}
-          />
+          <span style={{ fontWeight: 500, opacity: 0.8, overflowWrap: "anywhere", whiteSpace: "normal" }}>
+            {artist}
+          </span>
         </div>
       </div>
       <Eq bars={7} style={{ flexShrink: 0, height: 44 }} />

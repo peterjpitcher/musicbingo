@@ -125,7 +125,7 @@ export function Title({ brand, variant = "A" }: ScreenProps): React.JSX.Element 
           <div className="pill an-rise d4" style={{ marginTop: 6 }}>
             <Editable
               field="titleTagline"
-              placeholder="Five Lines · One Full House · Two Games"
+              placeholder="Lines · Full House · Two Games"
             />
           </div>
         </div>
@@ -155,7 +155,7 @@ export function Title({ brand, variant = "A" }: ScreenProps): React.JSX.Element 
         <div className="pill an-rise d4" style={{ marginTop: 4 }}>
           <Editable
             field="titleTagline"
-            placeholder="Five Lines · One Full House · Two Games"
+            placeholder="Lines · Full House · Two Games"
           />
         </div>
       </div>

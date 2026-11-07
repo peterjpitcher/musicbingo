@@ -82,6 +82,19 @@ describe("getContent precedence", () => {
     expect(getContent("tyHideReview", {})).toBe("");
     expect(getContent("tyHideNext", {})).toBe("");
   });
+  it("has no sample date, songs or themes to fall back to (7 November 2026)", () => {
+    for (const key of ["welcomeDate", "introTitle", "introArtist", "danceTitle", "danceArtist", "singTitle", "singArtist", "g1theme", "g1title", "g1artist", "g2theme", "g2title", "g2artist"] as const) {
+      expect(getContent(key, {})).toBe("");
+    }
+  });
+  it("still takes the game themes from the session", () => {
+    expect(getContent("g1theme", { session })).toBe("Pop Anthems");
+    expect(getContent("g2theme", { session })).toBe("Throwbacks");
+  });
+  it("drops a stored copy of an old design sample, so the real value shows", () => {
+    expect(sanitizeContent({ welcomeDate: "Friday · 8:00 PM", g1theme: "Pop Anthems", g2theme: "Throwback Bangers", hostName: "Sam" })).toEqual({ hostName: "Sam" });
+    expect(sanitizeContent({ welcomeDate: "Saturday 21 November · 7pm" })).toEqual({ welcomeDate: "Saturday 21 November · 7pm" });
+  });
   it("every ContentKey has a placeholder string", () => {
     for (const k of CONTENT_KEYS) expect(typeof getContent(k, {})).toBe("string");
   });
