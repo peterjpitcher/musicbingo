@@ -1,10 +1,8 @@
 import "server-only";
 
-import type { NextRequest } from "next/server";
 import { isSameOriginRequest, type AppRole } from "@anchor-nights/kit/auth";
 
 import { authHelpers, STAFF_ROLES } from "@/lib/auth/server";
-import { hasSessionTokenAccess } from "@/lib/live/access";
 
 /**
  * The one gate in front of every browser-called API route (auth standard
@@ -24,7 +22,6 @@ import { hasSessionTokenAccess } from "@/lib/live/access";
 
 export type RouteGate =
   | { ok: true; via: "staff"; userId: string; role: AppRole }
-  | { ok: true; via: "display-token" }
   | { ok: false; response: Response };
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
@@ -69,13 +66,4 @@ export async function requireStaff(request: Request, roles: readonly AppRole[] =
   }
   if (!result.ok) return { ok: false, response: result.response };
   return { ok: true, via: "staff", userId: result.user.id, role: result.role };
-}
-
-/**
- * The TV's own routes: a valid TV link token for this session (the cookie the
- * link set), or else a signed-in host or admin (the laptop's Open Display).
- */
-export async function requireStaffOrDisplayToken(request: NextRequest, sessionId: string): Promise<RouteGate> {
-  if (hasSessionTokenAccess(request, sessionId, "display")) return { ok: true, via: "display-token" };
-  return requireStaff(request);
 }

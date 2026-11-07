@@ -15,7 +15,10 @@ export const sessionCommandSchema = z.object({
   ]),
   clientEventId: z.string().trim().min(1).max(120).optional(),
   payload: z.record(z.string(), z.unknown()).default({}),
-  runtime: z.unknown().optional(),
+  // Every command carries the runtime it leaves, saved with it in one
+  // transaction, and the runtime version the console last saw (spec M-9).
+  runtime: z.unknown(),
+  expectedVersion: z.number().int().min(0),
 });
 
 export type SessionCommandInput = z.infer<typeof sessionCommandSchema>;

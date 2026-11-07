@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { deleteSession, getSession } from "@/lib/live/sessionRepo";
+import { deleteSession, getSession, SessionNotFoundError } from "@/lib/live/sessionRepo";
 import { resolveScreenBrandConfig } from "@/lib/brands/brandRepo";
 import { getBrandLogoPublicUrl } from "@/lib/brands/brandStorage";
 import { requireStaff } from "@/lib/auth/routeGuard";
@@ -52,6 +52,10 @@ export async function DELETE(
     await deleteSession(id);
     return NextResponse.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
   } catch (err: any) {
+    // A delete that removed nothing is not reported as done (spec M-9).
+    if (err instanceof SessionNotFoundError) {
+      return NextResponse.json({ error: "Session not found." }, { status: 404 });
+    }
     await reportError({ scope: "api:session:delete" }, err);
     return NextResponse.json({ error: err?.message ?? "Failed to delete session." }, { status: 500 });
   }

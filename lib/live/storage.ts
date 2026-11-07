@@ -4,7 +4,6 @@ import {
   LIVE_RUNTIME_VERSION,
   MAX_TEAM_SCORE,
   sanitizeChallengeBonusPoints,
-  type LiveControlLock,
   type LiveRuntimeState,
   type LiveSessionV1,
   type LiveScoreToast,
@@ -24,7 +23,10 @@ function runtimeStorageKey(sessionId: string): string {
   return `music-bingo-live-runtime:${sessionId}`;
 }
 
-function controlLockStorageKey(sessionId: string): string {
+// The browser-only control lock (music-bingo-live-lock:<id>) was replaced by
+// the server-held lock in spec M-9 (hooks/useHostControl.ts). Its old key is
+// still removed when a game is deleted, so nothing is left behind.
+function legacyControlLockStorageKey(sessionId: string): string {
   return `music-bingo-live-lock:${sessionId}`;
 }
 
@@ -102,7 +104,7 @@ export function deleteLiveSession(sessionId: string): void {
   writeRaw(LIVE_SESSIONS_STORAGE_KEY, JSON.stringify(sessions));
 
   deleteRaw(runtimeStorageKey(trimmed));
-  deleteRaw(controlLockStorageKey(trimmed));
+  deleteRaw(legacyControlLockStorageKey(trimmed));
 }
 
 export function exportLiveSessionJson(sessionId: string): string {
@@ -340,64 +342,4 @@ export function writeRuntimeState(sessionId: string, runtime: LiveRuntimeState):
     throw new Error("Invalid runtime state payload.");
   }
   writeRaw(runtimeStorageKey(sessionId), JSON.stringify(validated));
-}
-
-export function readControlLock(sessionId: string): LiveControlLock | null {
-  const raw = readRaw(controlLockStorageKey(sessionId));
-  if (!raw) return null;
-
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (!isObject(parsed)) return null;
-    const tabId = asString(parsed.tabId);
-    const lastSeenMs = asNumber(parsed.lastSeenMs);
-    if (!tabId || lastSeenMs === null) return null;
-    return { tabId, lastSeenMs };
-  } catch {
-    return null;
-  }
-}
-
-export function isControlLockStale(lock: LiveControlLock | null, nowMs = Date.now(), staleMs = 15_000): boolean {
-  if (!lock) return true;
-  return nowMs - lock.lastSeenMs > staleMs;
-}
-
-export function acquireControlLock(params: {
-  sessionId: string;
-  tabId: string;
-  force?: boolean;
-  nowMs?: number;
-  staleMs?: number;
-}): { acquired: boolean; lock: LiveControlLock | null } {
-  const nowMs = params.nowMs ?? Date.now();
-  const staleMs = params.staleMs ?? 15_000;
-
-  const current = readControlLock(params.sessionId);
-  const ownsLock = current?.tabId === params.tabId;
-  const available = !current || isControlLockStale(current, nowMs, staleMs);
-
-  if (!params.force && !ownsLock && !available) {
-    return { acquired: false, lock: current };
-  }
-
-  const nextLock: LiveControlLock = {
-    tabId: params.tabId,
-    lastSeenMs: nowMs,
-  };
-
-  writeRaw(controlLockStorageKey(params.sessionId), JSON.stringify(nextLock));
-  return { acquired: true, lock: nextLock };
-}
-
-export function updateControlHeartbeat(sessionId: string, tabId: string, nowMs = Date.now()): void {
-  const current = readControlLock(sessionId);
-  if (!current || current.tabId !== tabId) return;
-  writeRaw(controlLockStorageKey(sessionId), JSON.stringify({ tabId, lastSeenMs: nowMs }));
-}
-
-export function releaseControlLock(sessionId: string, tabId: string): void {
-  const current = readControlLock(sessionId);
-  if (current?.tabId !== tabId) return;
-  deleteRaw(controlLockStorageKey(sessionId));
 }

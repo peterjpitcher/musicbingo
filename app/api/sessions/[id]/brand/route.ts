@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { updateSessionBrand } from "@/lib/live/sessionRepo";
+import { SessionNotFoundError, updateSessionBrand } from "@/lib/live/sessionRepo";
 import { getBrand, resolveScreenBrandConfig } from "@/lib/brands/brandRepo";
 import { requireStaff } from "@/lib/auth/routeGuard";
 import { reportError } from "@/lib/reportError";
@@ -31,6 +31,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams): Promis
     const brand = await resolveScreenBrandConfig(brandId);
     return NextResponse.json({ brand });
   } catch (err: any) {
+    // The game was not there (or went while saving): not saved, and said so.
+    if (err instanceof SessionNotFoundError) {
+      return NextResponse.json({ error: "Session not found." }, { status: 404 });
+    }
     await reportError({ scope: "api:session-brand:put" }, err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

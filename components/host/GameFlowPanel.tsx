@@ -1,6 +1,10 @@
 'use client';
 
-import { buttonClass } from "@anchor-nights/kit/ui";
+import { buttonClass, HoldButton } from "@anchor-nights/kit/ui";
+
+/** The hold labels, as the host reads them (spec M-9, S4.2). */
+export const END_SESSION_HOLD_LABEL = "Hold to end the session";
+export const RESET_LOBBY_HOLD_LABEL = "Hold to reset to the lobby";
 
 /** Prop types for the Game Flow panel */
 export interface GameFlowPanelProps {
@@ -16,8 +20,13 @@ export interface GameFlowPanelProps {
   resumeGameNumber: 1 | 2 | null;
   /** Resume the interrupted game's playlist from the song it was on. */
   onResumeGame: () => void;
-  onEnd: () => void;
-  onReset: () => void;
+  /**
+   * End the session. Only fires after a full hold (it cannot be taken back
+   * mid-show). Return false when it was refused, so the hold never shows done.
+   */
+  onEnd: () => boolean | void;
+  /** Reset to the lobby, wiping scores and played songs. Also hold-to-confirm. */
+  onReset: () => boolean | void;
   /** Show the Bingo Claim screen (lists this game's played songs on the TV). */
   onClaim: () => void;
   /** Return the TV from the claim screen back to the active game screen. */
@@ -38,6 +47,10 @@ export interface GameFlowPanelProps {
  * All other modes show the 4-button intro/start grid plus a footer row whose
  * secondary action toggles between "End Session" and "Reset to Lobby" depending
  * on whether the session has already ended.
+ *
+ * End Session and Reset to Lobby cannot be taken back in front of the room,
+ * so both are press-and-hold (the kit HoldButton); everything else is a
+ * single tap because it can be undone with another tap.
  */
 export function GameFlowPanel({
   mode,
@@ -85,9 +98,7 @@ export function GameFlowPanel({
           >
             ▶ Continue Show
           </button>
-          <button className={buttonClass({ variant: "outline", size: "sm", className: "border-danger-text text-danger-text hover:bg-danger-fill hover:text-danger-text" })} onClick={onEnd}>
-            End Session
-          </button>
+          <HoldButton label={END_SESSION_HOLD_LABEL} onDone={onEnd} danger size={44} className="flex-1" />
         </div>
       ) : (
         <>
@@ -132,13 +143,9 @@ export function GameFlowPanel({
               Show Break Screen
             </button>
             {mode === 'ended' ? (
-              <button className={buttonClass({ variant: "outline", size: "sm", className: "flex-1" })} onClick={onReset}>
-                Reset to Lobby
-              </button>
+              <HoldButton label={RESET_LOBBY_HOLD_LABEL} onDone={onReset} size={44} className="flex-1" />
             ) : (
-              <button className={buttonClass({ variant: "outline", size: "sm", className: "border-danger-text text-danger-text hover:bg-danger-fill hover:text-danger-text" })} onClick={onEnd}>
-                End Session
-              </button>
+              <HoldButton label={END_SESSION_HOLD_LABEL} onDone={onEnd} danger size={44} className="flex-1" />
             )}
           </div>
         </>
