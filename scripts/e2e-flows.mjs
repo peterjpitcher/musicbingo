@@ -935,6 +935,21 @@ async function main() {
       assert.equal(cross.status(), 403, "a cross-site save should be refused");
     });
 
+    await runFlow(flowResults, "Flow A1b: The front page shows the kit's three tiles, and Host console asks a signed-out visitor to sign in", async () => {
+      await authPage.goto(`${BASE_URL}/`, { waitUntil: "networkidle" });
+      assert.equal(new URL(authPage.url()).pathname, "/", "the front page should no longer redirect");
+      await authPage.getByRole("heading", { name: "Music Bingo" }).waitFor();
+      const tiles = authPage.getByRole("navigation", { name: "Where to go" });
+      for (const [label, href] of [["Host console", "/host"], ["Pub TV", "/tv"], ["Admin", "/admin"]]) {
+        assert.equal(await tiles.getByRole("link", { name: new RegExp(label) }).getAttribute("href"), href);
+      }
+      // No events key in this run, so no sister night is advertised.
+      assert.equal(await authPage.getByRole("navigation", { name: "Other nights" }).count(), 0);
+      await tiles.getByRole("link", { name: /Host console/ }).click();
+      await authPage.waitForURL((url) => url.pathname === "/login", { timeout: 30_000 });
+      assert.equal(new URL(authPage.url()).searchParams.get("next"), "/host");
+    });
+
     await runFlow(flowResults, "Flow A2: A wrong password is refused with the kit's message", async () => {
       await authPage.goto(`${BASE_URL}/login?next=%2Fhost`, { waitUntil: "networkidle" });
       await signInThroughLoginPage(authPage, "not-the-password");

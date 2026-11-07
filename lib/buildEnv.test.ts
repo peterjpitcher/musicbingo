@@ -1,7 +1,10 @@
 import { describe, expect, test } from "vitest";
 
+import { OTHER_NIGHT_URL_ENV as APP_OTHER_NIGHT_URL_ENV } from "./otherNights";
 import {
   CRON_SECRET_MIN_LENGTH,
+  OTHER_NIGHT_URL_ENV,
+  SPOTIFY_CALLBACK_PATH,
   ERROR_SINK_TOKEN_MIN_LENGTH,
   LIVE_LINK_SECRET_MIN_LENGTH,
   checkMusicBingoEnv,
@@ -28,6 +31,8 @@ const PRODUCTION_OK = {
   SPOTIFY_CLIENT_SECRET: "secret",
   CRON_SECRET: "c".repeat(CRON_SECRET_MIN_LENGTH),
   ANCHOR_API_KEY: `anch_${"k".repeat(43)}`,
+  NEXT_PUBLIC_SITE_URL: "https://musicbingo.example.com",
+  SPOTIFY_WEB_REDIRECT_URI: "https://musicbingo.example.com/api/spotify/callback",
 };
 
 const AUTH_NAMES = Object.keys(AUTH_OK);
@@ -142,6 +147,76 @@ describe("the events feed and review link settings (spec M-7)", () => {
     expect(checkMusicBingoEnv({ ...AUTH_OK, REVIEW_SHORT_URL: "http://l.the-anchor.pub/mbreview" })).not.toEqual([]);
     expect(checkMusicBingoEnv({ ...AUTH_OK, REVIEW_SHORT_URL: "https://g.page/r/the-anchor/review" })).not.toEqual([]);
     expect(checkMusicBingoEnv({ ...AUTH_OK, REVIEW_SHORT_URL: "https://l.the-anchor.pub.evil.example/x" })).not.toEqual([]);
+  });
+});
+
+describe("the address and Spotify callback (spec M-10)", () => {
+  test("a production build needs its own address and Spotify callback", () => {
+    const { NEXT_PUBLIC_SITE_URL: _site, SPOTIFY_WEB_REDIRECT_URI: _redirect, ...without } = PRODUCTION_OK;
+    const problems = checkMusicBingoEnv(without);
+    expect(problems.some((p) => p.startsWith("NEXT_PUBLIC_SITE_URL is not set"))).toBe(true);
+    expect(problems.some((p) => p.startsWith("SPOTIFY_WEB_REDIRECT_URI is not set"))).toBe(true);
+  });
+
+  test("local and preview builds go without either (links and the callback follow the request's address)", () => {
+    expect(checkMusicBingoEnv(AUTH_OK)).toEqual([]);
+    expect(checkMusicBingoEnv({ ...AUTH_OK, VERCEL_ENV: "preview" })).toEqual([]);
+  });
+
+  test("the new address passes once both settings name it", () => {
+    const env = {
+      ...PRODUCTION_OK,
+      NEXT_PUBLIC_APP_URL: "https://musicbingo.the-anchor.pub",
+      NEXT_PUBLIC_SITE_URL: "https://musicbingo.the-anchor.pub",
+      SPOTIFY_WEB_REDIRECT_URI: "https://musicbingo.the-anchor.pub/api/spotify/callback",
+    };
+    expect(checkMusicBingoEnv(env)).toEqual([]);
+  });
+
+  test("the Spotify callback must be on NEXT_PUBLIC_APP_URL's address", () => {
+    const problems = checkMusicBingoEnv({
+      ...PRODUCTION_OK,
+      SPOTIFY_WEB_REDIRECT_URI: "https://oj-music-bingo.vercel.app/api/spotify/callback",
+    });
+    expect(problems.some((p) => p.startsWith("SPOTIFY_WEB_REDIRECT_URI must be on the same address as NEXT_PUBLIC_APP_URL"))).toBe(true);
+  });
+
+  test("the Spotify callback must be this app's callback path, with no query", () => {
+    for (const value of [
+      "https://musicbingo.example.com/callback",
+      "https://musicbingo.example.com/api/spotify/callback?x=1",
+      "https://musicbingo.example.com/api/spotify/callback/",
+    ]) {
+      const problems = checkMusicBingoEnv({ ...PRODUCTION_OK, SPOTIFY_WEB_REDIRECT_URI: value });
+      expect(problems.some((p) => p.includes(`must be this app's ${SPOTIFY_CALLBACK_PATH}`)), value).toBe(true);
+    }
+  });
+
+  test("the Spotify callback must use https, except a loopback address on a local run", () => {
+    const prod = checkMusicBingoEnv({ ...PRODUCTION_OK, SPOTIFY_WEB_REDIRECT_URI: "http://musicbingo.example.com/api/spotify/callback" });
+    expect(prod.some((p) => p.startsWith("SPOTIFY_WEB_REDIRECT_URI must use https"))).toBe(true);
+    const local = {
+      ...AUTH_OK,
+      NEXT_PUBLIC_APP_URL: "http://127.0.0.1:3000",
+      SPOTIFY_WEB_REDIRECT_URI: "http://127.0.0.1:3000/api/spotify/callback",
+    };
+    expect(checkMusicBingoEnv(local)).toEqual([]);
+  });
+
+  test("the public address must be a bare https origin and agree with NEXT_PUBLIC_APP_URL", () => {
+    const pathy = checkMusicBingoEnv({ ...PRODUCTION_OK, NEXT_PUBLIC_SITE_URL: "https://musicbingo.example.com/host" });
+    expect(pathy.some((p) => p.startsWith("NEXT_PUBLIC_SITE_URL"))).toBe(true);
+    const other = checkMusicBingoEnv({ ...PRODUCTION_OK, NEXT_PUBLIC_SITE_URL: "https://musicbingo.the-anchor.pub" });
+    expect(other.some((p) => p.startsWith("NEXT_PUBLIC_SITE_URL and NEXT_PUBLIC_APP_URL must be the same address"))).toBe(true);
+  });
+
+  test("the sister nights' addresses are optional, and https origins when set", () => {
+    expect(checkMusicBingoEnv({ ...AUTH_OK, NEXT_PUBLIC_QUIZ_NIGHT_URL: "https://quiz.example.com" })).toEqual([]);
+    expect(checkMusicBingoEnv({ ...AUTH_OK, NEXT_PUBLIC_CASH_BINGO_URL: "http://bingo.example.com" })).not.toEqual([]);
+  });
+
+  test("the front page reads the same sister-night names the build checks", () => {
+    expect({ ...APP_OTHER_NIGHT_URL_ENV }).toEqual({ ...OTHER_NIGHT_URL_ENV });
   });
 });
 

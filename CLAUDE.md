@@ -4,7 +4,7 @@ Workspace standards live in `/Users/peterpitcher/Cursor/CLAUDE.md`. Read that fi
 
 ## What this is
 
-A single-operator internal tool for running Music Bingo nights at The Anchor (the only venue since 6 November 2026; Barons Pubs is archived, not deleted). The prep wizard turns two song lists into an event pack (card PDFs, run sheet, DOCX host clipboard) and two private Spotify playlists; the host controller at `/host/[sessionId]` then drives the pub TV through a fixed run of show. The TV is `/tv`, paired once with a 6-digit code, which finds tonight's game by itself (spec M-9); `/display/[sessionId]` with a signed TV link is the fallback for a screen that cannot be paired. Players use printed cards; there is no per-player screen. Production: `https://musicbingo.orangejelly.co.uk` and `https://music-bingo.vercel.app` (Vercel project `oj-music-bingo`; both checked live 6 November 2026). `musicbingo-iota.vercel.app` is retired and returns 404.
+A single-operator internal tool for running Music Bingo nights at The Anchor (the only venue since 6 November 2026; Barons Pubs is archived, not deleted). The prep wizard turns two song lists into an event pack (card PDFs, run sheet, DOCX host clipboard) and two private Spotify playlists; the host controller at `/host/[sessionId]` then drives the pub TV through a fixed run of show. The TV is `/tv`, paired once with a 6-digit code, which finds tonight's game by itself (spec M-9); `/display/[sessionId]` with a signed TV link is the fallback for a screen that cannot be paired. Players use printed cards; there is no per-player screen. Production: `https://musicbingo.orangejelly.co.uk` and `https://music-bingo.vercel.app` (Vercel project `oj-music-bingo`; both checked live 6 November 2026). `musicbingo-iota.vercel.app` is retired and returns 404. The new address is `https://musicbingo.the-anchor.pub` (spec M-10): it goes live once Peter adds the DNS record and the Vercel domain, then sets `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_APP_URL` and `SPOTIFY_WEB_REDIRECT_URI` to it. No hostname is written in the code; links come from those settings.
 
 ## Stack, where it differs from the workspace default
 
@@ -39,6 +39,7 @@ npm run verify                # lint, typecheck, test, test:utc, test:py, test:e
 
 ```
 proxy.ts                 Kit sign-in adapter: session refresh and the staff page gate
+app/page.tsx             The kit front page (open): host, TV and admin tiles, and "Other nights" (lib/otherNights.ts)
 app/prep                 Prep wizard
 app/host, app/host/[id]  Dashboard and live controller
 app/tv                   The pub TV (never signed in): pairing code, tonight's game, or the laptop's Open Display
@@ -91,7 +92,7 @@ supabase/migrations/     Nothing runs them at deploy; production applies them on
 
 ## Integrations
 
-- **Spotify:** tokens live in httpOnly cookies, not the database. The redirect URI defaults to `{origin}/api/spotify/callback` (`SPOTIFY_WEB_REDIRECT_URI` overrides it). Register both the `127.0.0.1:3000` and `localhost:3000` callbacks in the Spotify app or local auth fails with a redirect mismatch; production must match the deployed origin exactly. After a scope change, Disconnect then Connect again.
+- **Spotify:** tokens live in httpOnly cookies, not the database. `SPOTIFY_WEB_REDIRECT_URI` is set per environment (required on production builds; the build checks it is https, is this app's `/api/spotify/callback` and is on `NEXT_PUBLIC_APP_URL`'s address); unset, local runs and previews use `{origin}/api/spotify/callback` (`lib/siteUrl.ts`). Connect Spotify started on another of the app's addresses says which address to open instead, since the sign-in cannot finish there. Register both the `127.0.0.1:3000` and `localhost:3000` callbacks in the Spotify app or local auth fails with a redirect mismatch, and each production address's callback before its env points at it. After a scope change, Disconnect then Connect again.
 - **Spotify 403 "Restriction violated"** means the command does not fit the player's state (pause when paused, skip with nothing loaded), not a Premium or permission problem; it maps to `RESTRICTED` and the command route explains it from the player state. Failures log `[spotify-live]` lines to Vercel. Spotify-owned playlists (ids starting `37i9dQZF1`) return 404 to this app and may refuse to play, so break playlists must be ones the operator owns.
 - **Events on the TV (spec M-7, S7):** `lib/eventsFeed.ts` is the kit's `createEventsFeed` for category `music-bingo` (never a display name), server only; `/api/screen/events` serves its projection (public, no key, cached 60 seconds) and `components/promo/PromoProvider.tsx` holds it for the TV and the console preview. The welcome and break screens lead the kit's idle loop (next Music Bingo, upcoming events, what's on); a paired TV with no game tonight loops on its own (`TvIdleLoop`); the Thank You screen is the kit's `ThankYouSlide` then the next two events (`lib/promo/promoMode.ts`). A feed that is down or has no key shows only "See what's on", never a typed or placeholder date. The host can hide the review or next-night card for tonight (Live Content panel), never type one.
 - **Review link:** `REVIEW_SHORT_URL` (Music Bingo's own short link on `l.the-anchor.pub` to `/feedback`), else `https://l.the-anchor.pub/jls0mu` (`lib/reviewLink.ts`). Never a Google URL and never a rating request: the kit refuses any link that is not an https the-anchor.pub one.
@@ -108,11 +109,14 @@ Next reads `.env.local` only at startup, so restart `npm run dev` after changing
 |---|---|---|
 | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Every build | Staff sign-in. Same project as `SUPABASE_URL` (the build checks) |
 | `SUPABASE_SERVICE_ROLE_KEY` | Every build | Game data and the kit's invites, audit and throttle |
-| `NEXT_PUBLIC_APP_URL` | Every build | This app's origin, for reset and invite links: `https://musicbingo.orangejelly.co.uk` |
+| `NEXT_PUBLIC_APP_URL` | Every build | This app's origin, for reset and invite links, per environment: `https://musicbingo.orangejelly.co.uk` until `musicbingo.the-anchor.pub` is live |
+| `NEXT_PUBLIC_SITE_URL` | Production | The public address host and TV links are built on (kit `getSiteOrigin`), a bare https origin; must equal `NEXT_PUBLIC_APP_URL` (the build checks). Previews use their branch address, local runs the request's |
 | `NEXT_PUBLIC_TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | Every build | Turnstile; Supabase verifies the token. Locally, Cloudflare's test pair |
 | `AUDIT_HMAC_KEY` | Every build | `v1:` then at least 32 random characters; pseudonymises emails in `auth_audit` |
 | `SUPABASE_URL` | Production | Service-role client. Project ref `ihyazjaklyhacxixhwww` |
-| `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` | Production | Playlists and live control; `SPOTIFY_WEB_REDIRECT_URI` is an optional override |
+| `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` | Production | Playlists and live control |
+| `SPOTIFY_WEB_REDIRECT_URI` | Production | `{NEXT_PUBLIC_APP_URL}/api/spotify/callback`, per environment, registered in the Spotify dashboard. Optional locally and on previews |
+| `NEXT_PUBLIC_QUIZ_NIGHT_URL`, `NEXT_PUBLIC_CASH_BINGO_URL`, `NEXT_PUBLIC_TASTING_NIGHT_URL` | Optional | The sister nights' addresses for the front page's "Other nights" row (https origins). A night shows only with an address and an upcoming event in the feed |
 | `LIVE_LINK_SECRET` | Every build | Signs host and TV links, at least 16 characters, nothing else falls back. Links made before M-9 stop working whatever its value |
 | `CRON_SECRET` | Production | Vercel Cron's bearer for `/api/cron/auth-maintenance`, at least 32 characters |
 | `ERROR_SINK_URL`, `ERROR_SINK_TOKEN` | Optional | Set both to store reports in `app_errors`: the URL is this app's `/api/errors` (https), the token at least 32 characters |

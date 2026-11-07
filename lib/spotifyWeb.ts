@@ -1,5 +1,7 @@
 import crypto from "node:crypto";
 
+import { spotifyRedirectUri } from "@/lib/siteUrl";
+
 export const SPOTIFY_OAUTH_SCOPES = [
   "playlist-modify-private",
   "user-read-private",
@@ -33,8 +35,9 @@ export function getSpotifyWebConfig(origin: string): SpotifyWebConfig {
     );
   }
 
-  const explicitRedirect = envString("SPOTIFY_WEB_REDIRECT_URI");
-  const redirectUri = explicitRedirect || `${origin}/api/spotify/callback`;
+  // SPOTIFY_WEB_REDIRECT_URI per environment (spec M-10; required and checked
+  // on production builds by lib/buildEnv.mjs), else this request's callback.
+  const redirectUri = spotifyRedirectUri(origin);
 
   return { clientId, clientSecret, redirectUri };
 }
