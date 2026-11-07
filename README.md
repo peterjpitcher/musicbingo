@@ -35,12 +35,13 @@ Next.js app to generate a full Music Bingo event pack from two plain-text song l
 
 ## Live runtime (Host + Private Display)
 ### Routes
+- Front page: `/` (host console, pub TV and admin tiles)
 - Host dashboard: `/host`
 - Host controller: `/host/<sessionId>`
 - Private display: `/display/<sessionId>` opened from the host controller
 
 ### Event-night flow
-1) Build your event pack and Spotify playlists on `/`.
+1) Build your event pack and Spotify playlists on `/prep`.
 2) Save a Live Session (or export/import JSON).
 3) Open `/host`, launch the session controller, then click **Open Display** on the host screen.
 4) Start Game 1 or Game 2 from the host controller.
@@ -74,5 +75,5 @@ Next.js app to generate a full Music Bingo event pack from two plain-text song l
 
 ## Notes
 - Supabase stores saved sessions and live runtime state.
-- Vercel project: `oj-music-bingo`. Production addresses: `https://musicbingo.orangejelly.co.uk` and `https://music-bingo.vercel.app`. `musicbingo-iota.vercel.app` is retired.
+- Vercel project: `oj-music-bingo`. Production addresses: `https://musicbingo.orangejelly.co.uk` and `https://music-bingo.vercel.app`. `musicbingo-iota.vercel.app` is retired. The new address `https://musicbingo.the-anchor.pub` goes live once its DNS and Vercel domain are added; register `https://musicbingo.the-anchor.pub/api/spotify/callback` in the Spotify app before pointing `SPOTIFY_WEB_REDIRECT_URI` at it.
 - Git auto-deploy smoke test marker.
