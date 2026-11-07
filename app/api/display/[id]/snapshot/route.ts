@@ -2,33 +2,36 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { getBrandLogoPublicUrl } from "@/lib/brands/brandStorage";
 import { resolveScreenBrandConfig } from "@/lib/brands/brandRepo";
-import { requireStaffOrDisplayToken } from "@/lib/auth/routeGuard";
-import { getRuntimeState, getSession } from "@/lib/live/sessionRepo";
+import { requireStaff } from "@/lib/auth/routeGuard";
+import { authoriseDisplay } from "@/lib/live/displayAccess";
+import { getSessionRecord } from "@/lib/live/sessionRepo";
 import { makeEmptyRuntimeState } from "@/lib/live/types";
 import { reportError } from "@/lib/reportError";
+import { tvPairing } from "@/lib/tv-pairing";
 
 export const runtime = "nodejs";
 
+/**
+ * What the TV draws: the game, its runtime and the runtime's version (the TV
+ * drops anything older than what it shows by this number, spec M-9). Open to
+ * the game's TV link, a paired TV for tonight's game, or a signed-in host or
+ * admin (lib/live/displayAccess.ts).
+ */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ): Promise<Response> {
   try {
     const { id } = await params;
-    // The TV's own route: its link token, or a signed-in host or admin.
-    const gate = await requireStaffOrDisplayToken(request, id);
+    const gate = await authoriseDisplay(request, id, {
+      loadRecord: getSessionRecord,
+      requirePairedTv: (req) => tvPairing().requirePairedTv(req),
+      requireStaff,
+    });
     if (!gate.ok) return gate.response;
+    const { session, runtime: runtimeState, runtimeVersion } = gate.record;
 
-    const session = await getSession(id);
-    if (!session) {
-      return NextResponse.json({ error: "Session not found." }, { status: 404 });
-    }
-
-    const [runtimeState, brand] = await Promise.all([
-      getRuntimeState(id),
-      resolveScreenBrandConfig(session.brandId ?? null),
-    ]);
-
+    const brand = await resolveScreenBrandConfig(session.brandId ?? null);
     const brandWithUrls = brand ? {
       ...brand,
       logo_dark_url: getBrandLogoPublicUrl(brand.logo_dark_url),
@@ -42,13 +45,13 @@ export async function GET(
       {
         session,
         runtime: runtimeState ?? makeEmptyRuntimeState(id),
+        runtimeVersion,
         brand: brandWithUrls,
       },
       { headers: { "Cache-Control": "no-store" } }
     );
   } catch (err) {
     await reportError({ scope: "api:display-snapshot:get" }, err);
-    const message = err instanceof Error ? err.message : "Failed to load display snapshot.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: "Failed to load display snapshot." }, { status: 500 });
   }
 }

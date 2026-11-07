@@ -12,6 +12,11 @@ import { getPublicSupabaseEnv } from "@anchor-nights/kit/env";
  * Deliberately not listed:
  *   /display/*   the TV, which is never signed in; its one API route checks
  *                the TV link token (or a signed-in host or admin).
+ *   /tv          the paired pub TV (spec M-9): never signed in. It shows a
+ *                pairing code, tonight's game for a paired TV, or (for a
+ *                signed-in host on the laptop) the game being run.
+ *   /api/tv/pairing  the kit's pairing endpoint, open by design and rate
+ *                limited; a code does nothing until active staff type it.
  *   /api/*       every route enforces for itself and answers JSON 401, 403 or
  *                503 (lib/auth/routeGuard.ts); lib/auth/routeRegistry.ts lists
  *                each one's protection and a test fails on an unlisted route.

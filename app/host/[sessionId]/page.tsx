@@ -5,9 +5,14 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useWakeLock } from "@anchor-nights/kit/tv";
-import { AnchorLogo, Banner, buttonClass, Card } from "@anchor-nights/kit/ui";
-import { assertSignedIn } from "@/lib/live/signInGuard";
+import { PairTvForm } from "@anchor-nights/kit/pairing/screens";
+import { AnchorLogo, Banner, buttonClass, Card, Dock } from "@anchor-nights/kit/ui";
+import { pairTv } from "@/app/tv/actions";
+import { useHostControl } from "@/hooks/useHostControl";
+import { assertSignedIn, SignInRequiredError } from "@/lib/live/signInGuard";
 import { publishLiveMessage } from "@/lib/live/channel";
+import { ensureHostDeviceId } from "@/lib/live/hostDevice";
+import { TAKEOVER_AFTER_S } from "@/lib/live/hostControl";
 import { NowPlayingPanel } from "@/components/host/NowPlayingPanel";
 import { GameFlowPanel } from "@/components/host/GameFlowPanel";
 import { TimingPanel } from "@/components/host/TimingPanel";
@@ -36,20 +41,15 @@ import {
   formatTimingMs,
   parseRevealConfigInputs,
 } from "@/lib/live/timing";
-import {
-  acquireControlLock,
-  isControlLockStale,
-  readControlLock,
-  readRuntimeState,
-  releaseControlLock,
-  updateControlHeartbeat,
-  writeRuntimeState,
-} from "@/lib/live/storage";
+import { readRuntimeState, writeRuntimeState } from "@/lib/live/storage";
 import {
   clearQueuedRuntime,
   pushRuntimeState,
   queueRuntime,
   readQueuedRuntime,
+  shouldRetry,
+  syncStateFor,
+  type SyncState,
 } from "@/lib/live/runtimeSync";
 import { matchChallengeSong } from "@/lib/live/challenge";
 import {
@@ -130,13 +130,6 @@ type LiveCommandResponse = LiveStatusResponse & {
   hostWarning?: string | null;
 };
 
-function makeTabId(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
-  return `host-tab-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
-}
-
 function makeScoreId(prefix: string): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return `${prefix}-${crypto.randomUUID()}`;
@@ -191,7 +184,21 @@ export default function HostSessionControllerPage() {
 
   useWakeLock();
 
-  const tabIdRef = useRef<string>(makeTabId());
+  // This tab's console id for the server-held control lock (spec M-9).
+  const [deviceId, setDeviceId] = useState<string | null>(null);
+  useEffect(() => {
+    if (sessionId) setDeviceId(ensureHostDeviceId(sessionId));
+  }, [sessionId]);
+  const control = useHostControl(sessionId, deviceId);
+  const isController = control.state.status === "held";
+  const { markLost, takeOver } = control;
+  const isControllerRef = useRef(false);
+  useEffect(() => {
+    isControllerRef.current = isController;
+  }, [isController]);
+  // The runtime version this console last saw from the server; every save
+  // presents it, and the server refuses an out-of-date one (spec M-9).
+  const versionRef = useRef<number | null>(null);
   const runtimeRef = useRef<LiveRuntimeState>(makeEmptyRuntimeState(sessionId || "pending"));
   const pollAbortRef = useRef<AbortController | null>(null);
   // Circuit-breaker: stop polling after a 401 until the user reconnects Spotify.
@@ -202,16 +209,16 @@ export default function HostSessionControllerPage() {
   );
   const [notice, setNotice] = useState<string>("");
   const [noticeVariant, setNoticeVariant] = useState<"success" | "warning">("success");
-  const [runtimeSyncStatus, setRuntimeSyncStatus] = useState<"synced" | "syncing" | "offline">("synced");
+  const [syncState, setSyncState] = useState<SyncState>({ status: "saved" });
   const pollFailCountRef = useRef<number>(0);
   const [error, setError] = useState<string>("");
   // Set when Spotify accepted a play command but nothing started playing.
   // Its own banner, so the success notices callers set cannot overwrite it,
   // and it clears itself as soon as a status poll sees music playing.
   const [playbackWarning, setPlaybackWarning] = useState<string>("");
-  const [isController, setIsController] = useState<boolean>(false);
   const [spotifyDisconnected, setSpotifyDisconnected] = useState<boolean>(false);
-  const [lockOwnerLabel, setLockOwnerLabel] = useState<string>("");
+  const [linksBusy, setLinksBusy] = useState<"copy" | "cancel" | null>(null);
+  const [linksNotice, setLinksNotice] = useState<string>("");
   const [_commandBusy, setCommandBusy] = useState<boolean>(false);
   // Welcome Song control: in-flight flag and inline error for the "Set song" resolve step.
   const [welcomeSongBusy, setWelcomeSongBusy] = useState<boolean>(false);
@@ -230,7 +237,6 @@ export default function HostSessionControllerPage() {
   const [titleRevealSecondsInput, setTitleRevealSecondsInput] = useState<string>("");
   const [artistRevealSecondsInput, setArtistRevealSecondsInput] = useState<string>("");
   const [awardModalOpen, setAwardModalOpen] = useState<boolean>(false);
-  const [displayOpening, setDisplayOpening] = useState<boolean>(false);
   const [_timingSaving, setTimingSaving] = useState<boolean>(false);
   // Resolved Spotify track IDs for all challenge songs of the active game.
   const challengeTrackIdsRef = useRef<Set<string>>(new Set());
@@ -382,57 +388,133 @@ export default function HostSessionControllerPage() {
       });
   }, [runtime.activeGameNumber, session, playlistRetryCount]);
 
-  // Push runtime state to the server for the private display.
-  // If the network fails, keep only the newest runtime snapshot and retry it.
-  useEffect(() => {
-    if (!sessionId || !isController) return;
-    setRuntimeSyncStatus("syncing");
-    void pushRuntimeState(sessionId, runtime).then((ok) => {
-      if (ok) {
-        clearQueuedRuntime(sessionId);
-        setRuntimeSyncStatus("synced");
-        return;
-      }
-      queueRuntime(sessionId, runtime);
-      setRuntimeSyncStatus("offline");
-    });
-  }, [runtime, sessionId, isController]);
+  // ---- Saving the runtime (spec M-9, S4.3, S4.4) ----
+  // One save in flight at a time, newest runtime next. Each save presents the
+  // version this console last saw; the server holds it to the control lock
+  // and that version, and answers why when it refuses. A refusal is shown and
+  // never retried; a save that could not reach the server is kept and retried
+  // every 5 seconds.
+  const pendingSaveRef = useRef<LiveRuntimeState | null>(null);
+  const saveInFlightRef = useRef<boolean>(false);
+  // A runtime adopted from the server (after a conflict or a takeover) is not saved back.
+  const adoptedRuntimeRef = useRef<LiveRuntimeState | null>(null);
 
+  const adoptServerRuntime = useCallback(async (): Promise<void> => {
+    if (!sessionId) return;
+    try {
+      const res = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/runtime`, { cache: "no-store" });
+      assertSignedIn(res);
+      if (!res.ok) return;
+      const data = (await res.json()) as { runtime: LiveRuntimeState | null; version: number };
+      versionRef.current = data.version;
+      if (data.runtime) {
+        const adopted = withDefaultWelcomeSong(data.runtime);
+        adoptedRuntimeRef.current = adopted;
+        runtimeRef.current = adopted;
+        setRuntime(adopted);
+      }
+    } catch {
+      // The next save or heartbeat says what is wrong.
+    }
+  }, [sessionId]);
+
+  const flushSaves = useCallback(async (): Promise<void> => {
+    if (!sessionId || !deviceId || saveInFlightRef.current) return;
+    const next = pendingSaveRef.current;
+    if (!next || versionRef.current === null || !isControllerRef.current) return;
+    pendingSaveRef.current = null;
+    saveInFlightRef.current = true;
+    setSyncState((current) => (current.status === "retrying" ? current : { status: "saving" }));
+    const outcome = await pushRuntimeState(sessionId, next, { deviceId, expectedVersion: versionRef.current });
+    saveInFlightRef.current = false;
+
+    if (outcome.kind === "saved") {
+      versionRef.current = outcome.version;
+      clearQueuedRuntime(sessionId);
+      if (!pendingSaveRef.current) setSyncState({ status: "saved" });
+    } else if (shouldRetry(outcome)) {
+      // Keep the newest runtime for the retry, here and across a reload.
+      pendingSaveRef.current = pendingSaveRef.current ?? next;
+      queueRuntime(sessionId, pendingSaveRef.current);
+      setSyncState(syncStateFor(outcome));
+      return;
+    } else {
+      pendingSaveRef.current = null;
+      clearQueuedRuntime(sessionId);
+      setSyncState(syncStateFor(outcome));
+      if (outcome.kind === "signed_out") {
+        assertSignedIn(new Response(null, { status: outcome.status }));
+      } else if (outcome.kind === "not_controller") {
+        markLost(outcome.secondsSinceSeen);
+      } else if (outcome.kind === "conflict") {
+        await adoptServerRuntime();
+      }
+      return;
+    }
+    if (pendingSaveRef.current) void flushSaves();
+  }, [sessionId, deviceId, markLost, adoptServerRuntime]);
+
+  // Queue each new runtime once (the same object is never saved twice).
+  const queuedRuntimeRef = useRef<LiveRuntimeState | null>(null);
   useEffect(() => {
     if (!sessionId || !isController) return;
-    const flushQueued = async () => {
-      const queued = readQueuedRuntime(sessionId);
-      if (!queued) return;
-      setRuntimeSyncStatus("syncing");
-      const ok = await pushRuntimeState(sessionId, queued);
-      if (ok) {
-        clearQueuedRuntime(sessionId);
-        setRuntimeSyncStatus("synced");
-      } else {
-        setRuntimeSyncStatus("offline");
-      }
-    };
-    void flushQueued();
-    window.addEventListener("online", flushQueued);
-    const id = window.setInterval(() => void flushQueued(), 5_000);
+    if (adoptedRuntimeRef.current === runtime || queuedRuntimeRef.current === runtime) return;
+    queuedRuntimeRef.current = runtime;
+    pendingSaveRef.current = runtime;
+    void flushSaves();
+  }, [runtime, sessionId, isController, flushSaves]);
+
+  // Retry a save that could not reach the server, every 5 seconds and when
+  // the browser comes back online. A runtime queued before a reload goes first.
+  useEffect(() => {
+    if (!sessionId || !isController) return;
+    const queued = readQueuedRuntime(sessionId);
+    if (queued && !pendingSaveRef.current) pendingSaveRef.current = queued;
+    const retry = (): void => void flushSaves();
+    retry();
+    window.addEventListener("online", retry);
+    const id = window.setInterval(retry, 5_000);
     return () => {
-      window.removeEventListener("online", flushQueued);
+      window.removeEventListener("online", retry);
       window.clearInterval(id);
     };
-  }, [sessionId, isController]);
+  }, [sessionId, isController, flushSaves]);
+
+  // Taking control (on open or by takeover): start from the server's runtime
+  // when another console saved since this one last looked. Only on the
+  // change into control, so a heartbeat that crosses this console's own save
+  // never drops a newer local change.
+  const serverVersion = control.state.serverVersion;
+  const wasControllerRef = useRef(false);
+  useEffect(() => {
+    const becameController = isController && !wasControllerRef.current;
+    wasControllerRef.current = isController;
+    if (!becameController || serverVersion === null) return;
+    if (versionRef.current === null || serverVersion > versionRef.current) void adoptServerRuntime();
+  }, [isController, serverVersion, adoptServerRuntime]);
+
+  // A console without control follows the one that has it, every 3 seconds,
+  // so it shows the game as it stands and a takeover starts from there.
+  useEffect(() => {
+    if (!sessionId || isController || control.state.status === "checking") return;
+    const id = window.setInterval(() => void adoptServerRuntime(), 3_000);
+    return () => window.clearInterval(id);
+  }, [sessionId, isController, control.state.status, adoptServerRuntime]);
 
   const persistAndBroadcastRuntime = useCallback(
     (next: LiveRuntimeState) => {
       if (!sessionId) return;
       writeRuntimeState(sessionId, next);
-      publishLiveMessage(sessionId, { type: "runtime_update", runtime: next });
+      // Only the console in control speaks for the game on this device's TV window.
+      if (isControllerRef.current) publishLiveMessage(sessionId, { type: "runtime_update", runtime: next });
     },
     [sessionId]
   );
 
   const commitRuntime = useCallback(
     (updater: LiveRuntimeState | ((prev: LiveRuntimeState) => LiveRuntimeState)) => {
-      if (!sessionId) return;
+      // Only the console in control changes the game (spec M-9); the others are read only.
+      if (!sessionId || !isControllerRef.current) return;
       setRuntime((prev) => {
         const computed = typeof updater === "function" ? updater(prev) : updater;
         const next: LiveRuntimeState = {
@@ -466,22 +548,53 @@ export default function HostSessionControllerPage() {
     });
   }
 
-  async function openPrivateDisplay(): Promise<void> {
+  // "Open Display" on the laptop opens /tv (spec M-9). Signed in, the laptop
+  // shows this game there without being paired; the console's
+  // BroadcastChannel keeps that window instant.
+  function openPrivateDisplay(): void {
     if (!sessionId) return;
-    setDisplayOpening(true);
+    window.open(`/tv?session=${encodeURIComponent(sessionId)}`, "music_bingo_display");
+  }
+
+  // The fallback for a screen that cannot be paired: a TV link for this game,
+  // copied to the clipboard. It works for 24 hours, or until links are cancelled.
+  async function copyTvLink(): Promise<void> {
+    if (!sessionId) return;
+    setLinksBusy("copy");
+    setLinksNotice("");
     try {
-      const res = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/links`, {
-        cache: "no-store",
-      });
+      const res = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/links`, { cache: "no-store" });
       assertSignedIn(res);
-      if (!res.ok) throw new Error("Could not create private display link.");
-      const data = await res.json() as { displayUrl?: string };
-      if (!data.displayUrl) throw new Error("Private display link was missing.");
-      window.open(data.displayUrl, "music_bingo_display");
+      const data = (await res.json().catch(() => null)) as { displayUrl?: string; error?: string } | null;
+      if (!res.ok || !data?.displayUrl) throw new Error(data?.error ?? "Could not make a TV link.");
+      await navigator.clipboard.writeText(data.displayUrl);
+      setLinksNotice("TV link copied. It works for 24 hours, or until you cancel links.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not open private display.");
+      if (err instanceof SignInRequiredError) return;
+      setError(err instanceof Error ? err.message : "Could not make a TV link.");
     } finally {
-      setDisplayOpening(false);
+      setLinksBusy(null);
+    }
+  }
+
+  // Cancels every host and TV link made so far for this game. Paired TVs carry on.
+  async function cancelLinks(): Promise<void> {
+    if (!sessionId) return;
+    setLinksBusy("cancel");
+    setLinksNotice("");
+    try {
+      const res = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/links`, { method: "DELETE" });
+      assertSignedIn(res);
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(data?.error ?? "Could not cancel the links. Try again.");
+      }
+      setLinksNotice("Every host and TV link made before now has stopped working. Paired TVs are not affected.");
+    } catch (err) {
+      if (err instanceof SignInRequiredError) return;
+      setError(err instanceof Error ? err.message : "Could not cancel the links. Try again.");
+    } finally {
+      setLinksBusy(null);
     }
   }
 
@@ -663,32 +776,7 @@ export default function HostSessionControllerPage() {
     [commitRuntime, session]
   );
 
-  const acquireLock = useCallback(
-    (force = false) => {
-      if (!sessionId) return false;
-      const attempt = acquireControlLock({
-        sessionId,
-        tabId: tabIdRef.current,
-        force,
-      });
-      setIsController(attempt.acquired);
-      if (!attempt.acquired && attempt.lock) {
-        const stale = isControlLockStale(attempt.lock);
-        setLockOwnerLabel(
-          stale
-            ? "Another tab may have stale control."
-            : "Another host tab controls this session."
-        );
-      } else {
-        setLockOwnerLabel("");
-      }
-      return attempt.acquired;
-    },
-    [sessionId]
-  );
-
   useEffect(() => {
-    const tabId = tabIdRef.current;
     if (!sessionId) {
       setError("Invalid session id.");
       return;
@@ -712,7 +800,9 @@ export default function HostSessionControllerPage() {
             cache: "no-store",
           });
           if (runtimeRes.ok) {
-            serverRuntime = (await runtimeRes.json()) as LiveRuntimeState;
+            const stored = (await runtimeRes.json()) as { runtime: LiveRuntimeState | null; version: number };
+            serverRuntime = stored.runtime;
+            versionRef.current = stored.version;
           }
         } catch {}
         const persistedRuntime = readRuntimeState(sessionId);
@@ -722,43 +812,16 @@ export default function HostSessionControllerPage() {
         });
         setRuntime(initial);
         runtimeRef.current = initial;
-        acquireLock(false);
+        // The server's own runtime is not saved straight back.
+        if (serverRuntime) adoptedRuntimeRef.current = initial;
       } catch (err: any) {
         if (!cancelled) setError(err?.message ?? "Failed to load session.");
       }
     })();
-    // Release lock on tab close/refresh so another tab can take over immediately.
-    const handleUnload = () => releaseControlLock(sessionId, tabId);
-    window.addEventListener("beforeunload", handleUnload);
     return () => {
       cancelled = true;
-      window.removeEventListener("beforeunload", handleUnload);
-      releaseControlLock(sessionId, tabId);
     };
-  }, [acquireLock, sessionId]);
-
-  useEffect(() => {
-    if (!sessionId) return;
-    const tabId = tabIdRef.current;
-    const interval = window.setInterval(() => {
-      if (isController) {
-        updateControlHeartbeat(sessionId, tabId);
-        publishLiveMessage(sessionId, {
-          type: "host_heartbeat",
-          hostId: tabId,
-          timestampMs: Date.now(),
-        });
-      } else {
-        const lock = readControlLock(sessionId);
-        if (!lock || isControlLockStale(lock)) {
-          setLockOwnerLabel("");
-        } else {
-          setLockOwnerLabel("Another host tab controls this session.");
-        }
-      }
-    }, 5_000);
-    return () => window.clearInterval(interval);
-  }, [isController, sessionId]);
+  }, [sessionId]);
 
   const pollStatus = useCallback(async () => {
     if (!session) return;
@@ -1739,7 +1802,7 @@ export default function HostSessionControllerPage() {
 
   return (
     <EditContext.Provider value={editValue}>
-        <div className="host-root">
+        <div className="host-root pb-[calc(110px+env(safe-area-inset-bottom))]">
 
           {/* ---- Top bar ---- */}
           <div className="host-bar">
@@ -1774,10 +1837,9 @@ export default function HostSessionControllerPage() {
               <button
                 type="button"
                 className={buttonClass({ variant: "outline", size: "sm" })}
-                onClick={() => void openPrivateDisplay()}
-                disabled={displayOpening}
+                onClick={openPrivateDisplay}
               >
-                {displayOpening ? "Opening..." : "Open Display"}
+                Open Display
               </button>
               {/* Back to sessions */}
               <Link href="/host" className={buttonClass({ variant: "outline", size: "sm" })}>
@@ -1788,31 +1850,40 @@ export default function HostSessionControllerPage() {
 
           {/* ---- System-state banners (the kit Banner) ---- */}
           <div className="mx-auto flex max-w-[1560px] flex-col gap-3 px-4 pt-4 sm:px-6">
-            {!isController && (
+            {control.state.status === "lost" && (
               <Banner
                 tone="warning"
-                title="Read-only mode"
+                title="Another device has control"
                 action={
                   <button
                     type="button"
                     className={buttonClass({ variant: "primary", size: "sm" })}
+                    disabled={!control.takeoverReady}
                     onClick={() => {
-                      const ok = acquireLock(true);
-                      if (!ok) {
-                        setError("Unable to take control right now.");
-                        return;
-                      }
-                      setNoticeVariant("success");
-                      setNotice("Controller lock transferred to this tab.");
+                      void takeOver().then((ok) => {
+                        if (!ok) {
+                          setError("Could not take over. The other device is still running this game.");
+                          return;
+                        }
+                        setNoticeVariant("success");
+                        setNotice("This device now has control of the game.");
+                      });
                     }}
                   >
-                    Take Control
+                    {control.takeoverReady ? "Take over" : `Take over in ${control.takeoverIn ?? TAKEOVER_AFTER_S}s`}
                   </button>
                 }
               >
-                {lockOwnerLabel || "Another host tab is controlling this session, so your controls are disabled."}
+                {control.takeoverReady
+                  ? "The device running this game has been quiet for 30 seconds. Take over to run it from here."
+                  : "This screen is read only and follows the device running the game. Take over is offered once that device has been quiet for 30 seconds."}
               </Banner>
             )}
+            {control.state.error ? (
+              <Banner tone="warning" title="Cannot check who has control">
+                {control.state.error} The console keeps trying.
+              </Banner>
+            ) : null}
             {spotifyDisconnected && (
               <Banner
                 tone="danger"
@@ -1842,9 +1913,18 @@ export default function HostSessionControllerPage() {
                 <Banner tone="success">Reveal timing is still running, so the TV will advance on schedule.</Banner>
               </>
             )}
-            {runtimeSyncStatus === "offline" ? (
-              <Banner tone="warning" title="Display sync is retrying">
-                The host keeps running. The display will catch up when the connection improves.
+            {syncState.status === "retrying" ? (
+              <Banner tone="warning" title="Not saved yet: retrying">
+                {syncState.message}
+              </Banner>
+            ) : null}
+            {syncState.status === "refused" ? (
+              <Banner
+                tone="danger"
+                title={syncState.title}
+                action={<DismissButton onClick={() => setSyncState({ status: "saved" })} />}
+              >
+                {syncState.message}
               </Banner>
             ) : null}
             {notice ? (
@@ -1867,7 +1947,10 @@ export default function HostSessionControllerPage() {
             ) : null}
           </div>
 
-          {/* ---- Main 2-col layout ---- */}
+          {/* ---- Main 2-col layout ----
+              Read only without control (spec M-9): every control in the
+              columns is disabled until this device takes over. */}
+          <fieldset disabled={!isController} className="contents">
           <div className="host-main">
 
             {/* LEFT — TV preview + run of show */}
@@ -1901,43 +1984,6 @@ export default function HostSessionControllerPage() {
                   </div>
                 </div>
 
-                {/* Prev / Next + Edit toggle */}
-                <div className="bignav">
-                  <button
-                    type="button"
-                    className={buttonClass({ variant: "outline", size: "lg", className: "flex-1" })}
-                    onClick={() => stepScreen(-1)}
-                    disabled={SHOW_SCREENS.findIndex((s) => s.id === currentScreenId) === 0}
-                  >
-                    {currentScreenId === "winners" && winnersVisibleCount > 0
-                      ? "‹ Hide Last Reveal"
-                      : "‹ Previous Screen"}
-                  </button>
-                  <button
-                    type="button"
-                    className={buttonClass({ variant: editing ? "primary" : "outline", size: "sm" })}
-                    style={{ minHeight: 46, padding: "0 18px" }}
-                    onClick={() => setEditing((e) => !e)}
-                    title="Toggle click-to-edit mode for TV content"
-                  >
-                    ✎ Edit
-                  </button>
-                  <button
-                    type="button"
-                    className={buttonClass({ variant: "primary", size: "lg", className: "flex-1" })}
-                    onClick={() => stepScreen(1)}
-                    disabled={isAtLastScreen || nextScreenBlocked}
-                    title={nextScreenBlocked ? nextScreenBlockedTitle : undefined}
-                  >
-                    {nextScreenBlocked
-                      ? currentScreenId === "winner-entry"
-                        ? "Add Winners To Reveal"
-                        : "Add Winners To Continue"
-                      : nextWinnerRank !== null
-                        ? `Reveal #${nextWinnerRank} Place`
-                      : "Next Screen ›"}
-                  </button>
-                </div>
               </div>
 
               {/* Run Of Show panel */}
@@ -2058,8 +2104,14 @@ export default function HostSessionControllerPage() {
                 claimAvailable={claimAvailable}
                 claimCount={runtime.playedTracks?.length ?? 0}
                 claimActive={runtime.screenId === "claim"}
-                onEnd={() => showClosingScreen("winner-entry")}
+                onEnd={() => {
+                  // Refused without control, so the hold never shows done.
+                  if (!isControllerRef.current) return false;
+                  showClosingScreen("winner-entry");
+                  return true;
+                }}
                 onReset={() => {
+                  if (!isControllerRef.current) return false;
                   commitRuntime((prev) => ({
                     ...prev,
                     mode: "idle",
@@ -2080,6 +2132,7 @@ export default function HostSessionControllerPage() {
                     extensionMs: 0,
                     freePlay: false,
                   }));
+                  return true;
                 }}
               />
 
@@ -2144,6 +2197,83 @@ export default function HostSessionControllerPage() {
               )}
             </div>
           </div>
+          </fieldset>
+
+          {/* ---- TVs: pair the pub screen, or hand out a TV link (spec M-9) ----
+              Outside the read-only fieldset: pairing and links never change the game. */}
+          <section className="mx-auto grid max-w-[1560px] gap-[22px] px-4 pb-6 sm:px-6 lg:grid-cols-2" aria-label="TVs">
+            <div className="panel">
+              <PairTvForm action={pairTv} bare />
+            </div>
+            <div className="panel flex flex-col gap-3">
+              <h2>
+                TV Links <span className="meta">24 hours</span>
+              </h2>
+              <p className="text-base text-fg-muted">
+                For a screen that cannot be paired. A link opens this game only, works for 24 hours, and stops at once if you cancel links.
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  className={buttonClass({ variant: "outline", size: "sm" })}
+                  onClick={() => void copyTvLink()}
+                  disabled={linksBusy !== null}
+                >
+                  {linksBusy === "copy" ? "Copying..." : "Copy a TV link"}
+                </button>
+                <button
+                  type="button"
+                  className={buttonClass({ variant: "outline", size: "sm" })}
+                  onClick={() => void cancelLinks()}
+                  disabled={linksBusy !== null}
+                >
+                  {linksBusy === "cancel" ? "Cancelling..." : "Cancel links"}
+                </button>
+              </div>
+              {linksNotice ? <p className="text-base text-fg" role="status">{linksNotice}</p> : null}
+            </div>
+          </section>
+
+          {/* ---- The dock: move the show on, always in the same place (spec S4.1) ---- */}
+          <Dock widthClassName="max-w-[1560px]">
+            <div className="flex flex-wrap gap-[10px]">
+              <button
+                type="button"
+                className={buttonClass({ variant: "outline", size: "lg", className: "flex-1" })}
+                onClick={() => stepScreen(-1)}
+                disabled={!isController || SHOW_SCREENS.findIndex((s) => s.id === currentScreenId) === 0}
+              >
+                {currentScreenId === "winners" && winnersVisibleCount > 0
+                  ? "‹ Hide Last Reveal"
+                  : "‹ Previous Screen"}
+              </button>
+              <button
+                type="button"
+                className={buttonClass({ variant: editing ? "primary" : "outline", size: "sm" })}
+                style={{ minHeight: 46, padding: "0 18px" }}
+                onClick={() => setEditing((e) => !e)}
+                disabled={!isController}
+                title="Toggle click-to-edit mode for TV content"
+              >
+                ✎ Edit
+              </button>
+              <button
+                type="button"
+                className={buttonClass({ variant: "primary", size: "lg", className: "flex-1" })}
+                onClick={() => stepScreen(1)}
+                disabled={!isController || isAtLastScreen || nextScreenBlocked}
+                title={nextScreenBlocked ? nextScreenBlockedTitle : undefined}
+              >
+                {nextScreenBlocked
+                  ? currentScreenId === "winner-entry"
+                    ? "Add Winners To Reveal"
+                    : "Add Winners To Continue"
+                  : nextWinnerRank !== null
+                    ? `Reveal #${nextWinnerRank} Place`
+                  : "Next Screen ›"}
+              </button>
+            </div>
+          </Dock>
           <AwardPointsModal
             open={awardModalOpen}
             teams={runtime.teamScores}

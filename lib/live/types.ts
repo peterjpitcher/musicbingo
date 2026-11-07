@@ -298,11 +298,6 @@ export function withDefaultWelcomeSong(runtime: LiveRuntimeState): LiveRuntimeSt
   return runtime.welcomeSong ? runtime : { ...runtime, welcomeSong: DEFAULT_WELCOME_SONG };
 }
 
-export type LiveControlLock = {
-  tabId: string;
-  lastSeenMs: number;
-};
-
 export type LiveChannelMessage =
   | {
     type: "runtime_update";

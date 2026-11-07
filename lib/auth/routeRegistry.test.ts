@@ -106,9 +106,9 @@ describe("the route registry", () => {
     expect(onDisk).not.toContain("/api/admin/unlock");
   });
 
-  test("28 routes, 23 of them for signed-in staff only (including all 12 Spotify routes)", () => {
-    expect(ROUTE_REGISTRY).toHaveLength(28);
-    expect(ROUTE_REGISTRY.filter((r) => r.protection === "staff")).toHaveLength(23);
+  test("30 routes, 24 of them for signed-in staff only (including all 12 Spotify routes)", () => {
+    expect(ROUTE_REGISTRY).toHaveLength(30);
+    expect(ROUTE_REGISTRY.filter((r) => r.protection === "staff")).toHaveLength(24);
     const spotify = ROUTE_REGISTRY.filter((r) => r.path.startsWith("/api/spotify/"));
     expect(spotify).toHaveLength(12);
     expect(spotify.every((r) => r.protection === "staff")).toBe(true);
@@ -116,10 +116,13 @@ describe("the route registry", () => {
 });
 
 const everyCall = ROUTE_REGISTRY.flatMap((entry) => entry.methods.map((method) => ({ ...entry, method })));
-const staffCalls = everyCall.filter((c) => c.protection === "staff" || c.protection === "staff-or-display-token");
+const staffCalls = everyCall.filter((c) => c.protection === "staff" || c.protection === "tv-display");
+// The pairing endpoint is open by design (it hands an unpaired TV a code);
+// what it must never do for an anonymous caller is pair it. Proved below.
+const guardedCalls = everyCall.filter((c) => c.protection !== "tv-pairing");
 
 describe("an anonymous caller is refused by every route", () => {
-  test.each(everyCall.map((c) => [`${c.method} ${c.path}`, c] as const))("%s", async (_name, call) => {
+  test.each(guardedCalls.map((c) => [`${c.method} ${c.path}`, c] as const))("%s", async (_name, call) => {
     authoriseRoute.mockResolvedValue({ ok: false, response: jsonResponse(401, "unauthenticated") });
     const handler = await handlerFor(call.path, call.method);
     const res = await handler(request(call.path, call.method, { origin: ORIGIN }), PARAMS);
@@ -197,5 +200,19 @@ describe("a signed-in host gets through the gate", () => {
     const remove = ROUTE_REGISTRY.find((r) => r.path === "/api/sessions/[id]");
     expect(save?.protection).toBe("staff");
     expect(remove?.protection).toBe(save?.protection);
+  });
+});
+
+describe("the TV pairing endpoint gives an anonymous caller nothing", () => {
+  test.each([["GET"], ["POST"]] as const)("%s /api/tv/pairing fails closed and sets no device cookie when the server cannot pair", async (method) => {
+    authoriseRoute.mockResolvedValue({ ok: false, response: jsonResponse(401, "unauthenticated") });
+    const handler = await handlerFor("/api/tv/pairing", method);
+    const res = await handler(request("/api/tv/pairing", method, { origin: ORIGIN }), PARAMS);
+    // The auth config and the service-role client are mocked to throw here,
+    // so the route must answer 503 "unavailable": never a code it could not
+    // store, and never "paired".
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ status: "unavailable" });
+    expect(res.headers.get("set-cookie") ?? "").not.toMatch(/anchor-tv=/);
   });
 });
