@@ -19,6 +19,10 @@
  *                           opens /host/[id], which then needs sign-in
  *   error-sink-bearer       server to server: ERROR_SINK_TOKEN as a bearer token
  *   cron-secret             Vercel Cron: CRON_SECRET as a bearer token
+ *   public-events           the TV's events loop (spec M-7, S7.1): open by
+ *                           design, read only, holds only what the pub's
+ *                           website already shows (no game, token or key);
+ *                           the management key stays on the server
  */
 
 export type Protection =
@@ -28,7 +32,8 @@ export type Protection =
   | "display-link-token"
   | "host-link-token"
   | "error-sink-bearer"
-  | "cron-secret";
+  | "cron-secret"
+  | "public-events";
 
 export type HttpMethod = "GET" | "POST" | "PUT" | "DELETE";
 
@@ -52,6 +57,7 @@ export const ROUTE_REGISTRY: readonly RouteEntry[] = Object.freeze([
   { path: "/api/display/[id]/snapshot", methods: ["GET"], protection: "tv-display", caller: "TV browser", sideEffects: "none (read); a paired TV's last-seen time, at most once a minute" },
   { path: "/api/errors", methods: ["GET", "POST"], protection: "error-sink-bearer", caller: "server", sideEffects: "POST stores a redacted error report; GET answers 405" },
   { path: "/api/generate", methods: ["POST"], protection: "staff", caller: "staff browser", sideEffects: "none stored (builds the event pack)" },
+  { path: "/api/screen/events", methods: ["GET"], protection: "public-events", caller: "TV browser", sideEffects: "none (read); the upcoming events from the management app, cached for 60 seconds" },
   { path: "/api/sessions", methods: ["GET", "PUT"], protection: "staff", caller: "staff browser", sideEffects: "PUT saves a game" },
   { path: "/api/sessions/[id]", methods: ["GET", "DELETE"], protection: "staff", caller: "staff browser", sideEffects: "DELETE removes a game" },
   { path: "/api/sessions/[id]/authorize", methods: ["GET"], protection: "host-link-token", caller: "staff browser", sideEffects: "sets the host token cookie" },

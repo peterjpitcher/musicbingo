@@ -1,5 +1,6 @@
 import { securityHeaders } from "@anchor-nights/kit/auth/headers";
 import { buildIdFromEnv } from "@anchor-nights/kit/env";
+import { EVENT_IMAGE_REMOTE_PATTERN } from "@anchor-nights/kit/events/image-host";
 
 import { validateMusicBingoEnv } from "./lib/buildEnv.mjs";
 
@@ -44,6 +45,10 @@ const nextConfig = {
     formats: ["image/avif", "image/webp"],
     remotePatterns: [
       { protocol: "https", hostname: "i.scdn.co" }, // Spotify CDN album art
+      // Event artwork on the TV's events loops (spec M-7), from the management
+      // app's event-images bucket only. The kit draws it through Next's
+      // optimiser, so the browser loads it from this origin.
+      EVENT_IMAGE_REMOTE_PATTERN,
     ],
   },
   async headers() {

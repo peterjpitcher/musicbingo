@@ -28,7 +28,11 @@ export const CONTENT_KEYS = [
   // break / winners / thanks / system
   "breakL1", "breakL2", "breakLede", "breakMins",
   "winPrize", "spoonPrize",
-  "nextDate", "tyL1", "tyL2", "tyLede", "reviewQrUrl", "bookQrUrl", "nfL1", "nfL2",
+  // The thank-you screen (spec M-7) is the kit's: the host may hide a card for
+  // tonight ("1"), never type a date or a link. The typed nextDate,
+  // reviewQrUrl and bookQrUrl and the old headline keys are gone; a stored
+  // value for any of them is dropped by sanitizeContent.
+  "tyHideReview", "tyHideNext", "nfL1", "nfL2",
 ] as const;
 
 export type ContentKey = (typeof CONTENT_KEYS)[number];
@@ -40,9 +44,9 @@ const CONTENT_KEY_SET = new Set<string>(CONTENT_KEYS);
 /**
  * Static fallbacks lifted from the design bundle (screens-a/b.jsx placeholders).
  *
- * Facts about a real night are never invented: the host name, the next event
- * date and the prizes are empty unless the host types them, and an empty value
- * hides that element on the TV. Until 6 November 2026 these held design sample
+ * Facts about a real night are never invented: the host name and the prizes
+ * are empty unless the host types them, and an empty value hides that element
+ * on the TV. The next event comes only from the events feed (spec M-7). Until 6 November 2026 these held design sample
  * values ("Fri 27 June · 8PM", a sample host name and sample prizes), which
  * the TV showed whenever the host left the fields blank.
  */
@@ -72,14 +76,7 @@ export const CONTENT_PLACEHOLDERS: Record<ContentKey, string> = {
   g2theme: "Throwback Bangers", g2title: "Take On Me", g2artist: "a-ha",
   breakL1: "We're On", breakL2: "A Break", breakLede: "Grab a refill, stretch your legs and keep your cards safe.", breakMins: "10",
   winPrize: "", spoonPrize: "",
-  nextDate: "", tyL1: "Thank You", tyL2: "& Goodnight",
-  tyLede: "We hope you had a brilliant night. We'd love to hear how it went.",
-  // Canonical short link, not the retired vip-club.uk one. Kept as a real default rather
-  // than "" because brands.qr_items is currently null for every brand, so falling through
-  // to resolveQrUrl would yield brand.website_url (the website, not a review page). A host
-  // override still wins, and the short link keeps the scan tracked. Populate
-  // brands.qr_items with a "review" entry to retire this default.
-  reviewQrUrl: "https://l.the-anchor.pub/jls0mu", bookQrUrl: "",
+  tyHideReview: "", tyHideNext: "",
   nfL1: "Nothing", nfL2: "On Yet",
 };
 
@@ -124,7 +121,6 @@ function derivedDefault(
     case "venuePresents": return brand?.name ? `${brand.name} Presents` : undefined;
     case "venueWeb": return websiteLabel(brand?.website_url) || undefined;
     case "breakLede": return brand?.break_message || undefined;
-    case "tyLede": return brand?.end_message || undefined;
     default: return undefined;
   }
 }

@@ -64,7 +64,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams): Promis
 
     const feedType = parsed.data.event_feed_type;
     const feedUrl = parsed.data.event_feed_base_url;
-    const rawApiKey = typeof body.event_feed_api_key === "string" ? body.event_feed_api_key.trim() : null;
+    // The feed key is no longer stored on a venue (spec M-7): it comes from
+    // ANCHOR_API_KEY on the server. Any event_feed_api_key sent is ignored,
+    // and this route never writes the column (a later migration clears it).
 
     // Validate event feed URL when provided
     const effectiveFeedType = feedType ?? existingBrand.event_feed_type;
@@ -78,47 +80,18 @@ export async function PUT(request: NextRequest, { params }: RouteParams): Promis
       }
     }
 
-    if (rawApiKey && rawApiKey.length > 500) {
-      return NextResponse.json(
-        { error: "event_feed_api_key must be 500 characters or fewer" },
-        { status: 400 }
-      );
-    }
-
-    // Completeness: non-anchor feeds require both URL and key
+    // Completeness: non-anchor feeds need their own URL.
     if (effectiveFeedType !== "none" && effectiveFeedType !== "anchor_management") {
       const effectiveUrl = feedUrl ?? existingBrand.event_feed_base_url;
-      const effectiveHasKey = rawApiKey || existingBrand.event_feed_has_key;
       if (!effectiveUrl?.trim()) {
         return NextResponse.json(
           { error: "event_feed_base_url is required for this feed type" },
           { status: 400 }
         );
       }
-      if (!effectiveHasKey) {
-        return NextResponse.json(
-          { error: "event_feed_api_key is required for this feed type" },
-          { status: 400 }
-        );
-      }
     }
 
     const dbInput: Parameters<typeof updateBrand>[1] = { ...parsed.data };
-
-    // Include API key if explicitly provided
-    if (rawApiKey) {
-      dbInput.event_feed_api_key = rawApiKey;
-    }
-
-    // Clear stale key when feed is disabled or provider changes
-    if (feedType) {
-      const providerChanged = feedType !== existingBrand.event_feed_type;
-      if (feedType === "none" && providerChanged) {
-        dbInput.event_feed_api_key = null;
-      } else if (providerChanged && !rawApiKey) {
-        dbInput.event_feed_api_key = null;
-      }
-    }
 
     const brand = await updateBrand(id, dbInput);
     return NextResponse.json(resolveLogoUrls(brand));

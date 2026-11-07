@@ -54,7 +54,8 @@ export async function POST(request: NextRequest): Promise<Response> {
 
     // Validate event feed configuration
     const { event_feed_type, event_feed_base_url } = parsed.data;
-    const rawApiKey = typeof body.event_feed_api_key === "string" ? body.event_feed_api_key.trim() : null;
+    // The feed key is no longer stored on a venue (spec M-7): it comes from
+    // ANCHOR_API_KEY on the server. Any event_feed_api_key sent is ignored.
 
     if (event_feed_type && event_feed_type !== "none") {
       if (event_feed_base_url) {
@@ -67,7 +68,7 @@ export async function POST(request: NextRequest): Promise<Response> {
         }
       }
 
-      // Non-anchor feeds require both URL and key (mirrors DB CHECK constraint)
+      // Non-anchor feeds need their own URL.
       if (event_feed_type !== "anchor_management") {
         if (!event_feed_base_url?.trim()) {
           return NextResponse.json(
@@ -75,26 +76,10 @@ export async function POST(request: NextRequest): Promise<Response> {
             { status: 400 }
           );
         }
-        if (!rawApiKey) {
-          return NextResponse.json(
-            { error: "event_feed_api_key is required for this feed type" },
-            { status: 400 }
-          );
-        }
       }
     }
 
-    if (rawApiKey && rawApiKey.length > 500) {
-      return NextResponse.json(
-        { error: "event_feed_api_key must be 500 characters or fewer" },
-        { status: 400 }
-      );
-    }
-
-    const dbInput: Parameters<typeof createBrand>[0] = {
-      ...parsed.data,
-      event_feed_api_key: rawApiKey || null,
-    };
+    const dbInput: Parameters<typeof createBrand>[0] = { ...parsed.data };
 
     const brand = await createBrand(dbInput);
     return NextResponse.json(resolveLogoUrls(brand), { status: 201 });

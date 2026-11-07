@@ -5,6 +5,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { EditContext, type EditContextValue } from "@/components/motifs/EditContext";
 import { Qr } from "@anchor-nights/kit/qr";
 import { ThankYou } from "@/components/screens/ThankYou";
+import { PromoContext, type PromoValue } from "@/components/promo/PromoProvider";
+import { feedWith, MUSIC_DEC_18, NO_FEED } from "@/lib/test/screenFeedFixtures";
 import { Welcome } from "@/components/screens/Welcome";
 import { Winners } from "@/components/screens/Winners";
 import { DEFAULT_BRAND_CONFIG } from "@/lib/brands/defaultBrand";
@@ -50,39 +52,58 @@ describe("Qr", () => {
   });
 });
 
-describe("ThankYou on the TV", () => {
-  it("hides the next event badge when the host left the date blank", () => {
-    const html = renderOnTv(createElement(ThankYou, { brand: anchor, runtime: runtimeWith({}) }), runtimeWith({}), anchor);
-    expect(html).not.toContain("Next Event");
-    expectNoSampleValues(html);
+describe("ThankYou on the TV (spec M-7: the kit's promo ThankYou)", () => {
+  const REVIEW = "https://l.the-anchor.pub/jls0mu";
+  function renderThankYou(value: PromoValue, content: Record<string, string> = {}): string {
+    const runtime = runtimeWith({ content } as Partial<LiveRuntimeState>);
+    return renderOnTv(
+      createElement(PromoContext.Provider, { value }, createElement(ThankYou, { brand: anchor, runtime })),
+      runtime,
+      anchor,
+    );
+  }
+
+  it("with the feed down shows \"See what's on\" and no date, never an invented one", () => {
+    for (const feed of [null, NO_FEED]) {
+      const html = renderThankYou({ feed, reviewUrl: REVIEW });
+      expect(html).toContain("See what&#x27;s on");
+      expect(html).not.toContain("What&#x27;s on next");
+      expect(html).not.toMatch(/\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b/);
+      expectNoSampleValues(html);
+    }
   });
 
-  it("shows the badge when the host typed a date", () => {
-    const runtime = runtimeWith({ content: { nextDate: "Fri 4 Dec" } });
-    const html = renderOnTv(createElement(ThankYou, { brand: anchor, runtime }), runtime, anchor);
-    expect(html).toContain("Next Event");
-  });
-
-  it("hides a QR card that has no usable address instead of showing an invented one", () => {
-    const noWebsite: BrandConfig = { ...anchor, website_url: null, qr_items: null };
-    // A host override of "" keeps the review default; book again then has nothing.
-    const html = renderOnTv(createElement(ThankYou, { brand: noWebsite, runtime: runtimeWith({}) }), runtimeWith({}), noWebsite);
-    expect(html).toContain("Review us");
-    expect(html).not.toContain("Book Again");
-    expectNoSampleValues(html);
+  it("shows the next Music Bingo from the feed with its London date", () => {
+    const html = renderThankYou({ feed: feedWith([MUSIC_DEC_18]), reviewUrl: REVIEW });
+    expect(html).toContain("What&#x27;s on next");
+    expect(html).toContain("Test Music Bingo Christmas");
+    expect(html).toContain("18");
   });
 
   it("asks for feedback without asking for a rating or steering to Google", () => {
-    const html = renderOnTv(createElement(ThankYou, { brand: anchor, runtime: runtimeWith({}) }), runtimeWith({}), anchor);
-    expect(html).toContain("Tell us how we did");
+    const html = renderThankYou({ feed: null, reviewUrl: REVIEW });
+    expect(html).toContain("Review us");
     expect(html).not.toMatch(/google/i);
-    expect(html).not.toContain("★");
-    expect(html).not.toMatch(/rate us/i);
+    expect(html).not.toContain("\u2605");
+    expect(html).not.toMatch(/rate us|stars?\b/i);
   });
 
-  it("keeps Book Again when the brand website is stored without a scheme", () => {
-    const html = renderOnTv(createElement(ThankYou, { brand: anchor, runtime: runtimeWith({}) }), runtimeWith({}), anchor);
-    expect(html).toContain("Book Again");
+  it("shows no review card for a Google link", () => {
+    const html = renderThankYou({ feed: null, reviewUrl: "https://g.page/r/the-anchor/review" });
+    expect(html).not.toContain("Review us");
+  });
+
+  it("hides a card the host switched off for tonight", () => {
+    const html = renderThankYou({ feed: feedWith([MUSIC_DEC_18]), reviewUrl: REVIEW }, { tyHideReview: "1", tyHideNext: "1" });
+    expect(html).not.toContain("Review us");
+    expect(html).not.toContain("What&#x27;s on next");
+    expect(html).not.toContain("See what&#x27;s on");
+  });
+
+  it("ignores a next date or QR link a host typed before this release", () => {
+    const html = renderThankYou({ feed: null, reviewUrl: REVIEW }, { nextDate: "Fri 4 Dec", bookQrUrl: "https://example.com/book" });
+    expect(html).not.toContain("Fri 4 Dec");
+    expect(html).not.toContain("example.com");
   });
 });
 
