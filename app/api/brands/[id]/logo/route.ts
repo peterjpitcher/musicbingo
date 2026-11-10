@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getBrand, updateBrand } from "@/lib/brands/brandRepo";
 import { uploadBrandLogo, type LogoSlot } from "@/lib/brands/brandStorage";
 import { hasAdminAccess } from "@/lib/live/access";
+import { reportError } from "@/lib/reportError";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -48,6 +49,7 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
 
     return NextResponse.json({ objectKey });
   } catch (err: any) {
+    await reportError({ scope: "api:brand-logo:post" }, err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

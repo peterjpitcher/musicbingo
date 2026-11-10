@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { deleteSession, getSession } from "@/lib/live/sessionRepo";
-import { resolveBrandConfig } from "@/lib/brands/brandRepo";
+import { resolveScreenBrandConfig } from "@/lib/brands/brandRepo";
 import { getBrandLogoPublicUrl } from "@/lib/brands/brandStorage";
 import { hasAnySessionAccess, hasSessionAccess } from "@/lib/live/access";
+import { reportError } from "@/lib/reportError";
 
 export const runtime = "nodejs";
 
@@ -20,7 +21,7 @@ export async function GET(
     if (!session) {
       return NextResponse.json({ error: "Session not found." }, { status: 404 });
     }
-    const brand = await resolveBrandConfig(session.brandId ?? null);
+    const brand = await resolveScreenBrandConfig(session.brandId ?? null);
     // Resolve logo URLs server-side so client components (screens) can use them
     // directly. event_logo_url is a Storage object key too — the Title screen
     // binds it raw as an <img src>, so it must be resolved here as well.
@@ -34,6 +35,7 @@ export async function GET(
     } : null;
     return NextResponse.json({ ...session, brand: brandWithUrls }, { headers: { "Cache-Control": "no-store" } });
   } catch (err: any) {
+    await reportError({ scope: "api:session:get" }, err);
     return NextResponse.json({ error: err?.message ?? "Failed to get session." }, { status: 500 });
   }
 }
@@ -50,6 +52,7 @@ export async function DELETE(
     await deleteSession(id);
     return NextResponse.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
   } catch (err: any) {
+    await reportError({ scope: "api:session:delete" }, err);
     return NextResponse.json({ error: err?.message ?? "Failed to delete session." }, { status: 500 });
   }
 }

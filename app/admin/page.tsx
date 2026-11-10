@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 
 import { AppHeader } from "@/components/layout/AppHeader";
-import { Notice } from "@/components/ui/Notice";
 import { safeNextPath } from "@/lib/live/adminGuard";
+import { Banner, buttonClass, Card, fieldClass, fieldHintClass, fieldLabelClass } from "@anchor-nights/kit/ui";
 
 export default function AdminUnlockPage() {
   const [nextPath, setNextPath] = useState("/host");
@@ -40,30 +40,34 @@ export default function AdminUnlockPage() {
   }
 
   return (
-    <div className="host-root">
+    <div className="host-root theme-desk">
       <AppHeader title="Music Bingo" subtitle="Admin Unlock" />
-      <main className="host-main">
-        <form className="newcard" onSubmit={submit} style={{ maxWidth: 520, margin: "60px auto" }}>
-          <h1 style={{ marginTop: 0 }}>Unlock admin</h1>
-          <p style={{ opacity: 0.7 }}>
-            Enter the admin secret for this Music Bingo app.
-          </p>
-          {error ? <Notice variant="error">{error}</Notice> : null}
-          <label className="field-label" htmlFor="admin-secret">Admin secret</label>
-          <input
-            id="admin-secret"
-            className="input"
-            type="password"
-            value={secret}
-            onChange={(event) => setSecret(event.currentTarget.value)}
-            autoComplete="current-password"
-          />
-          <div style={{ marginTop: 18 }}>
-            <button className="hbtn hbtn--primary" disabled={busy} type="submit">
+      <main className="mx-auto w-full max-w-[520px] px-4 py-10 sm:py-16">
+        <Card className="p-6 sm:p-8">
+          <form className="flex flex-col gap-4" onSubmit={submit}>
+            <div>
+              <h1 className="m-0 text-3xl text-fg-strong">Unlock admin</h1>
+              <p className={`mt-2 ${fieldHintClass}`}>
+                Enter the admin secret for this Music Bingo app.
+              </p>
+            </div>
+            {error ? <Banner tone="danger">{error}</Banner> : null}
+            <div className="flex flex-col gap-2">
+              <label className={fieldLabelClass} htmlFor="admin-secret">Admin secret</label>
+              <input
+                id="admin-secret"
+                className={fieldClass}
+                type="password"
+                value={secret}
+                onChange={(event) => setSecret(event.currentTarget.value)}
+                autoComplete="current-password"
+              />
+            </div>
+            <button className={buttonClass({ variant: "primary", size: "lg", block: true })} disabled={busy} type="submit">
               {busy ? "Unlocking..." : "Unlock"}
             </button>
-          </div>
-        </form>
+          </form>
+        </Card>
       </main>
     </div>
   );

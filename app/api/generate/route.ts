@@ -32,6 +32,7 @@ import { resolveBrandConfig, getBrandFeedConfig } from "@/lib/brands/brandRepo";
 import { fetchBrandLogoPngBytes } from "@/lib/brands/brandStorage";
 import type { BrandConfig } from "@/lib/brands/types";
 import { hasAdminAccess } from "@/lib/live/access";
+import { reportError } from "@/lib/reportError";
 
 export const runtime = "nodejs";
 
@@ -375,6 +376,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (err: unknown) {
+    await reportError({ scope: "api:generate:post" }, err);
     const msg = err instanceof Error ? err.message : "Failed to generate output bundle.";
     console.error("[music-bingo] /api/generate failed:", err instanceof Error ? err.stack ?? err.message : err);
     return new Response(msg, { status: 500 });

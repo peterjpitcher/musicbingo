@@ -1,10 +1,10 @@
 "use client";
 
 import { BrandSelector } from "@/components/brand/BrandSelector";
-import { Button } from "@/components/ui/Button";
 import { parseRevealConfigInputs } from "@/lib/live/timing";
 import { MAX_SONG_PLAY_MS, MIN_SONG_PLAY_MS } from "@/lib/live/types";
 import { isSpotifyOwnedPlaylist } from "@/lib/spotifyPlaylistId";
+import { Button } from "@anchor-nights/kit/ui";
 
 type StepEventSetupProps = {
   eventDate: string;
@@ -130,7 +130,7 @@ export function StepEventSetup({
       <div className="fg" style={{ marginBottom: 8 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <label>Normal song timing <span style={{ opacity: 0.5 }}>(seconds)</span></label>
-          <Button variant="secondary" size="sm" onClick={onResetRevealDefaults}>Use Defaults</Button>
+          <Button type="button" variant="outline" size="sm" onClick={onResetRevealDefaults}>Use Defaults</Button>
         </div>
       </div>
       <div className="timing-grid">
@@ -161,7 +161,7 @@ export function StepEventSetup({
 
       <div className="wiznav">
         <span />
-        <Button variant="primary" onClick={onNext} disabled={!canNext}>
+        <Button type="button" size="sm" variant="primary" onClick={onNext} disabled={!canNext}>
           Next: Game 1 →
         </Button>
       </div>

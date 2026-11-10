@@ -4,12 +4,8 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { useWakeLock } from "@/hooks/useWakeLock";
-import { AppHeader } from "@/components/layout/AppHeader";
-
-import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
-import { Notice } from "@/components/ui/Notice";
+import { useWakeLock } from "@anchor-nights/kit/tv";
+import { AnchorLogo, Banner, buttonClass, Card } from "@anchor-nights/kit/ui";
 import { assertAdminUnlocked } from "@/lib/live/adminGuard";
 import { publishLiveMessage } from "@/lib/live/channel";
 import { NowPlayingPanel } from "@/components/host/NowPlayingPanel";
@@ -22,7 +18,6 @@ import { AwardPointsModal, type AwardPreset } from "@/components/host/AwardPoint
 import { SCREEN_REGISTRY } from "@/components/screens/registry";
 import { ScoreToastOverlay } from "@/components/screens/ScoreToastOverlay";
 import { EditContext, type EditContextValue } from "@/components/motifs/EditContext";
-import { BrandProvider } from "@/components/brand/BrandProvider";
 import { SHOW_STEPS, normalizeScreenId, type ScreenId } from "@/lib/live/runOfShow";
 import { deriveScreenId } from "@/lib/live/deriveScreen";
 import { getContent, type ContentKey } from "@/lib/live/content";
@@ -1535,14 +1530,22 @@ export default function HostSessionControllerPage() {
 
   if (error && !session) {
     return (
-      <div className="min-h-screen bg-slate-50">
-        <AppHeader title="Live Host Controller" variant="light" />
-        <main className="max-w-2xl mx-auto px-4 py-8">
-          <Card>
-            <Notice variant="error" className="mb-4">{error}</Notice>
-            <Button as="link" href="/host" variant="secondary">
-              Back to Host Dashboard
-            </Button>
+      <div className="host-root">
+        <div className="host-bar">
+          <div className="brandlock">
+            <AnchorLogo height={40} priority />
+            <div className="host-title">
+              Music Bingo
+              <small>Host controller</small>
+            </div>
+          </div>
+        </div>
+        <main className="mx-auto max-w-2xl px-4 py-8">
+          <Card className="flex flex-col gap-4 p-5">
+            <Banner tone="danger">{error}</Banner>
+            <Link href="/host" className={buttonClass({ variant: "outline", size: "sm", className: "self-start" })}>
+              Back to the games list
+            </Link>
           </Card>
         </main>
       </div>
@@ -1735,17 +1738,13 @@ export default function HostSessionControllerPage() {
   const gameThemeLabel = getContent(gameThemeKey, { runtime, session, brand: effectiveBrand });
 
   return (
-    <BrandProvider brand={brand}>
-      <EditContext.Provider value={editValue}>
+    <EditContext.Provider value={editValue}>
         <div className="host-root">
 
           {/* ---- Top bar ---- */}
           <div className="host-bar">
             <div className="brandlock">
-              {effectiveBrand.logo_dark_url && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img className="logo" src={effectiveBrand.logo_dark_url} alt={effectiveBrand.name} />
-              )}
+              <AnchorLogo height={40} priority />
               <div className="host-title">
                 Music Bingo
                 <small>{session?.name ?? effectiveBrand.name} · Host Controller</small>
@@ -1764,7 +1763,7 @@ export default function HostSessionControllerPage() {
               {/* Award points */}
               <button
                 type="button"
-                className="hbtn"
+                className={buttonClass({ variant: "outline", size: "sm" })}
                 onClick={() => setAwardModalOpen(true)}
                 disabled={!isController}
                 title={!isController ? "Take control before awarding points." : undefined}
@@ -1774,104 +1773,97 @@ export default function HostSessionControllerPage() {
               {/* Open private display */}
               <button
                 type="button"
-                className="hbtn"
+                className={buttonClass({ variant: "outline", size: "sm" })}
                 onClick={() => void openPrivateDisplay()}
                 disabled={displayOpening}
               >
                 {displayOpening ? "Opening..." : "Open Display"}
               </button>
               {/* Back to sessions */}
-              <Link href="/host" className="hbtn">
+              <Link href="/host" className={buttonClass({ variant: "outline", size: "sm" })}>
                 Back to Sessions
               </Link>
             </div>
           </div>
 
-          {/* ---- System-state banners ---- */}
-          <div style={{ maxWidth: 1560, margin: "0 auto", padding: "18px 26px 0" }}>
+          {/* ---- System-state banners (the kit Banner) ---- */}
+          <div className="mx-auto flex max-w-[1560px] flex-col gap-3 px-4 pt-4 sm:px-6">
             {!isController && (
-              <div className="banner banner--warn">
-                <span className="bi">🔒</span>
-                <div className="bx">
-                  <b>Read-only mode</b>
-                  <p>{lockOwnerLabel || "Another host tab is controlling this session — your controls are disabled."}</p>
-                </div>
-                <button
-                  type="button"
-                  className="hbtn hbtn--primary"
-                  onClick={() => {
-                    const ok = acquireLock(true);
-                    if (!ok) {
-                      setError("Unable to take control right now.");
-                      return;
-                    }
-                    setNoticeVariant("success");
-                    setNotice("Controller lock transferred to this tab.");
-                  }}
-                >
-                  Take Control
-                </button>
-              </div>
+              <Banner
+                tone="warning"
+                title="Read-only mode"
+                action={
+                  <button
+                    type="button"
+                    className={buttonClass({ variant: "primary", size: "sm" })}
+                    onClick={() => {
+                      const ok = acquireLock(true);
+                      if (!ok) {
+                        setError("Unable to take control right now.");
+                        return;
+                      }
+                      setNoticeVariant("success");
+                      setNotice("Controller lock transferred to this tab.");
+                    }}
+                  >
+                    Take Control
+                  </button>
+                }
+              >
+                {lockOwnerLabel || "Another host tab is controlling this session, so your controls are disabled."}
+              </Banner>
             )}
             {spotifyDisconnected && (
-              <div className="banner banner--danger">
-                <span className="bi">⚠</span>
-                <div className="bx">
-                  <b>Spotify disconnected</b>
-                  <p>{runtime.warningMessage || "Playback control is unavailable — your Spotify session expired. Reconnect to resume."}</p>
-                </div>
-                <button type="button" className="hbtn" onClick={() => void reconnectSpotify()}>
-                  Reconnect Spotify
-                </button>
-              </div>
+              <Banner
+                tone="danger"
+                title="Spotify disconnected"
+                action={
+                  <button type="button" className={buttonClass({ variant: "outline", size: "sm" })} onClick={() => void reconnectSpotify()}>
+                    Reconnect Spotify
+                  </button>
+                }
+              >
+                {runtime.warningMessage || "Playback control is unavailable because your Spotify session expired. Reconnect to resume."}
+              </Banner>
             )}
             {!spotifyDisconnected && !runtime.spotifyControlAvailable && (
               <>
-                <div className="banner banner--warn">
-                  <span className="bi">🎛</span>
-                  <div className="bx">
-                    <b>Manual host control mode</b>
-                    <p>No active Spotify device detected — control playback in the Spotify app while this screen drives the on-screen reveals.</p>
-                  </div>
-                  <button type="button" className="hbtn" onClick={() => void pollStatus()}>
-                    Resync
-                  </button>
-                </div>
-                <div className="notice notice--ok">
-                  <span>✓</span>
-                  <span>Reveal timing is still running — the TV will advance on schedule.</span>
-                </div>
+                <Banner
+                  tone="warning"
+                  title="Manual host control mode"
+                  action={
+                    <button type="button" className={buttonClass({ variant: "outline", size: "sm" })} onClick={() => void pollStatus()}>
+                      Resync
+                    </button>
+                  }
+                >
+                  No active Spotify device detected. Control playback in the Spotify app while this screen drives the on-screen reveals.
+                </Banner>
+                <Banner tone="success">Reveal timing is still running, so the TV will advance on schedule.</Banner>
               </>
             )}
             {runtimeSyncStatus === "offline" ? (
-              <div className="banner banner--warn" style={{ marginBottom: 0 }}>
-                <span className="bi">!</span>
-                <div className="bx">
-                  <b>Display sync is retrying</b>
-                  <p>The host keeps running. The display will catch up when the connection improves.</p>
-                </div>
-              </div>
+              <Banner tone="warning" title="Display sync is retrying">
+                The host keeps running. The display will catch up when the connection improves.
+              </Banner>
             ) : null}
             {notice ? (
-              <div className={`banner ${noticeVariant === "warning" ? "banner--warn" : "banner--info"}`} style={{ marginBottom: 0 }}>
-                <span className="bi">{noticeVariant === "warning" ? "⚠" : "✓"}</span>
-                <div className="bx"><p>{notice}</p></div>
-                <button type="button" className="hbtn" onClick={() => setNotice("")}>✕</button>
-              </div>
+              <Banner
+                tone={noticeVariant === "warning" ? "warning" : "info"}
+                action={<DismissButton onClick={() => setNotice("")} />}
+              >
+                {notice}
+              </Banner>
             ) : null}
             {playbackWarning ? (
-              <div className="banner banner--warn" style={{ marginBottom: 0 }} role="status">
-                <span className="bi">⚠</span>
-                <div className="bx"><p>{playbackWarning}</p></div>
-                <button type="button" className="hbtn" onClick={() => setPlaybackWarning("")}>✕</button>
-              </div>
+              <Banner tone="warning" action={<DismissButton onClick={() => setPlaybackWarning("")} />}>
+                {playbackWarning}
+              </Banner>
             ) : null}
             {error ? (
-              <div className="banner banner--danger" style={{ marginBottom: 0 }}>
-                <span className="bi">⚠</span>
-                <div className="bx"><p>{error}</p></div>
-                <button type="button" className="hbtn" onClick={() => setError("")}>✕</button>
-              </div>
+              <Banner tone="danger" action={<DismissButton onClick={() => setError("")} />}>
+                {error}
+              </Banner>
             ) : null}
           </div>
 
@@ -1913,7 +1905,7 @@ export default function HostSessionControllerPage() {
                 <div className="bignav">
                   <button
                     type="button"
-                    className="hbtn grow hbtn--lg"
+                    className={buttonClass({ variant: "outline", size: "lg", className: "flex-1" })}
                     onClick={() => stepScreen(-1)}
                     disabled={SHOW_SCREENS.findIndex((s) => s.id === currentScreenId) === 0}
                   >
@@ -1923,7 +1915,7 @@ export default function HostSessionControllerPage() {
                   </button>
                   <button
                     type="button"
-                    className={`hbtn${editing ? " hbtn--primary" : ""}`}
+                    className={buttonClass({ variant: editing ? "primary" : "outline", size: "sm" })}
                     style={{ minHeight: 46, padding: "0 18px" }}
                     onClick={() => setEditing((e) => !e)}
                     title="Toggle click-to-edit mode for TV content"
@@ -1932,7 +1924,7 @@ export default function HostSessionControllerPage() {
                   </button>
                   <button
                     type="button"
-                    className="hbtn grow hbtn--lg hbtn--primary"
+                    className={buttonClass({ variant: "primary", size: "lg", className: "flex-1" })}
                     onClick={() => stepScreen(1)}
                     disabled={isAtLastScreen || nextScreenBlocked}
                     title={nextScreenBlocked ? nextScreenBlockedTitle : undefined}
@@ -2163,7 +2155,20 @@ export default function HostSessionControllerPage() {
             onAward={awardTeamPoints}
           />
         </div>
-      </EditContext.Provider>
-    </BrandProvider>
+    </EditContext.Provider>
+  );
+}
+
+/** Clears a host banner. */
+function DismissButton({ onClick }: { onClick: () => void }): React.JSX.Element {
+  return (
+    <button
+      type="button"
+      aria-label="Dismiss"
+      className={buttonClass({ variant: "ghost", size: "sm", className: "w-11 px-0" })}
+      onClick={onClick}
+    >
+      ✕
+    </button>
   );
 }

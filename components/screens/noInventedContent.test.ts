@@ -3,7 +3,7 @@ import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { EditContext, type EditContextValue } from "@/components/motifs/EditContext";
-import { Qr } from "@/components/motifs/Qr";
+import { Qr } from "@anchor-nights/kit/qr";
 import { ThankYou } from "@/components/screens/ThankYou";
 import { Welcome } from "@/components/screens/Welcome";
 import { Winners } from "@/components/screens/Winners";
@@ -41,12 +41,12 @@ function runtimeWith(fields: Partial<LiveRuntimeState>): LiveRuntimeState {
 
 describe("Qr", () => {
   it("renders nothing for an empty value, never a placeholder code", () => {
-    expect(renderToStaticMarkup(createElement(Qr, { value: "" }))).toBe("");
-    expect(renderToStaticMarkup(createElement(Qr, { value: "   " }))).toBe("");
+    expect(renderToStaticMarkup(createElement(Qr, { value: "", title: "QR code" }))).toBe("");
+    expect(renderToStaticMarkup(createElement(Qr, { value: "   ", title: "QR code" }))).toBe("");
   });
 
   it("renders the code square for a real value", () => {
-    expect(renderToStaticMarkup(createElement(Qr, { value: "https://www.the-anchor.pub/" }))).toContain("<div");
+    expect(renderToStaticMarkup(createElement(Qr, { value: "https://www.the-anchor.pub/", title: "QR code" }))).toContain("<svg");
   });
 });
 
@@ -67,9 +67,17 @@ describe("ThankYou on the TV", () => {
     const noWebsite: BrandConfig = { ...anchor, website_url: null, qr_items: null };
     // A host override of "" keeps the review default; book again then has nothing.
     const html = renderOnTv(createElement(ThankYou, { brand: noWebsite, runtime: runtimeWith({}) }), runtimeWith({}), noWebsite);
-    expect(html).toContain("Review Us");
+    expect(html).toContain("Review us");
     expect(html).not.toContain("Book Again");
     expectNoSampleValues(html);
+  });
+
+  it("asks for feedback without asking for a rating or steering to Google", () => {
+    const html = renderOnTv(createElement(ThankYou, { brand: anchor, runtime: runtimeWith({}) }), runtimeWith({}), anchor);
+    expect(html).toContain("Tell us how we did");
+    expect(html).not.toMatch(/google/i);
+    expect(html).not.toContain("★");
+    expect(html).not.toMatch(/rate us/i);
   });
 
   it("keeps Book Again when the brand website is stored without a scheme", () => {

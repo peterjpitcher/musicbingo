@@ -45,7 +45,7 @@ export function HouseRules({ brand }: ScreenProps): React.JSX.Element {
     >
       {/* Header */}
       <div className="col" style={{ alignItems: "center", gap: 12 }}>
-        <div className="kicker an-rise d1">How It Works</div>
+        <div className="tv-kicker an-rise d1">How It Works</div>
         <h1
           className="display display--gold an-rise d2"
           style={{ fontSize: 138 }}
@@ -75,17 +75,17 @@ export function HouseRules({ brand }: ScreenProps): React.JSX.Element {
               padding: "30px 34px",
               borderRadius: 20,
               background: "rgba(0,0,0,.26)",
-              borderLeft: "6px solid var(--brand-accent)",
+              borderLeft: "6px solid var(--anchor-gold)",
             }}
           >
             {/* Large rule number — outlined text */}
             <div
               style={{
-                fontFamily: "var(--brand-display)",
+                fontFamily: "var(--font-dm-serif), serif",
                 fontSize: 92,
                 lineHeight: 0.8,
                 color: "transparent",
-                WebkitTextStroke: "2px var(--brand-accent-light)",
+                WebkitTextStroke: "2px var(--anchor-gold-bright)",
               }}
             >
               {r.n}
@@ -95,10 +95,9 @@ export function HouseRules({ brand }: ScreenProps): React.JSX.Element {
             <div className="col" style={{ minWidth: 0 }}>
               <div
                 style={{
-                  fontFamily: "var(--brand-display)",
+                  fontFamily: "var(--font-dm-serif), serif",
                   fontSize: 48,
                   lineHeight: 1,
-                  textTransform: "uppercase",
                   whiteSpace: "nowrap",
                 }}
               >
@@ -106,7 +105,7 @@ export function HouseRules({ brand }: ScreenProps): React.JSX.Element {
               </div>
               <div
                 className="muted"
-                style={{ fontSize: 25, marginTop: 10, lineHeight: 1.35 }}
+                style={{ fontSize: 32, marginTop: 10, lineHeight: 1.35 }}
               >
                 <Editable field={`${r.k}s`} placeholder={r.s} />
               </div>

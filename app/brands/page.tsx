@@ -21,8 +21,13 @@ import {
 import { refreshBrandList, type BrandWithUrls } from "@/lib/brands/brandList";
 import type { BrandConfig, BrandInput } from "@/lib/brands/types";
 import { assertAdminUnlocked } from "@/lib/live/adminGuard";
+import { buttonClass } from "@anchor-nights/kit/ui";
 
-/** Sentinel id used in `?id=` to mean "create a new venue". */
+/**
+ * Sentinel id used in `?id=` to mean "create a new venue". Only reachable when
+ * no live venue exists: The Anchor is the only selectable venue (spec M-6), and
+ * archived venues (Barons Pubs) are hidden from this page.
+ */
 const NEW_ID = "new";
 
 /** Files staged for upload on the next save, keyed by slot. */
@@ -81,7 +86,10 @@ function BrandsEditor(): React.ReactElement {
     };
   }, []);
 
-  const isNew = selId === NEW_ID || selId === null;
+  // Archived venues stay in the database so old games still render, but they
+  // are not offered for editing or selection.
+  const visibleBrands = useMemo(() => brands.filter((b) => !b.archived_at), [brands]);
+  const isNew = !loadingList && visibleBrands.length === 0;
 
   // Always goes back to the server: this is the editor, so it must not serve a
   // list another page cached. The result refreshes the shared cache too, so any
@@ -103,6 +111,15 @@ function BrandsEditor(): React.ReactElement {
       .finally(() => setLoadingList(false));
   }, [refreshBrands]);
 
+  // With a live venue to edit, any other address (none, "new", an archived or
+  // unknown id) opens the default venue instead.
+  useEffect(() => {
+    if (loadingList || visibleBrands.length === 0) return;
+    if (selId && visibleBrands.some((b) => b.id === selId)) return;
+    const target = visibleBrands.find((b) => b.is_default) ?? visibleBrands[0];
+    router.replace(`/brands?id=${target.id}`);
+  }, [loadingList, visibleBrands, selId, router]);
+
   // Whenever the selected id (or the loaded list) changes, hydrate the draft.
   useEffect(() => {
     setError("");
@@ -113,12 +130,12 @@ function BrandsEditor(): React.ReactElement {
       setDraft(blankEditableBrand());
       return;
     }
-    const found = brands.find((b) => b.id === selId);
+    const found = visibleBrands.find((b) => b.id === selId);
     if (found) setDraft(brandToEditable(found));
-  }, [selId, isNew, brands]);
+  }, [selId, isNew, visibleBrands]);
 
   function select(id: string): void {
-    router.push(id === NEW_ID ? "/brands?id=new" : `/brands?id=${id}`);
+    router.push(`/brands?id=${id}`);
   }
 
   function onChange(patch: Partial<EditableBrand>): void {
@@ -253,56 +270,27 @@ function BrandsEditor(): React.ReactElement {
     }
   }
 
-  async function onDelete(): Promise<void> {
-    if (isNew || !selId) return;
-    if (!window.confirm(`Delete venue "${draft.name}"? This cannot be undone.`)) return;
-    setError("");
-    setNotice("");
-    try {
-      const res = await fetch(`/api/brands/${selId}`, { method: "DELETE" });
-      assertAdminUnlocked(res);
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error((data as { error?: string }).error || "Failed to delete venue.");
-      }
-      await refreshBrands();
-      router.push("/brands");
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to delete venue.");
-    }
-  }
-
   const previewBrand = useMemo(
     () => draftToBrandConfig(selId ?? NEW_ID, draft),
     [selId, draft]
   );
 
   return (
-    <div className="host-root">
+    <div className="host-root theme-desk">
       <AppHeader
         title="Music Bingo"
-        subtitle="Brands &amp; Venues"
+        subtitle="Venue"
         actions={
           <>
-            <Link href="/host" className="hbtn">
+            <Link href="/host" className={buttonClass({ variant: "outline", size: "sm" })}>
               ← Dashboard
             </Link>
-            <button
-              type="button"
-              className="hbtn hbtn--primary"
-              onClick={() => select(NEW_ID)}
-            >
-              + New Venue
-            </button>
           </>
         }
       />
 
-      <main
-        className="host-main"
-        style={{ gridTemplateColumns: "260px minmax(0,1fr) minmax(0,1fr)" }}
-      >
-        {/* Pane 1 — venue list */}
+      <main className="host-main host-main--venue">
+        {/* Pane 1: venue list */}
         <div className="host-col">
           <div className="panel">
             <h2>Venues</h2>
@@ -312,7 +300,6 @@ function BrandsEditor(): React.ReactElement {
               <div className="ros">
                 {isNew ? (
                   <button type="button" className="ros-step live">
-                    <span className="sw-lg" style={{ background: draft.colorAccent }} />
                     <span>
                       <span className="lbl">{draft.name || "New Venue"}</span>
                       <br />
@@ -320,14 +307,13 @@ function BrandsEditor(): React.ReactElement {
                     </span>
                   </button>
                 ) : null}
-                {brands.map((b) => (
+                {visibleBrands.map((b) => (
                   <button
                     type="button"
                     key={b.id}
                     className={`ros-step ${b.id === selId ? "live" : ""}`}
                     onClick={() => select(b.id)}
                   >
-                    <span className="sw-lg" style={{ background: b.color_accent }} />
                     <span>
                       <span className="lbl">{b.name}</span>
                       <br />
@@ -338,7 +324,7 @@ function BrandsEditor(): React.ReactElement {
                     </span>
                   </button>
                 ))}
-                {brands.length === 0 && !isNew ? (
+                {visibleBrands.length === 0 && !isNew ? (
                   <p className="hint-small">No venues yet. Create your first one.</p>
                 ) : null}
               </div>
@@ -346,16 +332,16 @@ function BrandsEditor(): React.ReactElement {
           </div>
         </div>
 
-        {/* Pane 2 — edit form */}
+        {/* Pane 2: edit form */}
         <div className="host-col">
           {error ? (
             <div className="panel" role="alert">
-              <p style={{ color: "#f0b6b6", margin: 0 }}>{error}</p>
+              <p style={{ color: "var(--danger-text)", margin: 0 }}>{error}</p>
             </div>
           ) : null}
           {notice ? (
             <div className="panel">
-              <p style={{ color: "#8fe0ab", margin: 0 }}>{notice}</p>
+              <p style={{ color: "var(--success-text)", margin: 0 }}>{notice}</p>
             </div>
           ) : null}
 
@@ -371,51 +357,27 @@ function BrandsEditor(): React.ReactElement {
             <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
               <button
                 type="button"
-                className="hbtn hbtn--primary"
+                className={buttonClass({ variant: "primary", size: "sm" })}
                 style={{ minHeight: 46 }}
                 onClick={() => void onSave()}
-                disabled={saving}
+                disabled={saving || loadingList}
               >
                 {saving ? "Saving…" : isNew ? "Create venue" : "Save venue"}
               </button>
-              {!isNew ? (
-                <button
-                  type="button"
-                  className="hbtn hbtn--danger"
-                  style={{ minHeight: 46 }}
-                  onClick={() => void onDelete()}
-                  disabled={saving}
-                >
-                  Delete venue
-                </button>
-              ) : null}
             </div>
           </div>
         </div>
 
-        {/* Pane 3 — live preview */}
+        {/* Pane 3: live preview */}
         <div className="host-col">
           <div className="panel" style={{ position: "sticky", top: 90 }}>
             <h2>
               Live Preview <span className="meta">{draft.name || "New Venue"}</span>
             </h2>
             <BrandPreviewPane brand={previewBrand} variant="A" />
-            <div className="swatches">
-              {[
-                draft.colorPrimary,
-                draft.colorPrimaryLight,
-                draft.colorAccent,
-                draft.colorAccentLight,
-              ].map((c, i) => (
-                <div key={i} className="swatch">
-                  <span style={{ background: c }} />
-                  <code>{c}</code>
-                </div>
-              ))}
-            </div>
             <p className="hint-small">
-              Colours, logos and fonts apply consistently across the TV screens, host
-              console, bingo cards and run sheet.
+              Every screen uses The Anchor look. The name, logos, messages and QR links
+              here fill in the TV screens, bingo cards and run sheet.
             </p>
           </div>
         </div>
@@ -426,7 +388,7 @@ function BrandsEditor(): React.ReactElement {
 
 export default function BrandsPage(): React.ReactElement {
   return (
-    <Suspense fallback={<div className="host-root" />}>
+    <Suspense fallback={<div className="host-root theme-desk" />}>
       <BrandsEditor />
     </Suspense>
   );

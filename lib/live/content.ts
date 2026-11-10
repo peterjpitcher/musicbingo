@@ -73,7 +73,7 @@ export const CONTENT_PLACEHOLDERS: Record<ContentKey, string> = {
   breakL1: "We're On", breakL2: "A Break", breakLede: "Grab a refill, stretch your legs and keep your cards safe.", breakMins: "10",
   winPrize: "", spoonPrize: "",
   nextDate: "", tyL1: "Thank You", tyL2: "& Goodnight",
-  tyLede: "We hope you had a brilliant night. If you did, a Google review means the world to us.",
+  tyLede: "We hope you had a brilliant night. We'd love to hear how it went.",
   // Canonical short link, not the retired vip-club.uk one. Kept as a real default rather
   // than "" because brands.qr_items is currently null for every brand, so falling through
   // to resolveQrUrl would yield brand.website_url (the website, not a review page). A host

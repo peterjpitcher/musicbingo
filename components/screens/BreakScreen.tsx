@@ -9,17 +9,17 @@ import { Vinyl } from "@/components/motifs/Vinyl";
 import { Chrome } from "@/components/motifs/Chrome";
 
 const COUNTDOWN_LABEL_STYLE: React.CSSProperties = {
-  fontSize: 24,
+  fontSize: 32,
   letterSpacing: ".2em",
   textTransform: "uppercase",
-  color: "var(--brand-accent-light)",
+  color: "var(--anchor-gold-bright)",
   fontWeight: 700,
 };
 
 const COUNTDOWN_VALUE_STYLE: React.CSSProperties = {
-  fontFamily: "var(--brand-display)",
+  fontFamily: "var(--font-dm-serif), serif",
   fontSize: 110,
-  color: "var(--cream)",
+  color: "var(--anchor-cream-text)",
   lineHeight: 0.8,
 };
 

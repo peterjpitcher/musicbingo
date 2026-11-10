@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { buttonClass } from "@anchor-nights/kit/ui";
 
 /** Shape of timing values (all in seconds). */
 export interface TimingValues {
@@ -78,10 +79,10 @@ export function TimingPanel({ timing, setTiming }: TimingPanelProps): React.Reac
         ))}
       </div>
       <div className="btn-row" style={{ marginTop: 12 }}>
-        <button className="hbtn grow" disabled={!changed} onClick={handleSave}>
+        <button className={buttonClass({ variant: "outline", size: "sm", className: "flex-1" })} disabled={!changed} onClick={handleSave}>
           Save Timing
         </button>
-        <button className="hbtn grow" onClick={handleDefaults}>
+        <button className={buttonClass({ variant: "outline", size: "sm", className: "flex-1" })} onClick={handleDefaults}>
           Use Defaults
         </button>
       </div>

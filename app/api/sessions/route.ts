@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { hasAdminAccess } from "@/lib/live/access";
 import { listSessions, upsertSession } from "@/lib/live/sessionRepo";
 import { validateLiveSession } from "@/lib/live/validate";
+import { reportError } from "@/lib/reportError";
 
 export const runtime = "nodejs";
 
@@ -14,6 +15,7 @@ export async function GET(request: NextRequest) {
     const sessions = await listSessions();
     return NextResponse.json(sessions, { headers: { "Cache-Control": "no-store" } });
   } catch (err: any) {
+    await reportError({ scope: "api:sessions:get" }, err);
     return NextResponse.json({ error: err?.message ?? "Failed to list sessions." }, { status: 500 });
   }
 }
@@ -31,6 +33,7 @@ export async function PUT(request: NextRequest) {
     await upsertSession(session);
     return NextResponse.json(session, { headers: { "Cache-Control": "no-store" } });
   } catch (err: any) {
+    await reportError({ scope: "api:sessions:put" }, err);
     return NextResponse.json({ error: err?.message ?? "Failed to save session." }, { status: 500 });
   }
 }

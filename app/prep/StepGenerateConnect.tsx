@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
+
 import { useState } from "react";
-import { Button } from "@/components/ui/Button";
-import { Notice } from "@/components/ui/Notice";
+import { Banner, Button, buttonClass } from "@anchor-nights/kit/ui";
 
 type SpotifyPlaylistResult = {
   gameNumber: number;
@@ -164,8 +165,8 @@ export function StepGenerateConnect({
     <div className="wizpanel">
       <h2>Generate &amp; Connect</h2>
 
-      {error ? <Notice variant="error" className="mb-4">{error}</Notice> : null}
-      {qrNotice ? <Notice variant="info" className="mb-4">{qrNotice}</Notice> : null}
+      {error ? <Banner tone="danger" className="mb-4">{error}</Banner> : null}
+      {qrNotice ? <Banner tone="info" className="mb-4">{qrNotice}</Banner> : null}
 
       {/* Spotify connect row */}
       <div className="genrow">
@@ -180,7 +181,9 @@ export function StepGenerateConnect({
         </div>
         {spotifyConnected ? (
           <Button
-            variant="secondary"
+            type="button"
+            size="sm"
+            variant="outline"
             onClick={onDisconnectSpotify}
             disabled={spotifyConnecting || spotifyCreating}
           >
@@ -188,6 +191,8 @@ export function StepGenerateConnect({
           </Button>
         ) : (
           <Button
+            type="button"
+            size="sm"
             variant="primary"
             onClick={onConnectSpotify}
             disabled={spotifyConnecting}
@@ -212,7 +217,7 @@ export function StepGenerateConnect({
                       {r.playlistUrl ? (
                         <>
                           {" "}—{" "}
-                          <a href={r.playlistUrl} target="_blank" rel="noreferrer" style={{ color: "var(--brand-accent-light)", textDecoration: "underline" }}>
+                          <a href={r.playlistUrl} target="_blank" rel="noreferrer" style={{ color: "var(--accent-text)", textDecoration: "underline" }}>
                             Open ↗
                           </a>
                         </>
@@ -224,11 +229,13 @@ export function StepGenerateConnect({
           </p>
         </div>
         {playlistsCreated ? (
-          <Button variant="secondary" onClick={onRefreshFromSpotify} disabled={refreshing}>
+          <Button type="button" size="sm" variant="outline" onClick={onRefreshFromSpotify} disabled={refreshing}>
             {refreshing ? "Refreshing…" : "Refresh"}
           </Button>
         ) : (
           <Button
+            type="button"
+            size="sm"
             variant="primary"
             disabled={!spotifyConnected || !canSubmit || busy || spotifyCreating}
             onClick={onCreatePlaylists}
@@ -270,7 +277,7 @@ export function StepGenerateConnect({
                     />
                     <button
                       type="button"
-                      className="hbtn hbtn--primary"
+                      className={buttonClass({ variant: "primary", size: "sm" })}
                       style={{ minHeight: 36, fontSize: 13, padding: "0 12px", flexShrink: 0 }}
                       disabled={isResolving || !inputVal.trim()}
                       onClick={() => void handleResolve(m.gameNumber as 1 | 2, m.artist, m.title)}
@@ -279,7 +286,7 @@ export function StepGenerateConnect({
                     </button>
                     <button
                       type="button"
-                      className="hbtn"
+                      className={buttonClass({ variant: "outline", size: "sm" })}
                       style={{ minHeight: 36, fontSize: 13, padding: "0 10px", flexShrink: 0 }}
                       disabled={isResolving}
                       onClick={() => handleSkip(m.gameNumber, m.artist, m.title)}
@@ -307,7 +314,9 @@ export function StepGenerateConnect({
           <p>Generate bingo cards without Spotify playlists</p>
         </div>
         <Button
-          variant="secondary"
+          type="button"
+          size="sm"
+          variant="outline"
           disabled={!canSubmit || busy}
           onClick={onDownloadOnly}
         >
@@ -323,6 +332,8 @@ export function StepGenerateConnect({
           <p>Game 1 &amp; 2 PDFs, What&apos;s On backs, run sheet</p>
         </div>
         <Button
+          type="button"
+          size="sm"
           variant="primary"
           disabled={!playlistsCreated || busy}
           onClick={onGenerateEventPack}
@@ -350,7 +361,7 @@ export function StepGenerateConnect({
               <div className="gx"><b>Live Session</b><p>Save to host console or export as JSON</p></div>
             </div>
             <div className="fg" style={{ width: "100%" }}>
-              <label style={{ fontSize: 12, letterSpacing: ".1em", textTransform: "uppercase", color: "rgb(var(--cream-rgb)/.65)", fontWeight: 700 }}>
+              <label style={{ fontSize: 12, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-muted)", fontWeight: 700 }}>
                 Session name
               </label>
               <input
@@ -361,28 +372,28 @@ export function StepGenerateConnect({
               />
             </div>
             {liveSessionNotice ? (
-              <Notice variant="success">{liveSessionNotice}</Notice>
+              <Banner tone="success">{liveSessionNotice}</Banner>
             ) : null}
             {!canSaveLive ? (
-              <p style={{ margin: 0, fontSize: 13, color: "rgb(var(--cream-rgb)/.65)" }}>
+              <p style={{ margin: 0, fontSize: 13, color: "var(--text-muted)" }}>
                 {saveHint}
               </p>
             ) : null}
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <Button variant="primary" onClick={onSaveLiveSession} disabled={!canSaveLive || saving}>
+              <Button type="button" size="sm" variant="primary" onClick={onSaveLiveSession} disabled={!canSaveLive || saving}>
                 {saving ? "Saving…" : "Save Live Session"}
               </Button>
-              <Button variant="secondary" onClick={onExportLiveSession} disabled={!canSaveLive || saving}>
+              <Button type="button" size="sm" variant="outline" onClick={onExportLiveSession} disabled={!canSaveLive || saving}>
                 Export JSON
               </Button>
-              <Button as="link" href="/host" variant="secondary">Open Host Console</Button>
+              <Link href="/host" className={buttonClass({ variant: "outline", size: "sm" })}>Open Host Console</Link>
             </div>
           </div>
         );
       })()}
 
       <div className="wiznav">
-        <Button variant="secondary" onClick={onBack}>← Back</Button>
+        <Button type="button" size="sm" variant="outline" onClick={onBack}>← Back</Button>
         <span />
       </div>
     </div>

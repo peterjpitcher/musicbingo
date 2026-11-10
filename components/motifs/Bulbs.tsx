@@ -33,7 +33,7 @@ export function Bulbs({ gap = 46, r = 6 }: BulbsProps): React.ReactElement {
             cx={gap / 2}
             cy={r + 2}
             r={r}
-            fill="var(--brand-accent-light)"
+            fill="var(--anchor-gold-bright)"
             opacity=".9"
           />
         </pattern>

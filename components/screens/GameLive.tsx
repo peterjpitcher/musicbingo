@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+
+import { buildFitSteps, useFitStep } from "@anchor-nights/kit/tv";
 
 import type { ScreenProps } from "@/components/screens/types";
 import type { LiveRuntimeState } from "@/lib/live/types";
@@ -15,6 +17,8 @@ import { Ball } from "@/components/motifs/Ball";
 import { Eq } from "@/components/motifs/Eq";
 import { Chrome } from "@/components/motifs/Chrome";
 import { AlbumArt } from "@/components/screens/AlbumArt";
+import { fitsInCanvas } from "@/lib/tvFit";
+import { TV_TYPE } from "@/lib/tvType";
 
 /**
  * Smoothly interpolates the playing track's `progressMs` between the ~2s server
@@ -63,21 +67,30 @@ function formatCountdown(ms: number): string {
   return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
-function fitTitleSize(value: string): number {
-  const length = value.trim().length;
-  if (length > 50) return 64;
-  if (length > 36) return 76;
-  if (length > 26) return 90;
-  if (length > 18) return 108;
-  return 130;
-}
+/**
+ * Title and artist sizes, largest first. The screen takes the first step at
+ * which the info column fits (the kit's useFitStep), so a long title shrinks
+ * only as far as it must. Title and artist take turns a notch at a time; the
+ * artist never goes below the TV base size.
+ */
+const TRACK_FIT_STEPS = buildFitSteps({
+  start: { title: 130, artist: 56 },
+  floor: { title: TV_TYPE.xl, artist: TV_TYPE.base },
+  step: { title: 8, artist: 4 },
+  shrinkOrder: [["title", "artist"]],
+});
 
-function fitArtistSize(value: string): number {
-  const length = value.trim().length;
-  if (length > 54) return 34;
-  if (length > 40) return 40;
-  if (length > 28) return 46;
-  return 56;
+/** Challenge songs carry an instruction line too, so they start a notch lower. */
+const CHALLENGE_FIT_STEPS = buildFitSteps({
+  start: { title: 124, artist: 54 },
+  floor: { title: TV_TYPE.xl, artist: TV_TYPE.base },
+  step: { title: 8, artist: 4 },
+  shrinkOrder: [["title", "artist"]],
+});
+
+/** Cream at a given strength, for borders and dim labels on the green. */
+function cream(percent: number): string {
+  return `color-mix(in srgb, var(--anchor-cream-text) ${percent}%, transparent)`;
 }
 
 function challengePresentation(type: LiveRuntimeState["challengeType"]): {
@@ -92,13 +105,13 @@ function challengePresentation(type: LiveRuntimeState["challengeType"]): {
       className: "screen--chal-dance",
       icon: "🕺",
       label: "Dance Challenge",
-      instruction: "Cards down — everyone up on your feet and dance along!",
+      instruction: "Cards down, everyone up on your feet and dance along!",
     }
     : {
       className: "screen--chal-sing",
       icon: "🎤",
       label: "Sing Challenge",
-      instruction: "Cards down — everyone sing along at the top of your lungs!",
+      instruction: "Cards down, everyone sing along at the top of your lungs!",
     };
 }
 
@@ -149,8 +162,6 @@ export function GameLive({
   const showArtist = reveal?.showArtist ?? false;
   const titleText = track && showTitle ? track.title : "";
   const artistText = track && showArtist ? track.artist : "";
-  const titleFontSize = titleText ? fitTitleSize(titleText) : 130;
-  const artistFontSize = artistText ? fitArtistSize(artistText) : 56;
 
   /*
    * "Next song" countdown — interpolated client-side so it ticks smoothly
@@ -176,6 +187,18 @@ export function GameLive({
     : 0;
   const nextLabel = hasLiveCountdown ? formatCountdown(remainingMs) : "0:08";
 
+  // Fit the title and artist to the info column (kit useFitStep, measured in
+  // canvas pixels so the Stage's scale does not skew it).
+  const infoRef = useRef<HTMLDivElement | null>(null);
+  const fitSteps = isChallenge ? CHALLENGE_FIT_STEPS : TRACK_FIT_STEPS;
+  const fitStep = useFitStep(
+    infoRef,
+    fitSteps.length,
+    fitsInCanvas,
+    `${isChallenge ? "challenge" : "track"}|${titleText}|${artistText}`,
+  );
+  const { title: titleFontSize, artist: artistFontSize } = fitSteps[Math.min(fitStep, fitSteps.length - 1)];
+
   /** Inline style for a lit reveal badge. */
   const badgeLit: React.CSSProperties = {
     display: "inline-flex",
@@ -183,13 +206,13 @@ export function GameLive({
     gap: 10,
     padding: "12px 22px",
     borderRadius: 999,
-    background: "rgb(var(--brand-accent-rgb) / .18)",
-    border: "2px solid var(--brand-accent)",
-    fontSize: 22,
+    background: "color-mix(in srgb, var(--anchor-gold) 18%, transparent)",
+    border: "2px solid var(--anchor-gold)",
+    fontSize: 32,
     fontWeight: 700,
     textTransform: "uppercase",
     letterSpacing: ".1em",
-    color: "var(--brand-accent-light)",
+    color: "var(--anchor-gold-bright)",
   };
 
   /** Inline style for a dim (not-yet-revealed) badge. */
@@ -200,12 +223,12 @@ export function GameLive({
     padding: "12px 22px",
     borderRadius: 999,
     background: "rgba(0,0,0,.2)",
-    border: "2px solid rgba(246,239,221,.15)",
-    fontSize: 22,
+    border: `2px solid ${cream(15)}`,
+    fontSize: 32,
     fontWeight: 700,
     textTransform: "uppercase",
     letterSpacing: ".1em",
-    color: "rgba(246,239,221,.35)",
+    color: cream(55),
   };
 
   const badges: Array<[string, boolean]> = [
@@ -217,21 +240,21 @@ export function GameLive({
   if (isChallenge) {
     const challenge = challengePresentation(liveRuntime?.challengeType ?? null);
     const bonusPoints = liveRuntime?.challengeBonusPoints ?? DEFAULT_CHALLENGE_BONUS_POINTS;
-    const challengeTitleFontSize = titleText ? Math.min(124, fitTitleSize(titleText)) : 124;
-    const challengeArtistFontSize = artistText ? Math.min(54, fitArtistSize(artistText)) : 54;
+    const challengeTitleFontSize = titleFontSize;
+    const challengeArtistFontSize = artistFontSize;
     const challengeBadgeLit: React.CSSProperties = {
       display: "inline-flex",
       alignItems: "center",
       gap: 10,
       padding: "12px 22px",
       borderRadius: 999,
-      background: "rgb(255 255 255 / .14)",
-      border: "2px solid rgb(var(--brand-accent-light-rgb) / .86)",
-      fontSize: 22,
+      background: cream(14),
+      border: "2px solid color-mix(in srgb, var(--anchor-gold-bright) 86%, transparent)",
+      fontSize: 32,
       fontWeight: 800,
       textTransform: "uppercase",
       letterSpacing: ".1em",
-      color: "#fff6dd",
+      color: "var(--anchor-cream-text)",
     };
     const challengeBadgeDim: React.CSSProperties = {
       display: "inline-flex",
@@ -240,12 +263,12 @@ export function GameLive({
       padding: "12px 22px",
       borderRadius: 999,
       background: "rgb(0 0 0 / .22)",
-      border: "2px solid rgb(255 255 255 / .18)",
-      fontSize: 22,
+      border: `2px solid ${cream(18)}`,
+      fontSize: 32,
       fontWeight: 700,
       textTransform: "uppercase",
       letterSpacing: ".1em",
-      color: "rgb(255 255 255 / .44)",
+      color: cream(60),
     };
 
     return (
@@ -263,7 +286,11 @@ export function GameLive({
           </div>
         </div>
 
-        <div className="col" style={{ flex: 1, gap: 20, minWidth: 0, color: "#fff" }}>
+        <div
+          ref={infoRef}
+          className="col"
+          style={{ flex: 1, gap: 20, minWidth: 0, alignSelf: "stretch", justifyContent: "center", color: "var(--anchor-cream-text)" }}
+        >
           <div
             className="an-rise d1"
             style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}
@@ -271,11 +298,10 @@ export function GameLive({
             <span aria-hidden style={{ fontSize: 60, lineHeight: 1 }}>{challenge.icon}</span>
             <span
               style={{
-                fontFamily: "var(--brand-display), Impact, sans-serif",
+                fontFamily: "var(--font-dm-serif), serif",
                 fontSize: 70,
                 lineHeight: .92,
-                textTransform: "uppercase",
-                color: "#fff",
+                color: "var(--anchor-cream-text)",
               }}
             >
               {challenge.label}
@@ -287,9 +313,9 @@ export function GameLive({
                 alignItems: "center",
                 padding: "16px 28px",
                 borderRadius: 999,
-                background: "linear-gradient(180deg, #fff6dd 0%, var(--brand-accent-light) 45%, var(--brand-accent) 100%)",
-                color: "var(--ink)",
-                fontSize: 26,
+                background: "linear-gradient(180deg, var(--anchor-cream-text) 0%, var(--anchor-gold-bright) 45%, var(--anchor-gold) 100%)",
+                color: "var(--anchor-green-deep)",
+                fontSize: 32,
                 fontWeight: 900,
                 textTransform: "uppercase",
                 letterSpacing: ".08em",
@@ -301,7 +327,7 @@ export function GameLive({
 
           <p
             className="an-rise d2"
-            style={{ margin: 0, color: "#fff", fontSize: 36, fontWeight: 800, lineHeight: 1.15 }}
+            style={{ margin: 0, color: "var(--anchor-cream-text)", fontSize: TV_TYPE.base, fontWeight: 700, lineHeight: 1.15 }}
           >
             {challenge.instruction}
           </p>
@@ -333,7 +359,7 @@ export function GameLive({
               lineHeight: 1.08,
               margin: 0,
               maxWidth: "100%",
-              color: "#fff",
+              color: "var(--anchor-cream-text)",
               overflowWrap: "anywhere",
               whiteSpace: "normal",
             }}
@@ -365,13 +391,13 @@ export function GameLive({
                 padding: "12px 24px",
                 borderRadius: 999,
                 background: "rgba(0,0,0,.3)",
-                border: "2px solid rgba(255,255,255,.34)",
-                fontSize: 22,
+                border: `2px solid ${cream(34)}`,
+                fontSize: 32,
                 fontWeight: 800,
                 textTransform: "uppercase",
                 letterSpacing: ".1em",
                 overflow: "hidden",
-                color: "#fff",
+                color: "var(--anchor-cream-text)",
               }}
             >
               {hasLiveCountdown && (
@@ -381,7 +407,7 @@ export function GameLive({
                     position: "absolute",
                     inset: 0,
                     width: `${nextFillPct}%`,
-                    background: "rgb(var(--brand-accent-rgb) / .22)",
+                    background: "color-mix(in srgb, var(--anchor-gold) 22%, transparent)",
                     transition: "width 1s linear",
                     pointerEvents: "none",
                   }}
@@ -396,7 +422,7 @@ export function GameLive({
                   gap: 12,
                 }}
               >
-                <Eq bars={4} style={{ height: 22 }} />{" "}
+                <Eq bars={4} style={{ height: 28 }} />{" "}
                 {playsInFull ? "Plays in full" : `Next song · ${nextLabel}`}
               </span>
             </span>
@@ -439,28 +465,32 @@ export function GameLive({
       </div>
 
       {/* Info column */}
-      <div className="col" style={{ flex: 1, gap: 22, minWidth: 0 }}>
+      <div
+        ref={infoRef}
+        className="col"
+        style={{ flex: 1, gap: 22, minWidth: 0, alignSelf: "stretch", justifyContent: "center" }}
+      >
         {/* Game badge + theme row */}
         <div className="an-rise d1" style={{ display: "flex", alignItems: "center", gap: 18 }}>
           <Ball n={game} size={76} />
           <div>
             <div
               style={{
-                fontSize: 18,
+                fontSize: 32,
                 letterSpacing: ".26em",
                 textTransform: "uppercase",
-                color: "var(--brand-accent-light)",
+                color: "var(--anchor-gold-bright)",
                 fontWeight: 700,
               }}
             >
               Game {game} · Now Playing
             </div>
-            <div style={{ fontSize: 26, fontWeight: 600 }} className="muted">
-              Theme —{" "}
+            <div style={{ fontSize: 32, fontWeight: 600 }} className="muted">
+              Theme:{" "}
               <Editable
                 field={themeField}
                 placeholder={themePH}
-                style={{ color: "var(--cream)", fontWeight: 700 }}
+                style={{ color: "var(--anchor-cream-text)", fontWeight: 700 }}
               />
             </div>
           </div>
@@ -504,7 +534,7 @@ export function GameLive({
             lineHeight: 1.1,
             margin: 0,
             maxWidth: "100%",
-            color: "var(--cream)",
+            color: "var(--anchor-cream-text)",
             overflowWrap: "anywhere",
             whiteSpace: "normal",
           }}
@@ -553,8 +583,8 @@ export function GameLive({
                 padding: "12px 24px",
                 borderRadius: 999,
                 background: "rgba(0,0,0,.3)",
-                border: "2px solid rgba(246,239,221,.3)",
-                fontSize: 22,
+                border: `2px solid ${cream(30)}`,
+                fontSize: 32,
                 fontWeight: 700,
                 textTransform: "uppercase",
                 letterSpacing: ".1em",
@@ -569,7 +599,7 @@ export function GameLive({
                     position: "absolute",
                     inset: 0,
                     width: `${nextFillPct}%`,
-                    background: "rgb(var(--brand-accent-rgb) / .18)",
+                    background: "color-mix(in srgb, var(--anchor-gold) 18%, transparent)",
                     transition: "width 1s linear",
                     pointerEvents: "none",
                   }}
@@ -584,7 +614,7 @@ export function GameLive({
                   gap: 12,
                 }}
               >
-                <Eq bars={4} style={{ height: 22 }} />{" "}
+                <Eq bars={4} style={{ height: 28 }} />{" "}
                 {playsInFull ? "Plays in full" : `Next song · ${nextLabel}`}
               </span>
             </span>

@@ -168,7 +168,7 @@ function buildSchedule(params: RenderRunSheetPdfParams, game1Theme: string, game
     { title: "Music Bingo - Game 2", note: `${game2Theme} - different song list` },
     { title: "Winner entry", note: "Add the final team names and scores" },
     { title: "Winners reveal", note: "Reveal the league table from last place to first" },
-    { title: "Thank you & reviews", note: "Google review QR + plug the next event" },
+    { title: "Thank you & reviews", note: "Review QR + plug the next event" },
   ];
 }
 
