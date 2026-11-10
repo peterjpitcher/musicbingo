@@ -19,7 +19,7 @@ export function Warmup({
   brand,
   runtime,
   type = "dance",
-}: ScreenProps & { type?: "dance" | "sing" }): JSX.Element {
+}: ScreenProps & { type?: "dance" | "sing" }): React.JSX.Element {
   const dance = type === "dance";
   const expectedGame = dance ? 1 : 2;
   const expectedScreen = dance ? "dance" : "sing";

@@ -15,7 +15,7 @@ export type EditableProps = {
    */
   optional?: boolean;
   /** HTML element to render; defaults to "span". */
-  as?: keyof JSX.IntrinsicElements;
+  as?: keyof React.JSX.IntrinsicElements;
   className?: string;
   style?: React.CSSProperties;
 };
@@ -36,7 +36,7 @@ export function Editable({
   optional = false,
   className = "",
   style,
-}: EditableProps): JSX.Element {
+}: EditableProps): React.JSX.Element {
   const { editing, get, set } = useEdit();
   const ref = useRef<HTMLElement>(null);
   const value = get(field, optional ? "" : placeholder);
