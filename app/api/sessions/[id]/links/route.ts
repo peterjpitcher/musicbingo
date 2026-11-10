@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireStaff } from "@/lib/auth/routeGuard";
 import { buildSessionAccessLinks } from "@/lib/live/access";
 import { reportError } from "@/lib/reportError";
+import { siteOrigin } from "@/lib/siteUrl";
 import { getSessionRecord, revokeSessionLinks, SessionNotFoundError } from "@/lib/live/sessionRepo";
 
 export const runtime = "nodejs";
@@ -23,7 +24,9 @@ export async function GET(
     }
 
     return NextResponse.json(
-      buildSessionAccessLinks(request.nextUrl.origin, id, record.linkGeneration),
+      // On the canonical address (NEXT_PUBLIC_SITE_URL, spec M-10), whichever
+      // alias the host opened the console on.
+      buildSessionAccessLinks(siteOrigin(request.nextUrl.origin), id, record.linkGeneration),
       { headers: { "Cache-Control": "no-store" } }
     );
   } catch (err) {

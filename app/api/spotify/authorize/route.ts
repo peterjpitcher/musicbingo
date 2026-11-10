@@ -8,6 +8,7 @@ import {
   makeSpotifyPopupHtml,
   makeSpotifyOAuthState,
 } from "@/lib/spotifyWeb";
+import { spotifyAddressMismatch } from "@/lib/siteUrl";
 
 export const runtime = "nodejs";
 
@@ -19,6 +20,21 @@ export async function GET(request: NextRequest) {
   if (!gate.ok) return gate.response;
   const origin = new URL(request.url).origin;
   const secure = process.env.NODE_ENV === "production";
+
+  // Spotify returns to one registered address per environment. Started on
+  // another of the app's addresses, the sign-in could never finish (its state
+  // cookie would be on the wrong address), so say where to go instead.
+  const canonical = spotifyAddressMismatch(origin);
+  if (canonical) {
+    return new Response(
+      makeSpotifyPopupHtml({
+        ok: false,
+        error: `Spotify connects only from ${canonical}. Open Music Bingo there, sign in, then press Connect Spotify again.`,
+        closeWindow: false,
+      }),
+      { status: 200, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } },
+    );
+  }
 
   try {
     const cfg = getSpotifyWebConfig(origin);
