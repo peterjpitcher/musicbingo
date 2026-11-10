@@ -1,206 +1,41 @@
 "use client";
 
 import React from "react";
+import { buildThankYouPlaylist } from "@anchor-nights/kit/promo";
+import { getLondonIsoDate } from "@anchor-nights/kit/dates";
+
 import type { ScreenProps } from "@/components/screens/types";
-import type { BrandConfig } from "@/lib/brands/types";
-import { Sunburst } from "@/components/motifs/Sunburst";
-import { VenueLogo } from "@/components/motifs/VenueLogo";
-import { Qr, qrValue } from "@anchor-nights/kit/qr";
-import { Editable } from "@/components/motifs/Editable";
 import { useEdit } from "@/components/motifs/EditContext";
-import { Chrome } from "@/components/motifs/Chrome";
-import { normaliseWebUrl, websiteLabel } from "@/lib/brands/websiteUrl";
+import { PromoSlideOnStage, usePromoClock } from "@/components/promo/PromoLoop";
+import { usePromo } from "@/components/promo/PromoProvider";
+import { readPromoHides } from "@/lib/promo/promoMode";
 
 /**
- * Resolve a QR URL from `brand.qr_items` using a keyword search.
- * Falls back through qr_items order, then `fallback`, then `brand.website_url`,
- * then empty string. Callers normalise the result with `normaliseWebUrl`.
- */
-function resolveQrUrl(
-  brand: BrandConfig,
-  keywords: string[],
-  fallback: string | null | undefined
-): string {
-  const items = brand.qr_items ?? [];
-  const match = items.find((item) =>
-    keywords.some((kw) => item.label.toLowerCase().includes(kw))
-  );
-  if (match) return match.url;
-  return fallback ?? brand.website_url ?? "";
-}
-
-type QrCard = { label: string; key: string; url: string; sub: string; delay: number };
-
-/**
- * Screen 13 — Thank You / Reviews / Next Event.
+ * Screen 13: Thank You (spec M-7, S7.5), the kit's promo ThankYou.
  *
- * Left column: venue logo, headline, lede, next-event date badge.
- * Right column: two QR cards, "Review us" and "Book Again".
+ * "Review us" is Music Bingo's review short link (to the neutral feedback
+ * page, never Google, no rating asked for); "What's on next" is the next
+ * Music Bingo from the management app's events feed, with its name, its
+ * London date and its booking QR. With nothing from the feed it shows "See
+ * what's on" instead. Nothing on it is typed by the host: the host can only
+ * hide a card for tonight (the switches in the console's Live Content panel).
  *
- * QR URLs are resolved from `brand.qr_items`:
- *   - Review card  → label containing "review"
- *   - Booking card → label containing "book", "booking", "reserve", or "event"
- * Falls back to the first / second qr_items entries, then `brand.website_url`.
- * Every URL is normalised to https:// (the brand value may be stored without
- * a scheme); a card with no usable URL is hidden rather than given an
- * invented code. The "Next Event" badge only shows when the host typed a date.
+ * On the TV the whole end-of-night loop (this slide, then the next two
+ * events) is drawn by LiveDisplay through PromoLoop; this component is the
+ * thank-you slide on its own, for the host console's preview.
  */
 export function ThankYou({ brand }: ScreenProps): React.ReactElement {
-  const { editing, get } = useEdit();
-  const items = brand.qr_items ?? [];
-
-  // Prefer keyword-matched items; fall back by position, then website_url.
-  const reviewUrl = normaliseWebUrl(
-    get("reviewQrUrl", "").trim() || resolveQrUrl(brand, ["review"], items[0]?.url),
-  );
-  const bookUrl = normaliseWebUrl(
-    get("bookQrUrl", "").trim() || resolveQrUrl(brand, ["book", "booking", "reserve", "event"], items[1]?.url ?? items[0]?.url),
-  );
-  const nextDate = get("nextDate", "").trim();
-  const showNextDate = Boolean(nextDate) || editing;
-
-  // Every address is normalised to https:// first (the brand value may be
-  // stored without a scheme), then only links a phone can open get a card
-  // (the kit's QR guard): a typo or a localhost address shows no code rather
-  // than one that scans to nothing. The review card asks for feedback, never
-  // for a particular rating or a particular site (owner rule, website SSOT
-  // section 17): its QR leads to a neutral feedback page.
-  const qrCards: QrCard[] = [
-    { label: "Review us",   key: "review", url: reviewUrl ?? "", sub: "Tell us how we did", delay: 4 },
-    { label: "Book Again",  key: "book",   url: bookUrl ?? "",   sub: "Book your seats before you leave!", delay: 5 },
-  ].filter((card) => qrValue(card.url) !== null);
-
-  return (
-    <div
-      className="screen grain vignette"
-      style={{
-        padding: "76px 120px 104px",
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 90,
-      }}
-    >
-      <Sunburst
-        size={1500}
-        style={{
-          left: "-360px",
-          top: "50%",
-          transform: "translateY(-50%)",
-          opacity: 0.3,
-        }}
-      />
-
-      {/* Left column: text content */}
-      <div
-        className="col"
-        style={{ flex: 1, gap: 24, position: "relative", zIndex: 2 }}
-      >
-        <VenueLogo brand={brand} />
-        <h1
-          className="display display--gold an-rise d2"
-          style={{ fontSize: 150 }}
-        >
-          <Editable as="div" field="tyL1" placeholder="Thank You" />
-          <Editable as="div" field="tyL2" placeholder="& Goodnight" />
-        </h1>
-        <p className="lede an-rise d3" style={{ maxWidth: 760 }}>
-          <Editable
-            field="tyLede"
-            placeholder="We hope you had a brilliant night. We'd love to hear how it went."
-          />
-        </p>
-        {showNextDate && (
-        <div
-          className="an-rise d4"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 22,
-            padding: "20px 30px",
-            borderRadius: 18,
-            width: "fit-content",
-            background: "color-mix(in srgb, var(--anchor-gold) 16%, transparent)",
-            border: "2px solid var(--anchor-gold)",
-          }}
-        >
-          <span
-            style={{
-              fontSize: 32,
-              letterSpacing: ".2em",
-              textTransform: "uppercase",
-              color: "var(--anchor-gold-bright)",
-              fontWeight: 700,
-            }}
-          >
-            Next Event
-          </span>
-          <span
-            style={{
-              fontFamily: "var(--font-dm-serif), serif",
-              fontSize: 52,
-              color: "var(--anchor-cream-text)",
-              lineHeight: 0.9,
-            }}
-          >
-            <Editable optional field="nextDate" placeholder="Next event date" />
-          </span>
-        </div>
-        )}
-      </div>
-
-      {/* Right column: QR cards */}
-      {qrCards.length > 0 ? (
-      <div
-        className="col"
-        style={{
-          flex: "0 0 620px",
-          flexDirection: "row",
-          gap: 44,
-          position: "relative",
-          zIndex: 2,
-        }}
-      >
-        {qrCards.map(({ label, key, url, sub, delay }) => (
-          <div
-            key={key}
-            className={`an-pop d${delay}`}
-            style={{ textAlign: "center", flex: 1 }}
-          >
-            <div
-              style={{
-                padding: 16,
-                background: "#ffffff",
-                borderRadius: 20,
-                display: "inline-block",
-                boxShadow: "0 24px 60px rgba(0,0,0,.5)",
-                border: "3px solid var(--anchor-gold-bright)",
-              }}
-            >
-              <Qr value={url} title={`QR code: ${label}`} size={250} />
-            </div>
-            <div
-              style={{
-                fontFamily: "var(--font-dm-serif), serif",
-                fontSize: 44,
-                marginTop: 20,
-                color: "var(--anchor-cream-text)",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {label}
-            </div>
-            <div className="muted" style={{ fontSize: 32, marginTop: 6 }}>
-              {sub}
-            </div>
-          </div>
-        ))}
-      </div>
-      ) : null}
-
-      <Chrome
-        left={<Editable field="venueWeb" placeholder={websiteLabel(brand.website_url) || brand.name} />}
-        right="See You Next Month"
-      />
-    </div>
-  );
+  const { get } = useEdit();
+  const { feed, reviewUrl } = usePromo();
+  const nowMs = usePromoClock();
+  const hides = readPromoHides((key) => get(key, ""));
+  const [slide] = buildThankYouPlaylist({
+    feed,
+    nowMs,
+    sessionDate: getLondonIsoDate(nowMs),
+    reviewUrl,
+    hideReview: hides.hideReview,
+    hideNext: hides.hideNext,
+  });
+  return <PromoSlideOnStage slide={slide} nowMs={nowMs} brand={brand} />;
 }

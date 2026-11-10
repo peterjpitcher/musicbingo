@@ -27,6 +27,7 @@ const PRODUCTION_OK = {
   SPOTIFY_CLIENT_ID: "id",
   SPOTIFY_CLIENT_SECRET: "secret",
   CRON_SECRET: "c".repeat(CRON_SECRET_MIN_LENGTH),
+  ANCHOR_API_KEY: `anch_${"k".repeat(43)}`,
 };
 
 const AUTH_NAMES = Object.keys(AUTH_OK);
@@ -106,6 +107,41 @@ describe("checkMusicBingoEnv", () => {
   test("an error sink must be https", () => {
     const problems = checkMusicBingoEnv({ ...PRODUCTION_OK, ERROR_SINK_URL: "http://example.com/api/errors", ERROR_SINK_TOKEN: "x".repeat(40) });
     expect(problems.some((problem) => problem.startsWith("ERROR_SINK_URL"))).toBe(true);
+  });
+});
+
+describe("the events feed and review link settings (spec M-7)", () => {
+  test("a production build needs the events key", () => {
+    const { ANCHOR_API_KEY: _key, ...withoutKey } = PRODUCTION_OK;
+    expect(checkMusicBingoEnv(withoutKey).join(" ")).toContain("ANCHOR_API_KEY is not set");
+  });
+
+  test("the old MANAGEMENT_API_TOKEN still satisfies a production build for one release", () => {
+    const { ANCHOR_API_KEY: _key, ...withoutKey } = PRODUCTION_OK;
+    expect(checkMusicBingoEnv({ ...withoutKey, MANAGEMENT_API_TOKEN: "an-older-token" })).toEqual([]);
+  });
+
+  test("local and preview builds go without a key (the TV shows \"See what's on\")", () => {
+    expect(checkMusicBingoEnv(AUTH_OK)).toEqual([]);
+    expect(checkMusicBingoEnv({ ...AUTH_OK, VERCEL_ENV: "preview" })).toEqual([]);
+  });
+
+  test("a set ANCHOR_API_KEY must look like a key", () => {
+    const problems = checkMusicBingoEnv({ ...AUTH_OK, ANCHOR_API_KEY: "vercel env add ANCHOR_API_KEY" });
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain("ANCHOR_API_KEY does not look like a management API key");
+  });
+
+  test("the events address must be https", () => {
+    expect(checkMusicBingoEnv({ ...AUTH_OK, ANCHOR_API_BASE_URL: "http://mgmt.example.com/api" }).join(" ")).toContain("must use https");
+    expect(checkMusicBingoEnv({ ...AUTH_OK, MANAGEMENT_API_BASE_URL: "http://mgmt.example.com" }).join(" ")).toContain("must use https");
+  });
+
+  test("the review link is optional and only ever an https the-anchor.pub link", () => {
+    expect(checkMusicBingoEnv({ ...AUTH_OK, REVIEW_SHORT_URL: "https://l.the-anchor.pub/mbreview" })).toEqual([]);
+    expect(checkMusicBingoEnv({ ...AUTH_OK, REVIEW_SHORT_URL: "http://l.the-anchor.pub/mbreview" })).not.toEqual([]);
+    expect(checkMusicBingoEnv({ ...AUTH_OK, REVIEW_SHORT_URL: "https://g.page/r/the-anchor/review" })).not.toEqual([]);
+    expect(checkMusicBingoEnv({ ...AUTH_OK, REVIEW_SHORT_URL: "https://l.the-anchor.pub.evil.example/x" })).not.toEqual([]);
   });
 });
 

@@ -31,9 +31,9 @@ export type EditableBrand = {
   breakMessage: string;
   endMessage: string;
   /**
-   * Free-form QR links (max 4). The ThankYou screen matches them by label
-   * substring ("review"; "book"/"booking"/"reserve"/"event") — there are no
-   * discrete review/booking fields (spec A8).
+   * Free-form QR links (max 4), named in the printed pack's footer. The TV's
+   * Thank You screen no longer reads them (spec M-7): its review link is
+   * REVIEW_SHORT_URL and its next night comes from the events feed.
    */
   qrItems: QrItem[];
   eventFeedType: "anchor_management" | "baronshub" | "none";
@@ -143,9 +143,6 @@ type BrandFormProps = {
   onChange: (patch: Partial<EditableBrand>) => void;
   /** Stage a logo file for upload on the next save. */
   onLogoFile: (slot: EditableLogoSlot, file: File | null) => void;
-  /** The API key entered this session (empty keeps the existing one). */
-  apiKey: string;
-  onApiKeyChange: (value: string) => void;
 };
 
 /** A single labelled field cell. */
@@ -178,8 +175,6 @@ export function BrandForm({
   draft,
   onChange,
   onLogoFile,
-  apiKey,
-  onApiKeyChange,
 }: BrandFormProps): React.ReactElement {
   const feedDisabled = draft.eventFeedType === "none";
 
@@ -398,25 +393,9 @@ export function BrandForm({
               disabled={feedDisabled}
             />
           </Field>
-          <div
-            className="fg span2"
-            style={{ flexDirection: "row", alignItems: "center", gap: 12 }}
-          >
-            <span className={`statustag ${draft.eventFeedHasKey ? "ready" : "draft"}`}>
-              {draft.eventFeedHasKey ? "API key saved" : "No API key"}
-            </span>
-            <input
-              type="password"
-              value={apiKey}
-              onChange={(e) => onApiKeyChange(e.target.value)}
-              placeholder={
-                draft.eventFeedHasKey ? "Leave blank to keep existing" : "Enter API key"
-              }
-              disabled={feedDisabled}
-                className={cn(fieldClass, "flex-1")}
-              aria-label="Event feed API key"
-            />
-          </div>
+          <p className="help span2">
+            The Anchor Management key is a server setting (ANCHOR_API_KEY), not stored with the venue.
+          </p>
         </div>
       </div>
     </>

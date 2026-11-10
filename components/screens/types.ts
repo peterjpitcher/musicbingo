@@ -22,4 +22,10 @@ export type ScreenProps = {
    * jump back and forth on 16 October 2026. The host preview leaves it unset.
    */
   progressMs?: number;
+  /**
+   * The game's event date (the session's `eventDateInput`, YYYY-MM-DD), for
+   * the welcome screen's real date and start time (lib/live/welcomeWhen.ts).
+   * Unset (the venue page's preview) the welcome screen shows no date.
+   */
+  eventDateInput?: string | null;
 };

@@ -8,6 +8,9 @@ import { Chrome } from "@/components/motifs/Chrome";
 import { Editable } from "@/components/motifs/Editable";
 import { useEdit } from "@/components/motifs/EditContext";
 import { NowPlaying } from "@/components/screens/NowPlaying";
+import { usePromo } from "@/components/promo/PromoProvider";
+import { usePromoClock } from "@/components/promo/PromoLoop";
+import { welcomeWhen } from "@/lib/live/welcomeWhen";
 
 /**
  * Welcome screen — three layout variants (A/B/C).
@@ -16,7 +19,7 @@ import { NowPlaying } from "@/components/screens/NowPlaying";
  * Variant B: split-panel — text left, spinning vinyl right.
  * Variant C: marquee-framed card centred on a sunburst.
  */
-export function Welcome({ brand, runtime, variant = "A" }: ScreenProps): React.JSX.Element {
+export function Welcome({ brand, runtime, variant = "A", eventDateInput = null }: ScreenProps): React.JSX.Element {
   // The host's name is only shown when the host typed it; the copy reads
   // naturally without it. While editing, the empty slot stays clickable.
   const { editing, get } = useEdit();
@@ -27,15 +30,27 @@ export function Welcome({ brand, runtime, variant = "A" }: ScreenProps): React.J
       <Editable optional field="hostName" placeholder="Host name" />
     </b>
   );
-  // The "Now Playing" pill only appears once the host has actually played the
-  // welcome song — i.e. it is the live, currently-playing track. In design /
-  // preview contexts (no runtime) we keep showing it so the layout stays
-  // representative.
+  // The "Now Playing" pill only appears while the welcome song is actually
+  // the live, playing track, and names that song. With no runtime (the venue
+  // page's preview) there is no pill: never a sample song (spec M-7).
   const welcomeSong = runtime?.welcomeSong ?? null;
   const current = runtime?.currentTrack ?? null;
-  const showNowPlaying =
-    !runtime ||
-    Boolean(welcomeSong && current?.isPlaying && current.trackId === welcomeSong.trackId);
+  const showNowPlaying = Boolean(welcomeSong && current?.isPlaying && current.trackId === welcomeSong.trackId);
+  const nowPlaying = showNowPlaying ? (
+    <NowPlaying title={current?.title || welcomeSong?.title || ""} artist={current?.artist || welcomeSong?.artist || ""} />
+  ) : null;
+
+  // The "when" in the corner: what the host typed, else the game's real date
+  // and start time (lib/live/welcomeWhen.ts), else nothing. Never a sample.
+  const { feed } = usePromo();
+  const nowMs = usePromoClock();
+  const typedWhen = get("welcomeDate", "").trim();
+  const autoWhen = welcomeWhen({ eventDateInput, feed, nowMs });
+  const whenEl = editing ? (
+    <Editable optional field="welcomeDate" placeholder={autoWhen || "Date and time"} />
+  ) : (
+    typedWhen || autoWhen
+  );
 
   /* ── Variant B: split panel ─────────────────────────────── */
   if (variant === "B") {
@@ -67,12 +82,7 @@ export function Welcome({ brand, runtime, variant = "A" }: ScreenProps): React.J
           </p>
           {showNowPlaying && (
             <div className="an-rise d4" style={{ marginTop: 10 }}>
-              <NowPlaying
-                titleField="introTitle"
-                artistField="introArtist"
-                titlePH="Yes Sir, I Can Boogie"
-                artistPH="Baccara"
-              />
+              {nowPlaying}
             </div>
           )}
         </div>
@@ -116,9 +126,9 @@ export function Welcome({ brand, runtime, variant = "A" }: ScreenProps): React.J
                   boxShadow: "inset 0 0 0 5px rgba(0,0,0,.25)",
                 }}
               >
-                EST.
+                MUSIC
                 <br />
-                2024
+                BINGO
               </div>
             </div>
           </div>
@@ -126,7 +136,7 @@ export function Welcome({ brand, runtime, variant = "A" }: ScreenProps): React.J
 
         <Chrome
           left="Welcome"
-          right={<Editable field="welcomeDate" placeholder="Friday · 8:00 PM" />}
+          right={whenEl}
         />
       </div>
     );
@@ -197,12 +207,7 @@ export function Welcome({ brand, runtime, variant = "A" }: ScreenProps): React.J
               <>
                 <hr className="rule an-fade d5" style={{ margin: "34px auto 28px", maxWidth: 520 }} />
                 <div className="an-rise d6">
-                  <NowPlaying
-                    titleField="introTitle"
-                    artistField="introArtist"
-                    titlePH="Yes Sir, I Can Boogie"
-                    artistPH="Baccara"
-                  />
+                  {nowPlaying}
                 </div>
               </>
             )}
@@ -246,18 +251,13 @@ export function Welcome({ brand, runtime, variant = "A" }: ScreenProps): React.J
         </p>
         {showNowPlaying && (
           <div className="an-rise d4" style={{ marginTop: 18 }}>
-            <NowPlaying
-              titleField="introTitle"
-              artistField="introArtist"
-              titlePH="Yes Sir, I Can Boogie"
-              artistPH="Baccara"
-            />
+            {nowPlaying}
           </div>
         )}
       </div>
       <Chrome
         left="Welcome"
-        right={<Editable field="welcomeDate" placeholder="Friday · 8:00 PM" />}
+        right={whenEl}
       />
     </div>
   );
