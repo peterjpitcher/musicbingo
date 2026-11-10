@@ -8,8 +8,9 @@ import {
   validateMusicBingoEnv,
 } from "./buildEnv.mjs";
 
-/** What every build needs since staff sign-in (M-8), with placeholder values. */
+/** What every build needs since staff sign-in (M-8) and dedicated link signing (M-9), with placeholder values. */
 const AUTH_OK = {
+  LIVE_LINK_SECRET: "l".repeat(LIVE_LINK_SECRET_MIN_LENGTH),
   NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
   NEXT_PUBLIC_SUPABASE_ANON_KEY: "public-anon-key-placeholder",
   SUPABASE_SERVICE_ROLE_KEY: "service-role-key-placeholder",
@@ -25,7 +26,6 @@ const PRODUCTION_OK = {
   SUPABASE_URL: "https://example.supabase.co",
   SPOTIFY_CLIENT_ID: "id",
   SPOTIFY_CLIENT_SECRET: "secret",
-  LIVE_LINK_SECRET: "l".repeat(LIVE_LINK_SECRET_MIN_LENGTH),
   CRON_SECRET: "c".repeat(CRON_SECRET_MIN_LENGTH),
 };
 
@@ -43,6 +43,15 @@ describe("checkMusicBingoEnv", () => {
         expect(problems).toContain(`${name} is not set.`);
       }
     }
+  });
+
+  test("a missing LIVE_LINK_SECRET fails every build, local, preview and production (no fallback)", () => {
+    const { LIVE_LINK_SECRET: _omitted, ...withoutLinkSecret } = AUTH_OK;
+    for (const env of [withoutLinkSecret, { ...withoutLinkSecret, VERCEL_ENV: "preview" }]) {
+      expect(checkMusicBingoEnv(env).some((p) => p.startsWith("LIVE_LINK_SECRET is not set"))).toBe(true);
+    }
+    const { LIVE_LINK_SECRET: _gone, ...productionWithout } = PRODUCTION_OK;
+    expect(() => validateMusicBingoEnv({ ...productionWithout, APP_ADMIN_SECRET: "the old admin secret", SUPABASE_SERVICE_ROLE_KEY: "service-role" })).toThrow(/LIVE_LINK_SECRET/);
   });
 
   test("a production build names every missing setting", () => {

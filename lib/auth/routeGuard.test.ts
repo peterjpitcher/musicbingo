@@ -1,5 +1,3 @@
-import crypto from "node:crypto";
-import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 const authoriseRoute = vi.fn();
@@ -9,8 +7,7 @@ vi.mock("@/lib/auth/server", () => ({
   authHelpers: () => ({ authoriseRoute }),
 }));
 
-const { allowedOrigins, requireStaff, requireStaffOrDisplayToken } = await import("@/lib/auth/routeGuard");
-const { createSessionAccessToken } = await import("@/lib/live/access");
+const { allowedOrigins, requireStaff } = await import("@/lib/auth/routeGuard");
 
 const ORIGIN = "https://musicbingo.example.com";
 
@@ -89,34 +86,5 @@ describe("requireStaff", () => {
     authoriseRoute.mockResolvedValue(refused(403, "unauthorised"));
     await requireStaff(new Request(`${ORIGIN}/admin`), ["admin"]);
     expect(authoriseRoute).toHaveBeenCalledWith(["admin"]);
-  });
-});
-
-describe("requireStaffOrDisplayToken", () => {
-  function displayCookie(sessionId: string): string {
-    const hash = crypto.createHash("sha256").update(sessionId, "utf8").digest("base64url").slice(0, 24);
-    return `music_bingo_access_display_${hash}=${createSessionAccessToken(sessionId, "display")}`;
-  }
-
-  test("the TV's own token cookie passes without a sign-in", async () => {
-    const req = new NextRequest(`${ORIGIN}/api/display/s1/snapshot`, { headers: { cookie: displayCookie("s1") } });
-    expect(await requireStaffOrDisplayToken(req, "s1")).toEqual({ ok: true, via: "display-token" });
-    expect(authoriseRoute).not.toHaveBeenCalled();
-  });
-
-  test("another game's TV token does not, and falls back to sign-in", async () => {
-    authoriseRoute.mockResolvedValue(refused(401, "unauthenticated"));
-    const req = new NextRequest(`${ORIGIN}/api/display/s2/snapshot`, { headers: { cookie: displayCookie("s1") } });
-    const gate = await requireStaffOrDisplayToken(req, "s2");
-    expect(gate.ok ? 0 : gate.response.status).toBe(401);
-  });
-
-  test("a host link token is not a TV token", async () => {
-    authoriseRoute.mockResolvedValue(refused(401, "unauthenticated"));
-    const hash = crypto.createHash("sha256").update("s1", "utf8").digest("base64url").slice(0, 24);
-    const req = new NextRequest(`${ORIGIN}/api/display/s1/snapshot`, {
-      headers: { cookie: `music_bingo_access_display_${hash}=${createSessionAccessToken("s1", "host")}` },
-    });
-    expect((await requireStaffOrDisplayToken(req, "s1")).ok).toBe(false);
   });
 });

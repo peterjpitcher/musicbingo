@@ -522,7 +522,13 @@ async function installSpotifyLiveMocks(context, options = {}) {
 async function installAppDataMocks(context, options = {}) {
   const sessions = new Map((options.sessions ?? []).map((session) => [session.id, session]));
   const runtimes = new Map();
+  // The server's runtime version per game (spec M-9): every landed save bumps it.
+  const versions = new Map();
+  const versionOf = (sessionId) => versions.get(sessionId) ?? 0;
   const jsonHeaders = { "Cache-Control": "no-store" };
+  // Lets a flow make the host's saves fail: null (saves land) or a function
+  // returning { status, body } for the next save.
+  const saveFailure = { next: options.saveFailure ?? null };
 
   await context.route(
     (url) => url.pathname === "/api/brands",
@@ -573,10 +579,28 @@ async function installAppDataMocks(context, options = {}) {
         status: 200,
         contentType: "application/json",
         headers: jsonHeaders,
-        body: JSON.stringify({
-          hostUrl: `${BASE_URL}/host/${sessionId}`,
-          displayUrl: `${BASE_URL}/display/${sessionId}`,
-        }),
+        body: JSON.stringify(route.request().method() === "DELETE"
+          ? { ok: true, generation: 2 }
+          : {
+            hostUrl: `${BASE_URL}/host/${sessionId}`,
+            displayUrl: `${BASE_URL}/display/${sessionId}`,
+            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+          }),
+      });
+    }
+  );
+
+  // The server-held control lock: this stand-in always grants it.
+  await context.route(
+    (url) => /^\/api\/sessions\/[^/]+\/control$/.test(url.pathname),
+    async (route) => {
+      const parts = new URL(route.request().url()).pathname.split("/");
+      const sessionId = decodeURIComponent(parts.at(-2) ?? "");
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        headers: jsonHeaders,
+        body: JSON.stringify({ ok: true, version: versionOf(sessionId) }),
       });
     }
   );
@@ -618,12 +642,32 @@ async function installAppDataMocks(context, options = {}) {
       const parts = new URL(route.request().url()).pathname.split("/");
       const sessionId = decodeURIComponent(parts.at(-2) ?? "");
       const payload = route.request().postDataJSON?.();
+      if (saveFailure.next) {
+        const failure = saveFailure.next();
+        await route.fulfill({
+          status: failure.status,
+          contentType: "application/json",
+          headers: jsonHeaders,
+          body: JSON.stringify(failure.body),
+        });
+        return;
+      }
+      if (payload?.expectedVersion !== versionOf(sessionId)) {
+        await route.fulfill({
+          status: 409,
+          contentType: "application/json",
+          headers: jsonHeaders,
+          body: JSON.stringify({ ok: false, reason: "conflict", version: versionOf(sessionId) }),
+        });
+        return;
+      }
       if (payload?.runtime) runtimes.set(sessionId, payload.runtime);
+      versions.set(sessionId, versionOf(sessionId) + 1);
       await route.fulfill({
         status: 200,
         contentType: "application/json",
         headers: jsonHeaders,
-        body: JSON.stringify({ ok: true }),
+        body: JSON.stringify({ ok: true, version: versionOf(sessionId) }),
       });
     }
   );
@@ -635,23 +679,14 @@ async function installAppDataMocks(context, options = {}) {
       const sessionId = decodeURIComponent(parts.at(-2) ?? "");
       const method = route.request().method();
       if (method === "GET") {
-        const runtime = runtimes.get(sessionId);
+        const known = sessions.has(sessionId);
         await route.fulfill({
-          status: runtime ? 200 : 404,
+          status: known ? 200 : 404,
           contentType: "application/json",
           headers: jsonHeaders,
-          body: JSON.stringify(runtime ?? { error: "Runtime state not found." }),
-        });
-        return;
-      }
-      if (method === "PUT") {
-        const payload = route.request().postDataJSON?.();
-        if (payload) runtimes.set(sessionId, payload);
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          headers: jsonHeaders,
-          body: JSON.stringify({ ok: true }),
+          body: JSON.stringify(known
+            ? { runtime: runtimes.get(sessionId) ?? null, version: versionOf(sessionId) }
+            : { error: "Session not found." }),
         });
         return;
       }
@@ -671,11 +706,13 @@ async function installAppDataMocks(context, options = {}) {
         contentType: "application/json",
         headers: jsonHeaders,
         body: JSON.stringify(session
-          ? { session, runtime: runtime ?? makeEmptyRuntimeFixture(sessionId), brand: null }
+          ? { session, runtime: runtime ?? makeEmptyRuntimeFixture(sessionId), runtimeVersion: versionOf(sessionId), brand: null }
           : { error: "Session not found." }),
       });
     }
   );
+
+  return { saveFailure, runtimes, versions };
 }
 
 async function openPrep(page) {
@@ -1155,6 +1192,71 @@ async function main() {
     });
 
     await flow7Context.close();
+
+    // Spec M-9, S4.2: End Session and Reset to Lobby need a full hold.
+    const flowHoldContext = await newStaffContext(browser, staffState);
+    const holdMocks = await installAppDataMocks(flowHoldContext, { sessions: [makeLiveSessionFixture("flow-live-hold")] });
+    await installSpotifyLiveMocks(flowHoldContext, { canControlPlayback: true });
+    await flowHoldContext.addInitScript((payload) => {
+      window.localStorage.setItem("music-bingo-live-sessions-v1", JSON.stringify([payload]));
+    }, makeLiveSessionFixture("flow-live-hold"));
+    const flowHoldPage = await flowHoldContext.newPage();
+
+    await runFlow(flowResults, "Flow 16: End Session and Reset to Lobby need a full hold", async () => {
+      await flowHoldPage.goto(`${BASE_URL}/host/flow-live-hold`, { waitUntil: "domcontentloaded" });
+      const start = flowHoldPage.getByRole("button", { name: "Start Game 1" });
+      await waitUntilEnabled(start, 15_000);
+      await start.click();
+      const endHold = flowHoldPage.getByRole("button", { name: /Hold to end the session/ });
+      await endHold.waitFor({ timeout: 15_000 });
+
+      // A tap does nothing.
+      await endHold.click();
+      await flowHoldPage.waitForTimeout(1_500);
+      assert.notEqual(holdMocks.runtimes.get("flow-live-hold")?.mode, "ended", "a tap must not end the session");
+      assert.equal(await flowHoldPage.getByRole("button", { name: /Hold to reset to the lobby/ }).count(), 0);
+
+      // A full hold ends it, and the footer offers the reset hold instead.
+      const box = await endHold.boundingBox();
+      assert.ok(box, "the End Session hold should be on screen");
+      await flowHoldPage.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await flowHoldPage.mouse.down();
+      await flowHoldPage.waitForTimeout(1_800);
+      await flowHoldPage.mouse.up();
+      await flowHoldPage.getByRole("button", { name: /Hold to reset to the lobby/ }).waitFor({ timeout: 10_000 });
+      const deadline = Date.now() + 10_000;
+      while (holdMocks.runtimes.get("flow-live-hold")?.mode !== "ended" && Date.now() < deadline) {
+        await flowHoldPage.waitForTimeout(200);
+      }
+      assert.equal(holdMocks.runtimes.get("flow-live-hold")?.mode, "ended", "the held End Session should be saved");
+    });
+
+    await flowHoldContext.close();
+
+    // Spec M-9: a save that did not land is shown to the host, never silent.
+    const flowSaveContext = await newStaffContext(browser, staffState);
+    const saveMocks = await installAppDataMocks(flowSaveContext, { sessions: [makeLiveSessionFixture("flow-live-save")] });
+    await installSpotifyLiveMocks(flowSaveContext, { canControlPlayback: true });
+    await flowSaveContext.addInitScript((payload) => {
+      window.localStorage.setItem("music-bingo-live-sessions-v1", JSON.stringify([payload]));
+    }, makeLiveSessionFixture("flow-live-save"));
+    const flowSavePage = await flowSaveContext.newPage();
+
+    await runFlow(flowResults, "Flow 17: A failed or refused host save is shown to the host", async () => {
+      await flowSavePage.goto(`${BASE_URL}/host/flow-live-save`, { waitUntil: "domcontentloaded" });
+      const start = flowSavePage.getByRole("button", { name: "Start Game 1" });
+      await waitUntilEnabled(start, 15_000);
+
+      saveMocks.saveFailure.next = () => ({ status: 500, body: { error: "Database unavailable." } });
+      await start.click();
+      await flowSavePage.getByText("Not saved yet: retrying").waitFor({ timeout: 10_000 });
+
+      saveMocks.saveFailure.next = () => ({ status: 409, body: { ok: false, reason: "not_controller", secondsSinceSeen: 2 } });
+      await flowSavePage.getByText("Not saved: another device has control").waitFor({ timeout: 15_000 });
+      saveMocks.saveFailure.next = null;
+    });
+
+    await flowSaveContext.close();
 
     const flow10Context = await newStaffContext(browser, staffState);
     await installAppDataMocks(flow10Context, { sessions: [makeLiveSessionFixture("flow-live-refusals")] });

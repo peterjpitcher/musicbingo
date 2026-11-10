@@ -4,6 +4,7 @@ import { isCronRequest } from "@/lib/auth/cron";
 import { authConfig } from "@/lib/auth/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { reportError } from "@/lib/reportError";
+import { tvPairing } from "@/lib/tv-pairing";
 
 /**
  * Daily sign-in housekeeping (auth standard section 11; spec M-8), run by
@@ -11,6 +12,10 @@ import { reportError } from "@/lib/reportError";
  * audit events after 6 years, spent recovery grants after a day and finished
  * invites after 12 months, then fails any invite stuck half-accepted and
  * deletes the still-banned account it left behind.
+ *
+ * Then the TV pairing clean-up (spec M-9): pairing codes go after a day,
+ * pairing attempts (with their IP addresses) after 30 days and removed TVs
+ * 12 months after removal.
  *
  * Never callable from a browser: Vercel sends `Authorization: Bearer
  * <CRON_SECRET>`. Without CRON_SECRET it refuses everything (fails closed).
@@ -34,7 +39,8 @@ export async function GET(request: Request): Promise<Response> {
     const maintenance = createAuthMaintenance({ config: authConfig(), adminClient: createAdminClient });
     const pruned = await maintenance.pruneAuthData();
     const invites = await maintenance.reconcileInvites();
-    return json(200, { ok: true, pruned, invites });
+    const pairing = await tvPairing().maintenance.prunePairing();
+    return json(200, { ok: true, pruned, invites, pairing });
   } catch (err) {
     await reportError({ scope: "cron:auth-maintenance" }, err);
     return json(500, { ok: false, error: "auth_maintenance_failed" });

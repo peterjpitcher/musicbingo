@@ -1,7 +1,6 @@
 import { test, expect } from "vitest";
 
 import {
-  isControlLockStale,
   listLiveSessions,
   validateLiveSession,
 } from "@/lib/live/storage";
@@ -86,8 +85,3 @@ test("empty runtime includes the default welcome intro song", () => {
   expect(runtime.welcomeSong).toEqual(DEFAULT_WELCOME_SONG);
 });
 
-test("isControlLockStale uses timeout window", () => {
-  const now = 1_000_000;
-  expect(isControlLockStale({ tabId: "abc", lastSeenMs: now - 31_000 }, now, 30_000)).toBe(true);
-  expect(isControlLockStale({ tabId: "abc", lastSeenMs: now - 29_000 }, now, 30_000)).toBe(false);
-});
