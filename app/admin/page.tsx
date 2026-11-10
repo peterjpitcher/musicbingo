@@ -1,73 +1,64 @@
-"use client";
+import type { Metadata } from "next";
+import Link from "next/link";
+import { InvitePanel, StaffPanel } from "@anchor-nights/kit/auth/screens";
+import { Banner, buttonClass } from "@anchor-nights/kit/ui";
 
-import { useEffect, useState } from "react";
-import type { FormEvent } from "react";
-
+import { cancelInvite, changeRole, deactivateUser, issueInvite, reactivateUser, revokeSessions } from "@/app/admin/actions";
 import { AppHeader } from "@/components/layout/AppHeader";
-import { safeNextPath } from "@/lib/live/adminGuard";
-import { Banner, buttonClass, Card, fieldClass, fieldHintClass, fieldLabelClass } from "@anchor-nights/kit/ui";
+import { ADMIN_ROLES, adminActions, authHelpers } from "@/lib/auth/server";
 
-export default function AdminUnlockPage() {
-  const [nextPath, setNextPath] = useState("/host");
-  const [secret, setSecret] = useState("");
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
+export const metadata: Metadata = { title: "Staff | Music Bingo" };
+export const dynamic = "force-dynamic";
 
-  useEffect(() => {
-    setNextPath(safeNextPath(new URLSearchParams(window.location.search).get("next")));
-  }, []);
+/**
+ * Staff management (admins only; proxy.ts and requireRole both check):
+ * invite someone by a copied link, cancel an invite, change a role, sign
+ * someone out everywhere, deactivate a leaver or give access back. This page
+ * replaced the shared admin-secret unlock page in M-8.
+ */
+export default async function StaffAdminPage(): Promise<React.JSX.Element> {
+  const { user } = await authHelpers().requireRole(ADMIN_ROLES);
+  const admin = adminActions();
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setBusy(true);
-    setError("");
-    try {
-      const res = await fetch("/api/admin/unlock", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ secret }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        throw new Error(data?.error || "Could not unlock admin.");
-      }
-      window.location.href = safeNextPath(nextPath);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not unlock admin.");
-    } finally {
-      setBusy(false);
-    }
+  let invites: Awaited<ReturnType<typeof admin.listInvites>> = null;
+  let staff: Awaited<ReturnType<typeof admin.listStaff>> = null;
+  let loadFailed = false;
+  try {
+    [invites, staff] = await Promise.all([admin.listInvites(), admin.listStaff()]);
+  } catch {
+    loadFailed = true;
   }
 
   return (
     <div className="host-root theme-desk">
-      <AppHeader title="Music Bingo" subtitle="Admin Unlock" />
-      <main className="mx-auto w-full max-w-[520px] px-4 py-10 sm:py-16">
-        <Card className="p-6 sm:p-8">
-          <form className="flex flex-col gap-4" onSubmit={submit}>
-            <div>
-              <h1 className="m-0 text-3xl text-fg-strong">Unlock admin</h1>
-              <p className={`mt-2 ${fieldHintClass}`}>
-                Enter the admin secret for this Music Bingo app.
-              </p>
-            </div>
-            {error ? <Banner tone="danger">{error}</Banner> : null}
-            <div className="flex flex-col gap-2">
-              <label className={fieldLabelClass} htmlFor="admin-secret">Admin secret</label>
-              <input
-                id="admin-secret"
-                className={fieldClass}
-                type="password"
-                value={secret}
-                onChange={(event) => setSecret(event.currentTarget.value)}
-                autoComplete="current-password"
-              />
-            </div>
-            <button className={buttonClass({ variant: "primary", size: "lg", block: true })} disabled={busy} type="submit">
-              {busy ? "Unlocking..." : "Unlock"}
-            </button>
-          </form>
-        </Card>
+      <AppHeader
+        title="Music Bingo"
+        subtitle="Staff"
+        actions={
+          <Link href="/host" className={buttonClass({ variant: "outline", size: "sm" })}>
+            Games
+          </Link>
+        }
+      />
+      <main className="mx-auto flex w-full max-w-[720px] flex-col gap-6 px-4 py-8 sm:py-12">
+        {loadFailed ? (
+          <Banner tone="danger">We could not load the staff list just now. Refresh the page to try again.</Banner>
+        ) : null}
+        <InvitePanel
+          issueAction={issueInvite}
+          cancelAction={cancelInvite}
+          invites={(invites ?? []).map(({ id, email, role, status, expiresAt }) => ({ id, email, role, status, expiresAt }))}
+        />
+        {staff ? (
+          <StaffPanel
+            staff={staff.map(({ userId, email, role, active, deactivatedAt }) => ({ userId, email, role, active, deactivatedAt }))}
+            currentUserId={user.id}
+            changeRoleAction={changeRole}
+            deactivateAction={deactivateUser}
+            reactivateAction={reactivateUser}
+            revokeSessionsAction={revokeSessions}
+          />
+        ) : null}
       </main>
     </div>
   );

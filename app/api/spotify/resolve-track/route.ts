@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+
+import { requireStaff } from "@/lib/auth/routeGuard";
 import {
   getSpotifyWebConfig,
   refreshSpotifyAccessToken,
@@ -24,7 +26,10 @@ const COOKIE_REFRESH = "spotify_refresh_token";
  * Auth/refresh mirrors resolve-missing: all non-200 responses use JSON { error }
  * so the host UI (which reads res.json().error) can surface the real reason.
  */
-export async function POST(request: NextRequest): Promise<NextResponse> {
+export async function POST(request: NextRequest): Promise<Response> {
+  // Signed-in host or admin only (M-8); the Spotify logic below is unchanged.
+  const gate = await requireStaff(request);
+  if (!gate.ok) return gate.response;
   const origin = new URL(request.url).origin;
   const secure = process.env.NODE_ENV === "production";
 

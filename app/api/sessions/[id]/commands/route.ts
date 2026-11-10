@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { hasSessionAccess } from "@/lib/live/access";
+import { requireStaff } from "@/lib/auth/routeGuard";
 import { sessionCommandSchema } from "@/lib/live/commandSchema";
 import { appendSessionEvent, getSession, upsertRuntimeState } from "@/lib/live/sessionRepo";
 import { validateRuntimeState } from "@/lib/live/storage";
@@ -10,12 +10,11 @@ export const runtime = "nodejs";
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
-): Promise<NextResponse> {
+): Promise<Response> {
   try {
     const { id } = await params;
-    if (!hasSessionAccess(request, id, "host")) {
-      return NextResponse.json({ error: "Host access required." }, { status: 401 });
-    }
+    const gate = await requireStaff(request);
+    if (!gate.ok) return gate.response;
 
     const session = await getSession(id);
     if (!session) {

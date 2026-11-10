@@ -1,6 +1,6 @@
 // lib/brands/brandStorage.ts
 import path from "node:path";
-import { getSupabaseClient } from "@/lib/supabase";
+import { getSupabaseClient } from "@/lib/supabase/service";
 
 const BUCKET_NAME = "brand-assets";
 const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB

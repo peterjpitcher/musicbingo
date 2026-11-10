@@ -11,6 +11,10 @@ export default defineConfig({
     exclude: [...configDefaults.exclude],
   },
   resolve: {
-    alias: { "@": root },
+    alias: {
+      "@": root,
+      // `server-only` throws outside Next's server bundle; tests run in Node.
+      "server-only": path.join(root, "lib/test/server-only-stub.ts"),
+    },
   },
 });

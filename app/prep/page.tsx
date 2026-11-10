@@ -9,7 +9,7 @@ import { AppHeader } from "@/components/layout/AppHeader";
 import { promotionNotice } from "@/lib/eventFeed/promotionStatus";
 import { formatEventDateDisplay } from "@/lib/eventDate";
 import { DEFAULT_GAME_THEME, MAX_SONGS_PER_GAME, makeSongSelectionValue } from "@/lib/gameInput";
-import { assertAdminUnlocked } from "@/lib/live/adminGuard";
+import { assertSignedIn } from "@/lib/live/signInGuard";
 import { exportLiveSessionJson, getLiveSession, upsertLiveSession } from "@/lib/live/sessionApi";
 import {
   formatSecondsInput,
@@ -1027,7 +1027,7 @@ function PrepPageInner() {
       pdfForm.set("count", String(count));
 
       const res = await fetch("/api/generate", { method: "POST", body: pdfForm });
-      assertAdminUnlocked(res);
+      assertSignedIn(res);
       if (!res.ok) {
         const msg = await res.text();
         throw new Error(msg || "Failed to generate output bundle.");
@@ -1307,7 +1307,7 @@ function PrepPageInner() {
       pdfForm.set("count", String(count));
 
       const res = await fetch("/api/generate", { method: "POST", body: pdfForm });
-      assertAdminUnlocked(res);
+      assertSignedIn(res);
       if (!res.ok) {
         const msg = await res.text();
         throw new Error(msg || "Failed to generate output bundle.");

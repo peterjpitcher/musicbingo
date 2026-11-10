@@ -20,7 +20,7 @@ function query(): unknown {
   return builder;
 }
 
-vi.mock("@/lib/supabase", () => ({
+vi.mock("@/lib/supabase/service", () => ({
   getSupabaseClient: () => ({ from: () => query() }),
 }));
 

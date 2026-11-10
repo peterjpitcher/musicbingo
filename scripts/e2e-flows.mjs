@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { createServer } from "node:http";
 import { writeFile, mkdir, readFile, rm } from "node:fs/promises";
 import { resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -16,6 +17,175 @@ const BASE_URL = `http://${HOST}:${PORT}`;
 const OUTPUT_DIR = resolve(process.cwd(), "output", "playwright");
 const DOWNLOAD_PATH = resolve(OUTPUT_DIR, "music-bingo-event-pack.zip");
 
+// Staff sign-in (M-8). The dev server talks to a stand-in for Supabase Auth
+// (startMockSupabase below), so the flows sign in through the real /login
+// page, the real server action and the real proxy, with no credentials.
+const MOCK_SUPABASE_PORT = 54399;
+const MOCK_SUPABASE_URL = `http://${HOST}:${MOCK_SUPABASE_PORT}`;
+const STAFF_EMAIL = "host@e2e.test";
+const STAFF_PASSWORD = "e2e-only-password-not-real";
+const STAFF_USER_ID = "00000000-0000-4000-8000-0000000000e2";
+const TURNSTILE_TEST_TOKEN = "e2e-turnstile-token";
+
+/** Placeholder settings for the dev server: none is a real secret. */
+const AUTH_TEST_ENV = {
+  NEXT_PUBLIC_SUPABASE_URL: MOCK_SUPABASE_URL,
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: "e2e-anon-key-placeholder-only",
+  SUPABASE_URL: MOCK_SUPABASE_URL,
+  SUPABASE_SERVICE_ROLE_KEY: "e2e-service-role-key-placeholder-only",
+  NEXT_PUBLIC_APP_URL: BASE_URL,
+  // Cloudflare's published always-pass test keys.
+  NEXT_PUBLIC_TURNSTILE_SITE_KEY: "1x00000000000000000000AA",
+  TURNSTILE_SECRET_KEY: "1x0000000000000000000000000000000AA",
+  AUDIT_HMAC_KEY: "v1:e2e-placeholder-not-a-secret-0123456789abcdef",
+  LIVE_LINK_SECRET: "e2e-live-link-secret-placeholder",
+};
+
+function base64url(value) {
+  return Buffer.from(JSON.stringify(value)).toString("base64url");
+}
+
+/** A JWT-shaped access token (the mock never checks a signature). */
+function makeAccessToken(serial) {
+  const now = Math.floor(Date.now() / 1000);
+  const payload = { sub: STAFF_USER_ID, email: STAFF_EMAIL, role: "authenticated", aud: "authenticated", exp: now + 3600, iat: now, session_id: `e2e-${serial}` };
+  return `${base64url({ alg: "HS256", typ: "JWT" })}.${base64url(payload)}.e2e-signature`;
+}
+
+const STAFF_USER = {
+  id: STAFF_USER_ID,
+  aud: "authenticated",
+  role: "authenticated",
+  email: STAFF_EMAIL,
+  app_metadata: { provider: "email" },
+  user_metadata: {},
+  created_at: "2026-11-01T09:00:00Z",
+};
+
+/**
+ * Just enough of Supabase for sign-in: the password and refresh grants, the
+ * user lookup, sign-out, the staff role and the kit's throttle and audit
+ * writes. It records what it saw so the flows can assert on it (for example
+ * that the Turnstile token reached Supabase). Unknown paths answer 404 and
+ * are recorded, so an unexpected call shows up in the results.
+ */
+function startMockSupabase() {
+  const state = { validTokens: new Set(), serial: 0, captchaTokens: [], audit: [], dataReads: [], unexpected: [], role: "host" };
+
+  function session() {
+    state.serial += 1;
+    const access = makeAccessToken(state.serial);
+    state.validTokens.add(access);
+    return {
+      access_token: access,
+      token_type: "bearer",
+      expires_in: 3600,
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
+      refresh_token: `e2e-refresh-${state.serial}`,
+      user: STAFF_USER,
+    };
+  }
+
+  function bearer(req) {
+    const header = req.headers.authorization ?? "";
+    return header.startsWith("Bearer ") ? header.slice(7) : "";
+  }
+
+  const server = createServer(async (req, res) => {
+    const chunks = [];
+    for await (const chunk of req) chunks.push(chunk);
+    const raw = Buffer.concat(chunks).toString("utf8");
+    let body = {};
+    try {
+      body = raw ? JSON.parse(raw) : {};
+    } catch {}
+    const url = new URL(req.url ?? "/", MOCK_SUPABASE_URL);
+    const send = (status, payload) => {
+      res.writeHead(status, { "Content-Type": "application/json" });
+      res.end(payload === undefined ? "" : JSON.stringify(payload));
+    };
+
+    if (url.pathname === "/auth/v1/token" && url.searchParams.get("grant_type") === "password") {
+      state.captchaTokens.push(body.gotrue_meta_security?.captcha_token ?? null);
+      if (body.email === STAFF_EMAIL && body.password === STAFF_PASSWORD) return send(200, session());
+      return send(400, { code: 400, error_code: "invalid_credentials", msg: "Invalid login credentials" });
+    }
+    if (url.pathname === "/auth/v1/token" && url.searchParams.get("grant_type") === "refresh_token") {
+      return send(200, session());
+    }
+    if (url.pathname === "/auth/v1/user" && req.method === "GET") {
+      if (state.validTokens.has(bearer(req))) return send(200, STAFF_USER);
+      return send(403, { code: 403, error_code: "bad_jwt", msg: "invalid JWT" });
+    }
+    if (url.pathname === "/auth/v1/logout") {
+      state.validTokens.delete(bearer(req));
+      res.writeHead(204);
+      return res.end();
+    }
+    if (url.pathname === "/rest/v1/rpc/current_staff_role") {
+      return send(200, state.validTokens.has(bearer(req)) ? state.role : null);
+    }
+    if (url.pathname === "/rest/v1/rpc/kit_auth_throttle") return send(200, 0);
+    if (url.pathname === "/rest/v1/auth_audit" && req.method === "POST") {
+      state.audit.push(...(Array.isArray(body) ? body : [body]));
+      res.writeHead(201);
+      return res.end();
+    }
+    // Server-rendered pages read games and venues with the service role; the
+    // browser flows mock the app's own API instead, so these answer empty.
+    if (req.method === "GET" && /^\/rest\/v1\/(live_sessions|brands)$/.test(url.pathname)) {
+      state.dataReads.push(url.pathname);
+      return send(200, []);
+    }
+    state.unexpected.push(`${req.method} ${url.pathname}`);
+    return send(404, { message: "not mocked" });
+  });
+
+  return new Promise((resolveStart) => {
+    server.listen(MOCK_SUPABASE_PORT, HOST, () => resolveStart({ server, state }));
+  });
+}
+
+/**
+ * Stands in for Cloudflare's Turnstile script: renders a widget that is
+ * solved at once and puts a test token in the form, as the real one does.
+ */
+async function installTurnstileStub(context) {
+  await context.route("https://challenges.cloudflare.com/**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/javascript",
+      body: `window.turnstile = {
+        render: function (el, opts) {
+          var input = document.createElement("input");
+          input.type = "hidden";
+          input.name = opts["response-field-name"] || "cf-turnstile-response";
+          input.value = ${JSON.stringify(TURNSTILE_TEST_TOKEN)};
+          el.appendChild(input);
+          setTimeout(function () { if (opts.callback) opts.callback(input.value); }, 0);
+          return "e2e-widget";
+        },
+        reset: function () {},
+        remove: function () {}
+      };`,
+    });
+  });
+}
+
+/** A browser context that is already signed in (the session cookies from the sign-in flow). */
+async function newStaffContext(browser, storageState, options = {}) {
+  const context = await browser.newContext({ ...options, storageState });
+  await installTurnstileStub(context);
+  return context;
+}
+
+async function signInThroughLoginPage(page, password = STAFF_PASSWORD) {
+  await page.getByLabel("Email address").fill(STAFF_EMAIL);
+  await page.getByLabel("Password").fill(password);
+  await page.locator('[data-turnstile-status="ready"], [data-turnstile-status="solved"]').waitFor({ timeout: 15_000 });
+  await page.getByRole("button", { name: "Sign in" }).click();
+}
+
 function makeNodeOptions() {
   const existing = process.env.NODE_OPTIONS?.trim() ?? "";
   const localStorageFlag = "--localstorage-file=.next/node-localstorage.json";
@@ -27,7 +197,9 @@ async function waitForServerReady(timeoutMs = 120_000) {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
     try {
-      const res = await fetch(`${BASE_URL}/api/spotify/status`, { cache: "no-store" });
+      // /login is public and compiles the auth screens, so it is the first
+      // page that answers 200 once the server is ready.
+      const res = await fetch(`${BASE_URL}/login`, { cache: "no-store" });
       if (res.ok) return;
     } catch {}
     await sleep(500);
@@ -41,6 +213,7 @@ function startAppServer() {
     cwd: process.cwd(),
     env: {
       ...process.env,
+      ...AUTH_TEST_ENV,
       NODE_OPTIONS: makeNodeOptions(),
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -696,6 +869,7 @@ async function main() {
   const songListB = makeSongList("FlowB");
   const flowResults = [];
 
+  const supabase = await startMockSupabase();
   const server = startAppServer();
   let browser;
 
@@ -703,7 +877,54 @@ async function main() {
     await waitForServerReady();
     browser = await chromium.launch({ headless: true });
 
-    const flow123Context = await browser.newContext({ acceptDownloads: true });
+    // ---------------------------------------------------------- sign-in (M-8)
+    const authContext = await browser.newContext();
+    await installTurnstileStub(authContext);
+    const authPage = await authContext.newPage();
+
+    await runFlow(flowResults, "Flow A1: Signed out, every staff page sends you to sign in and the API refuses", async () => {
+      for (const path of ["/prep", "/host", "/brands", "/admin", "/account"]) {
+        await authPage.goto(`${BASE_URL}${path}`, { waitUntil: "domcontentloaded" });
+        await authPage.waitForURL((url) => url.pathname === "/login", { timeout: 30_000 });
+        assert.equal(new URL(authPage.url()).searchParams.get("next"), path, `${path} should come back after sign-in`);
+      }
+      await authPage.getByRole("heading", { name: "Staff sign in" }).waitFor();
+      // The real routes, not the browser mocks: page.request bypasses context.route.
+      for (const path of ["/api/sessions", "/api/spotify/status", "/api/brands"]) {
+        const res = await authPage.request.get(`${BASE_URL}${path}`);
+        assert.equal(res.status(), 401, `${path} should refuse a signed-out caller`);
+      }
+      const cross = await authPage.request.put(`${BASE_URL}/api/sessions`, { data: {}, headers: { origin: "https://evil.example" } });
+      assert.equal(cross.status(), 403, "a cross-site save should be refused");
+    });
+
+    await runFlow(flowResults, "Flow A2: A wrong password is refused with the kit's message", async () => {
+      await authPage.goto(`${BASE_URL}/login?next=%2Fhost`, { waitUntil: "networkidle" });
+      await signInThroughLoginPage(authPage, "not-the-password");
+      await authPage.getByText(/That email and password did not work/i).waitFor({ timeout: 15_000 });
+      assert.equal(new URL(authPage.url()).pathname, "/login");
+    });
+
+    await runFlow(flowResults, "Flow A3: A host signs in, lands back on the games list and cannot open Staff", async () => {
+      await authPage.goto(`${BASE_URL}/login?next=%2Fhost`, { waitUntil: "networkidle" });
+      await signInThroughLoginPage(authPage);
+      await authPage.waitForURL((url) => url.pathname === "/host", { timeout: 30_000 });
+      assert.equal(supabase.state.captchaTokens.at(-1), TURNSTILE_TEST_TOKEN, "the Turnstile token should reach Supabase");
+      assert.ok(
+        supabase.state.audit.some((row) => row.event === "sign_in" && row.outcome === "success"),
+        "a successful sign-in should be audited"
+      );
+      const res = await authPage.request.get(`${BASE_URL}/api/spotify/status`);
+      assert.notEqual(res.status(), 401, "a signed-in host should get past the API gate");
+      await authPage.goto(`${BASE_URL}/admin`, { waitUntil: "domcontentloaded" });
+      await authPage.waitForURL((url) => url.pathname === "/host", { timeout: 30_000 });
+      await authPage.goto(`${BASE_URL}/account`, { waitUntil: "networkidle" });
+      await authPage.getByText(STAFF_EMAIL).waitFor();
+    });
+
+    const staffState = await authContext.storageState();
+
+    const flow123Context = await newStaffContext(browser, staffState, { acceptDownloads: true });
     await installAppDataMocks(flow123Context);
     const spotifyFlow123 = await installSpotifyMocks(flow123Context, { initialConnected: false });
     const flow123Page = await flow123Context.newPage();
@@ -800,7 +1021,7 @@ async function main() {
 
     await flow123Context.close();
 
-    const flow4Context = await browser.newContext();
+    const flow4Context = await newStaffContext(browser, staffState);
     await installAppDataMocks(flow4Context);
     await installSpotifyMocks(flow4Context, { initialConnected: false });
     const flow4Page = await flow4Context.newPage();
@@ -831,7 +1052,7 @@ async function main() {
 
     await flow4Context.close();
 
-    const flowConnectedPrepContext = await browser.newContext();
+    const flowConnectedPrepContext = await newStaffContext(browser, staffState);
     await installAppDataMocks(flowConnectedPrepContext);
     await installSpotifyMocks(flowConnectedPrepContext, { initialConnected: true });
     const flowConnectedPrepPage = await flowConnectedPrepContext.newPage();
@@ -847,7 +1068,7 @@ async function main() {
 
     await flowConnectedPrepContext.close();
 
-    const flow5Context = await browser.newContext();
+    const flow5Context = await newStaffContext(browser, staffState);
     await installAppDataMocks(flow5Context);
     const spotifyFlow5 = await installSpotifyMocks(flow5Context, { initialConnected: false });
     const flow5Page = await flow5Context.newPage();
@@ -867,7 +1088,7 @@ async function main() {
 
     await flow5Context.close();
 
-    const flow6Context = await browser.newContext();
+    const flow6Context = await newStaffContext(browser, staffState);
     await installAppDataMocks(flow6Context, { sessions: [makeLiveSessionFixture("flow-live-session")] });
     await installSpotifyLiveMocks(flow6Context, { canControlPlayback: true });
     await flow6Context.addInitScript((payload) => {
@@ -912,7 +1133,7 @@ async function main() {
 
     await flow6Context.close();
 
-    const flow7Context = await browser.newContext();
+    const flow7Context = await newStaffContext(browser, staffState);
     await installAppDataMocks(flow7Context, { sessions: [makeLiveSessionFixture("flow-live-fallback")] });
     await installSpotifyLiveMocks(flow7Context, { canControlPlayback: false });
     await flow7Context.addInitScript((payload) => {
@@ -935,7 +1156,7 @@ async function main() {
 
     await flow7Context.close();
 
-    const flow10Context = await browser.newContext();
+    const flow10Context = await newStaffContext(browser, staffState);
     await installAppDataMocks(flow10Context, { sessions: [makeLiveSessionFixture("flow-live-refusals")] });
     const spotifyFlow10 = await installSpotifyLiveMocks(flow10Context, { canControlPlayback: true });
     await flow10Context.addInitScript((payload) => {
@@ -985,7 +1206,7 @@ async function main() {
 
     await flow10Context.close();
 
-    const flow11Context = await browser.newContext({ permissions: ["clipboard-read", "clipboard-write"] });
+    const flow11Context = await newStaffContext(browser, staffState, { permissions: ["clipboard-read", "clipboard-write"] });
     await installAppDataMocks(flow11Context);
     await installSpotifyMocks(flow11Context, { initialConnected: false });
     const flow11Page = await flow11Context.newPage();
@@ -1006,7 +1227,7 @@ async function main() {
 
     await flow11Context.close();
 
-    const flow12Context = await browser.newContext();
+    const flow12Context = await newStaffContext(browser, staffState);
     await installAppDataMocks(flow12Context);
     await installSpotifyMocks(flow12Context, { initialConnected: false });
     const flow12Page = await flow12Context.newPage();
@@ -1029,7 +1250,7 @@ async function main() {
       ...makeLiveSessionFixture("flow-live-preshow"),
       breakPlaylistId: "https://open.spotify.com/playlist/flowbreakmix",
     };
-    const flow13Context = await browser.newContext();
+    const flow13Context = await newStaffContext(browser, staffState);
     await installAppDataMocks(flow13Context, { sessions: [preShowSession] });
     const spotifyFlow13 = await installSpotifyLiveMocks(flow13Context, { canControlPlayback: true });
     await flow13Context.addInitScript((payload) => {
@@ -1075,7 +1296,7 @@ async function main() {
 
     await flow13Context.close();
 
-    const flow14Context = await browser.newContext();
+    const flow14Context = await newStaffContext(browser, staffState);
     await installAppDataMocks(flow14Context);
     const spotifyFlow14 = await installSpotifyMocks(flow14Context, { initialConnected: false });
     await flow14Context.route("**/api/spotify/track/*", async (route) => {
@@ -1162,7 +1383,7 @@ async function main() {
 
     await flow14Context.close();
 
-    const flow15Context = await browser.newContext();
+    const flow15Context = await newStaffContext(browser, staffState);
     await installAppDataMocks(flow15Context);
     await installSpotifyMocks(flow15Context, { initialConnected: true });
     // Registered after installSpotifyMocks, so it takes precedence: game 1 has
@@ -1255,7 +1476,7 @@ async function main() {
 
     await flow15Context.close();
 
-    const flow9Context = await browser.newContext();
+    const flow9Context = await newStaffContext(browser, staffState);
     await installAppDataMocks(flow9Context);
     await installSpotifyMocks(flow9Context, { initialConnected: false });
     const flow9Page = await flow9Context.newPage();
@@ -1286,9 +1507,37 @@ async function main() {
     });
 
     await flow9Context.close();
+
+    await runFlow(flowResults, "Flow A4: An account with no role is held on the waiting screen", async () => {
+      supabase.state.role = "pending";
+      try {
+        await authPage.goto(`${BASE_URL}/host`, { waitUntil: "domcontentloaded" });
+        await authPage.waitForURL((url) => url.pathname === "/pending", { timeout: 30_000 });
+        const res = await authPage.request.get(`${BASE_URL}/api/sessions`);
+        assert.equal(res.status(), 403, "a pending account should be refused by the API");
+      } finally {
+        supabase.state.role = "host";
+      }
+    });
+
+    await runFlow(flowResults, "Flow A5: Sign out ends the session", async () => {
+      await authPage.goto(`${BASE_URL}/account`, { waitUntil: "networkidle" });
+      await authPage.getByRole("button", { name: "Sign out" }).first().click();
+      await authPage.waitForURL((url) => url.pathname === "/login", { timeout: 30_000 });
+      await authPage.goto(`${BASE_URL}/host`, { waitUntil: "domcontentloaded" });
+      await authPage.waitForURL((url) => url.pathname === "/login", { timeout: 30_000 });
+    });
+
+    await runFlow(flowResults, "Flow A6: Nothing called a Supabase endpoint the flows do not expect", async () => {
+      assert.deepEqual(supabase.state.unexpected, []);
+    });
+
+    await authContext.close();
   } finally {
     if (browser) await browser.close();
     await stopAppServer(server);
+    supabase.server.closeAllConnections();
+    await new Promise((done) => supabase.server.close(() => done()));
   }
 
   await writeFile(

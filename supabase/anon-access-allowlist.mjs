@@ -16,13 +16,19 @@
  *   only postgres and service_role. Row level security is on for all four tables.
  *
  * WHY EMPTY IS THE RIGHT ANSWER HERE, NOT JUST THE CURRENT ONE
- *   This app never uses the anon key. `lib/supabase.ts` is the only file that
- *   builds a Supabase client and it requires SUPABASE_URL plus
- *   SUPABASE_SERVICE_ROLE_KEY, server side. There is no publishable key in
- *   `.env.example`, in the code, or in any browser bundle. Nothing the app does
- *   needs anon to reach anything, so any appearance of anon reach is drift by
- *   definition and not a feature. That is why this file starts empty and the
+ *   Since staff sign-in (spec M-8, November 2026) the app does use the public
+ *   key, but only for Supabase Auth: signing in, refreshing the session and
+ *   asking current_staff_role() as a signed-in user. Every game, venue and
+ *   error read still goes through the service role on the server
+ *   (`lib/supabase.ts`). Nothing the app does needs the anon role to reach a
+ *   table, view or function in `public`, so any anon reach is drift by
+ *   definition and not a feature. That is why this file stays empty and the
  *   check fails the moment a single object shows up.
+ *
+ *   The sign-in tables and functions the kit migrations add (20261107090000
+ *   to 20261107090005) are listed below as forbidden: they revoke anon
+ *   themselves, and CI replays every migration and runs this check against
+ *   the result, so a later migration that re-grants one fails the build.
  *
  * WHY THE GUARD EXISTS AT ALL
  *   Across this workspace the publishable key repeatedly reached further than
@@ -145,6 +151,54 @@ export const FORBIDDEN_IN_ALLOWLIST = [
     privileges: ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE'],
     why: 'Live session rows carry host access secrets and the runtime state of a running game. The app reaches them through the service role on the server, never from a browser, so anon needs no read and certainly no write.',
   },
+  {
+    kind: 'table',
+    name: 'profiles',
+    privileges: null,
+    why: 'Staff roles (admin, host, pending) and deactivation dates: the source of truth for who may run a night. Signed-in staff read their own row through the authenticated role; anon must never read or write any of it.',
+  },
+  {
+    kind: 'table',
+    name: 'invites',
+    privileges: null,
+    why: 'Invite token hashes and the emails invited. Service role only (the kit admin actions and the bootstrap script).',
+  },
+  {
+    kind: 'table',
+    name: 'recovery_grants',
+    privileges: null,
+    why: 'Password-recovery grant hashes. Service role only; anon reach would let anyone probe or spend a reset.',
+  },
+  {
+    kind: 'table',
+    name: 'auth_audit',
+    privileges: null,
+    why: 'The sign-in audit, with staff emails and IP addresses. Append-only for the service role, readable by active admins only.',
+  },
+  ...[
+    'kit_issue_invite',
+    'kit_cancel_invite',
+    'kit_claim_invite',
+    'kit_attach_invite_user',
+    'kit_complete_invite',
+    'kit_fail_invite',
+    'kit_stale_invites',
+    'kit_mint_recovery_grant',
+    'kit_claim_recovery_grant',
+    'kit_invalidate_recovery_grants_for_email',
+    'kit_set_staff_role',
+    'kit_deactivate_staff',
+    'kit_reactivate_staff',
+    'kit_staff_role_for',
+    'kit_auth_throttle',
+    'kit_prune_auth_data',
+    'kit_before_user_created',
+  ].map((name) => ({
+    kind: /** @type {const} */ ('function'),
+    name,
+    privileges: null,
+    why: 'A kit sign-in function (20261107090000 to 20261107090004). Service role or the Auth hook role only: anon EXECUTE would let anyone issue invites, mint recovery grants, change roles or prune the audit.',
+  })),
   {
     kind: 'table',
     name: 'session_runtime_snapshots',

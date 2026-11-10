@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useWakeLock } from "@anchor-nights/kit/tv";
 import { AnchorLogo, Banner, buttonClass, Card } from "@anchor-nights/kit/ui";
-import { assertAdminUnlocked } from "@/lib/live/adminGuard";
+import { assertSignedIn } from "@/lib/live/signInGuard";
 import { publishLiveMessage } from "@/lib/live/channel";
 import { NowPlayingPanel } from "@/components/host/NowPlayingPanel";
 import { GameFlowPanel } from "@/components/host/GameFlowPanel";
@@ -473,7 +473,7 @@ export default function HostSessionControllerPage() {
       const res = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/links`, {
         cache: "no-store",
       });
-      assertAdminUnlocked(res);
+      assertSignedIn(res);
       if (!res.ok) throw new Error("Could not create private display link.");
       const data = await res.json() as { displayUrl?: string };
       if (!data.displayUrl) throw new Error("Private display link was missing.");

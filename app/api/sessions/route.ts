@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { hasAdminAccess } from "@/lib/live/access";
+import { requireStaff } from "@/lib/auth/routeGuard";
 import { listSessions, upsertSession } from "@/lib/live/sessionRepo";
 import { validateLiveSession } from "@/lib/live/validate";
 import { reportError } from "@/lib/reportError";
@@ -9,9 +9,8 @@ export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
   try {
-    if (!hasAdminAccess(request)) {
-      return NextResponse.json({ error: "Admin access required." }, { status: 401 });
-    }
+    const gate = await requireStaff(request);
+    if (!gate.ok) return gate.response;
     const sessions = await listSessions();
     return NextResponse.json(sessions, { headers: { "Cache-Control": "no-store" } });
   } catch (err: any) {
@@ -22,9 +21,8 @@ export async function GET(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    if (!hasAdminAccess(request)) {
-      return NextResponse.json({ error: "Admin access required." }, { status: 401 });
-    }
+    const gate = await requireStaff(request);
+    if (!gate.ok) return gate.response;
     const body = await request.json().catch(() => null);
     const session = validateLiveSession(body);
     if (!session) {

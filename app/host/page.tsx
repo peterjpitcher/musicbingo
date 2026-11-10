@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 import { BrandSelector } from "@/components/brand/BrandSelector";
 import { AppHeader } from "@/components/layout/AppHeader";
-import { assertAdminUnlocked } from "@/lib/live/adminGuard";
+import { assertSignedIn } from "@/lib/live/signInGuard";
 import {
   deleteLiveSession,
   exportLiveSessionJson,
@@ -338,7 +338,7 @@ export default function HostDashboardPage() {
       }
 
       const res = await fetch("/api/generate", { method: "POST", body: form });
-      assertAdminUnlocked(res);
+      assertSignedIn(res);
       if (!res.ok) {
         const msg = await res.text();
         throw new Error(msg || "Failed to generate event pack.");
@@ -363,7 +363,7 @@ export default function HostDashboardPage() {
       const res = await fetch(`/api/sessions/${encodeURIComponent(session.id)}/links`, {
         cache: "no-store",
       });
-      assertAdminUnlocked(res);
+      assertSignedIn(res);
       if (!res.ok) throw new Error("Could not create private host link.");
       const data = await res.json() as { hostUrl?: string };
       window.location.href = data.hostUrl || `/host/${session.id}`;

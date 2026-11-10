@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { NextRequest } from "next/server";
 import JSZip from "jszip";
 import { PDFDocument } from "pdf-lib";
-import { hasAdminAccess } from "@/lib/live/access";
 import { POST } from "@/app/api/generate/route";
 import { getBrandFeedConfig, resolveBrandConfig } from "@/lib/brands/brandRepo";
 import { fetchEventsForBrand } from "./index";
@@ -13,7 +12,10 @@ vi.mock("@/lib/brands/brandRepo", () => ({
   resolveBrandConfig: vi.fn(), getBrandFeedConfig: vi.fn(),
 }));
 vi.mock("@/lib/brands/brandStorage", () => ({ fetchBrandLogoPngBytes: vi.fn().mockResolvedValue(null) }));
-vi.mock("@/lib/live/access", () => ({ hasAdminAccess: vi.fn().mockReturnValue(true) }));
+// The staff gate itself is proved in lib/auth/routeRegistry.test.ts.
+vi.mock("@/lib/auth/routeGuard", () => ({
+  requireStaff: vi.fn(async () => ({ ok: true, via: "staff", userId: "u1", role: "host" })),
+}));
 vi.mock("@/lib/pdf", async (original) => ({
   ...await original<typeof import("@/lib/pdf")>(),
   loadDefaultLogoPngBytes: vi.fn().mockResolvedValue(null),
@@ -28,7 +30,6 @@ const events = Array.from({ length: 12 }, (_, i) => ({
 }));
 
 beforeEach(() => {
-  vi.mocked(hasAdminAccess).mockReturnValue(true);
   vi.mocked(resolveBrandConfig).mockResolvedValue(null);
   vi.mocked(getBrandFeedConfig).mockResolvedValue(config);
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ success: true, data: { events } }))));
