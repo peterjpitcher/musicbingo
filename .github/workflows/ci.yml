@@ -8,8 +8,6 @@ name: CI
 # Both still run locally through npm run verify.
 
 on:
-  push:
-    branches: [main]
   pull_request:
   workflow_dispatch:
 
