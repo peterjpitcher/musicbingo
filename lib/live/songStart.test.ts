@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import { computeRevealState } from "@/lib/live/reveal";
 import {
   findSongStartMs,
+  nextSongStartMs,
   songProgressMs,
+  songStartSeekIgnored,
   songStartSeekMs,
   songStartsFromSongs,
   usableSongStartMs,
@@ -61,5 +63,41 @@ describe("song start times on the night", () => {
     expect(at(DEFAULT_REVEAL_CONFIG.albumMs).showAlbum).toBe(true);
     expect(at(DEFAULT_REVEAL_CONFIG.nextMs - 1).shouldAdvance).toBe(false);
     expect(at(DEFAULT_REVEAL_CONFIG.nextMs).shouldAdvance).toBe(true);
+  });
+});
+
+describe("nextSongStartMs", () => {
+  const base = {
+    trackChanged: true,
+    previousStartMs: 0,
+    configuredStartMs: 40_000,
+    durationMs: 200_000,
+    isIntroSong: false,
+    freePlay: false,
+    canControlPlayback: true,
+  };
+  it("takes the start time when a new song comes up", () => {
+    expect(nextSongStartMs(base)).toBe(40_000);
+  });
+  it("keeps it through a mid-song loss of control or free-play toggle", () => {
+    const midSong = { ...base, trackChanged: false, previousStartMs: 40_000 };
+    expect(nextSongStartMs({ ...midSong, canControlPlayback: false })).toBe(40_000);
+    expect(nextSongStartMs({ ...midSong, freePlay: true })).toBe(40_000);
+  });
+  it("uses none for the warm-up, free play or manual control", () => {
+    expect(nextSongStartMs({ ...base, isIntroSong: true })).toBe(0);
+    expect(nextSongStartMs({ ...base, freePlay: true })).toBe(0);
+    expect(nextSongStartMs({ ...base, canControlPlayback: false })).toBe(0);
+  });
+});
+
+describe("songStartSeekIgnored", () => {
+  it("gives up when Spotify stayed near the top after the jump", () => {
+    expect(songStartSeekIgnored({ songStartMs: 40_000, progressMs: 8_000, msSinceSeek: 7_000 })).toBe(true);
+  });
+  it("waits a moment, and leaves a song that did jump", () => {
+    expect(songStartSeekIgnored({ songStartMs: 40_000, progressMs: 2_000, msSinceSeek: 1_000 })).toBe(false);
+    expect(songStartSeekIgnored({ songStartMs: 40_000, progressMs: 47_000, msSinceSeek: 7_000 })).toBe(false);
+    expect(songStartSeekIgnored({ songStartMs: 0, progressMs: 8_000, msSinceSeek: 7_000 })).toBe(false);
   });
 });

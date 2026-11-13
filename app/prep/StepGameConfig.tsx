@@ -105,6 +105,8 @@ export function StepGameConfig({
 
   const selectedChallengeCount = challengeSongs.filter((s) => s.value).length;
   const startTimeCount = parsed.songs.filter((s) => (s.startMs ?? 0) > 0).length;
+  // A start time the parser could not read stays in the title ("@0.40").
+  const unreadStartTimes = parsed.songs.filter((s) => /@\s*[\d.:]+\s*$/.test(s.title));
 
   const introSlot = INTRO_CONFIG[gameNumber];
 
@@ -260,6 +262,11 @@ export function StepGameConfig({
             </span>
             {notEnough && parsed.songs.length > 0 && (
               <span className="warn">Pool: {parsed.combinedPool.length} (need ≥25)</span>
+            )}
+            {unreadStartTimes.length > 0 && (
+              <span className="bad" role="status">
+                Start time not understood for {unreadStartTimes.map((s) => s.title).join(", ")}: use minutes:seconds, like @0:40
+              </span>
             )}
             {startTimeCount > 0 && (
               <span className="ok">

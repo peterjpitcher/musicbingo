@@ -61,3 +61,42 @@ export function songStartSeekMs(params: { songStartMs: number; progressMs: numbe
   if (params.progressMs >= params.songStartMs - SONG_START_TOLERANCE_MS) return null;
   return params.songStartMs;
 }
+
+/**
+ * The start point for the runtime after a status snapshot. It is decided only
+ * when a new track comes up and is then carried unchanged for the rest of the
+ * song: a brief loss of control or a free-play toggle mid-song must not drop
+ * it, or the reveals would latch on at once and the song would be cut short.
+ */
+export function nextSongStartMs(params: {
+  trackChanged: boolean;
+  previousStartMs: number | null | undefined;
+  configuredStartMs: number;
+  durationMs: number | null | undefined;
+  isIntroSong: boolean;
+  freePlay: boolean;
+  canControlPlayback: boolean;
+}): number {
+  if (!params.trackChanged) return params.previousStartMs ?? 0;
+  if (params.isIntroSong || params.freePlay || !params.canControlPlayback) return 0;
+  return usableSongStartMs(params.configuredStartMs, params.durationMs);
+}
+
+/** A seek Spotify accepted but did not act on: give up after this long. */
+export const SONG_START_SEEK_GRACE_MS = 6_000;
+
+/**
+ * True when a seek to the start point was sent a while ago but playback is
+ * still well short of it, so the song should be counted from the top again.
+ */
+export function songStartSeekIgnored(params: {
+  songStartMs: number;
+  progressMs: number;
+  msSinceSeek: number;
+}): boolean {
+  return (
+    params.songStartMs > 0 &&
+    params.msSinceSeek >= SONG_START_SEEK_GRACE_MS &&
+    params.progressMs < params.songStartMs - SONG_START_TOLERANCE_MS - SONG_START_SEEK_GRACE_MS
+  );
+}

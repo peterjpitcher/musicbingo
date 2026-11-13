@@ -29,10 +29,17 @@ function downloadBlob(blob: Blob, filename: string): void {
   URL.revokeObjectURL(url);
 }
 
+function formatStartTime(startMs: number | undefined): string {
+  if (!startMs) return "";
+  const totalSeconds = Math.round(startMs / 1000);
+  return ` @${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, "0")}`;
+}
+
 function formatSongsForClipboard(text: string): string {
   const parsed = parseSongListText(text);
   if (parsed.songs.length > 0) {
-    return parsed.songs.map((song) => `${song.artist} - ${song.title}`).join("\n");
+    // Start times ("@0:40") are kept, so a copied list can be reused as is.
+    return parsed.songs.map((song) => `${song.artist} - ${song.title}${formatStartTime(song.startMs)}`).join("\n");
   }
   return text.trim();
 }

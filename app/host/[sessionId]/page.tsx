@@ -36,7 +36,13 @@ import {
   updateAdvanceTrackMarker,
 } from "@/lib/live/reveal";
 import { makeIntroTracking, trackIntroPlayback, type IntroTracking } from "@/lib/live/introState";
-import { findSongStartMs, songProgressMs, songStartSeekMs, usableSongStartMs } from "@/lib/live/songStart";
+import {
+  findSongStartMs,
+  nextSongStartMs,
+  songProgressMs,
+  songStartSeekIgnored,
+  songStartSeekMs,
+} from "@/lib/live/songStart";
 import { getLiveSession, upsertLiveSession } from "@/lib/live/sessionApi";
 import {
   formatSecondsInput,
@@ -255,6 +261,7 @@ export default function HostSessionControllerPage() {
   const songStartByTrackIdRef = useRef<Map<string, number>>(new Map());
   // The track the console last jumped to its start time, so it seeks once.
   const songStartSeekedTrackRef = useRef<string | null>(null);
+  const songStartSeekedAtRef = useRef(0);
   // Anchor-based intro tracking set by playIntroSong; survives stale status
   // reports and market-relinked track ids (see lib/live/introState.ts).
   const introAnchorRef = useRef<IntroTracking | null>(null);
@@ -744,11 +751,15 @@ export default function HostSessionControllerPage() {
         const configuredStartMs = track?.trackId
           ? songStartByTrackIdRef.current.get(track.trackId) ?? findSongStartMs(track, game?.songStarts)
           : 0;
-        const songStartMs = isIntroSong || prev.freePlay || !payload.canControlPlayback
-          ? 0
-          : trackChanged
-            ? usableSongStartMs(configuredStartMs, track?.durationMs)
-            : (prev.songStartMs ?? 0);
+        const songStartMs = nextSongStartMs({
+          trackChanged,
+          previousStartMs: prev.songStartMs,
+          configuredStartMs,
+          durationMs: track?.durationMs,
+          isIntroSong,
+          freePlay: prev.freePlay,
+          canControlPlayback: Boolean(payload.canControlPlayback),
+        });
 
         // When intro or free play is active, show all metadata immediately (no timed reveal).
         const computedRevealState = (isIntroSong || prev.freePlay)
@@ -1134,13 +1145,27 @@ export default function HostSessionControllerPage() {
     if (songStartSeekedTrackRef.current !== null && songStartSeekedTrackRef.current !== track.trackId) {
       songStartSeekedTrackRef.current = null;
     }
-    if (songStartSeekedTrackRef.current === track.trackId) return;
+    if (songStartSeekedTrackRef.current === track.trackId) {
+      // Spotify took the jump but stayed near the top: count from the top.
+      if (songStartSeekIgnored({
+        songStartMs,
+        progressMs: track.progressMs,
+        msSinceSeek: Date.now() - songStartSeekedAtRef.current,
+      })) {
+        const ignoredTrackId = track.trackId;
+        commitRuntime((prev) =>
+          prev.currentTrack?.trackId === ignoredTrackId ? { ...prev, songStartMs: 0 } : prev
+        );
+      }
+      return;
+    }
     const seekTo = songStartSeekMs({ songStartMs, progressMs: track.progressMs });
     if (seekTo === null) {
       if (songStartMs > 0) songStartSeekedTrackRef.current = track.trackId;
       return;
     }
     songStartSeekedTrackRef.current = track.trackId;
+    songStartSeekedAtRef.current = Date.now();
     const trackId = track.trackId;
     void sendCommand("seek", { positionMs: seekTo }).then((ok) => {
       if (ok) return;
