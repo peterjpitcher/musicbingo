@@ -3,8 +3,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { PromoSlide, SlideLoop, SlidePreload, type PromoSlideData } from "@anchor-nights/kit/promo";
 
-import { VenueLogo } from "@/components/motifs/VenueLogo";
-import type { BrandConfig } from "@/lib/brands/types";
 import { buildPromoPlaylist, type PromoLead, type PromoMode } from "@/lib/promo/promoMode";
 import { usePromo } from "@/components/promo/PromoProvider";
 
@@ -28,24 +26,20 @@ export function usePromoClock(intervalMs: number = CLOCK_MS): number {
 
 /**
  * One kit slide on Music Bingo's TV: the night register background every
- * screen uses, the venue logo, and the slide centred below it. Drawn inside
- * the kit Stage: since kit 2.0.1 the slides size themselves from the Stage's
- * --anchor-vh, so they are canvas pixels here like every other screen.
+ * screen uses and the slide centred on it. The logo is the corner logo drawn
+ * over every TV screen (TvCornerLogo). Drawn inside the kit Stage: since kit
+ * 2.0.1 the slides size themselves from the Stage's --anchor-vh, so they are
+ * canvas pixels here like every other screen.
  */
 export function PromoSlideOnStage({
   slide,
   nowMs,
-  brand,
 }: {
   slide: PromoSlideData;
   nowMs: number;
-  brand: BrandConfig;
 }): React.JSX.Element {
   return (
     <div className="screen grain vignette" data-promo-slide={slide.kind} style={{ padding: "52px 110px 96px", gap: 20 }}>
-      <div style={{ display: "flex", justifyContent: "center", position: "relative", zIndex: 2 }}>
-        <VenueLogo brand={brand} size="sm" />
-      </div>
       <div
         style={{
           flex: 1,
@@ -66,7 +60,6 @@ export function PromoSlideOnStage({
 
 export interface PromoLoopProps {
   mode: PromoMode;
-  brand: BrandConfig;
   /** The London date of tonight's game at the loop's clock (lib/promo/promoMode.ts sessionDateFor). */
   sessionDate: (nowMs: number) => string;
   /** Draws Music Bingo's own lead screen (welcome or break). */
@@ -78,7 +71,7 @@ export interface PromoLoopProps {
  * the kit. The feed and the review link come from PromoProvider. With no
  * feed the kit shows only the lead and "See what's on": nothing invented.
  */
-export function PromoLoop({ mode, brand, sessionDate, renderLead }: PromoLoopProps): React.JSX.Element {
+export function PromoLoop({ mode, sessionDate, renderLead }: PromoLoopProps): React.JSX.Element {
   const { feed, reviewUrl } = usePromo();
   const nowMs = usePromoClock();
   const date = sessionDate(nowMs);
@@ -90,9 +83,9 @@ export function PromoLoop({ mode, brand, sessionDate, renderLead }: PromoLoopPro
   const renderSlide = useCallback(
     (slide: PromoSlideData): ReactNode => {
       if (slide.kind === "app") return renderLead?.(slide.id as PromoLead) ?? null;
-      return <PromoSlideOnStage slide={slide} nowMs={nowMs} brand={brand} />;
+      return <PromoSlideOnStage slide={slide} nowMs={nowMs} />;
     },
-    [nowMs, renderLead, brand],
+    [nowMs, renderLead],
   );
 
   return <SlideLoop slides={slides} renderSlide={renderSlide} />;

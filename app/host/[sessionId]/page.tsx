@@ -23,6 +23,8 @@ import { AwardPointsModal, type AwardPreset } from "@/components/host/AwardPoint
 import { SCREEN_REGISTRY } from "@/components/screens/registry";
 import { ScoreToastOverlay } from "@/components/screens/ScoreToastOverlay";
 import { EditContext, type EditContextValue } from "@/components/motifs/EditContext";
+import { TvCornerLogo } from "@/components/motifs/TvCornerLogo";
+import { gameSongTotal } from "@/lib/live/songCount";
 import { SHOW_STEPS, adjacentShowStep, normalizeScreenId, showStepsFor, type ScreenId } from "@/lib/live/runOfShow";
 import { resolveBreakPlaylist } from "@/lib/spotifyPlaylistId";
 import { deriveScreenId } from "@/lib/live/deriveScreen";
@@ -2074,8 +2076,10 @@ export default function HostSessionControllerPage() {
                         brand: effectiveBrand,
                         runtime,
                         eventDateInput: session?.eventDateInput ?? null,
+                        songTotal: gameSongTotal(session, runtime.activeGameNumber),
                       })}
                       <ScoreToastOverlay toast={runtime.scoreToast} />
+                      <TvCornerLogo brand={effectiveBrand} />
                     </div>
                   </div>
                 </div>

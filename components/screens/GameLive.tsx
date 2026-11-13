@@ -19,6 +19,7 @@ import { Ball } from "@/components/motifs/Ball";
 import { Eq } from "@/components/motifs/Eq";
 import { Chrome } from "@/components/motifs/Chrome";
 import { AlbumArt } from "@/components/screens/AlbumArt";
+import { songCount, type SongCount } from "@/lib/live/songCount";
 import { TV_TYPE } from "@/lib/tvType";
 
 /**
@@ -97,6 +98,28 @@ const CHALLENGE_FIT_STEPS = buildFitSteps({
   shrinkOrder: [["title", "artist"]],
 });
 
+/**
+ * The footer's right corner on a game screen: songs played so far and songs
+ * left, as plain numbers (Peter, 13 November 2026). The numbers are larger
+ * and brighter than the footer's labels so the room can read them.
+ */
+function SongCountChrome({ count }: { count: SongCount }): React.JSX.Element {
+  const number: React.CSSProperties = {
+    fontSize: TV_TYPE.base,
+    fontWeight: 800,
+    letterSpacing: 0,
+    color: "var(--anchor-gold-bright)",
+    fontVariantNumeric: "tabular-nums",
+  };
+  return (
+    <span data-song-count style={{ display: "inline-flex", alignItems: "baseline", gap: 14 }}>
+      <span style={number}>{count.played}</span> played
+      <span aria-hidden>·</span>
+      <span style={number}>{count.left}</span> left
+    </span>
+  );
+}
+
 /** Cream at a given strength, for borders and dim labels on the green. */
 function cream(percent: number): string {
   return `color-mix(in srgb, var(--anchor-cream-text) ${percent}%, transparent)`;
@@ -144,6 +167,7 @@ export function GameLive({
   runtime,
   game = 1,
   progressMs,
+  songTotal = 0,
 }: ScreenProps & { game?: 1 | 2 }): React.JSX.Element {
   const themeField = game === 1 ? "g1theme" : "g2theme";
   const { editing, get } = useEdit();
@@ -160,6 +184,9 @@ export function GameLive({
   const liveRuntime = showLiveTrack ? runtime : null;
   const track = liveRuntime?.currentTrack ?? null;
   const reveal = liveRuntime?.revealState ?? null;
+  // Songs played and left, only while this game has a live song (so never
+  // a stale count from the other game, nor in manual host mode).
+  const count = liveRuntime ? songCount(liveRuntime.playedTracks?.length ?? 0, songTotal) : null;
 
   /*
    * Default every reveal to hidden until the runtime/reveal state has loaded.
@@ -445,7 +472,7 @@ export function GameLive({
               <Editable field="venueName" placeholder={brand.name} /> · {challenge.label}
             </>
           }
-          right="Join In For Points"
+          right={count ? <SongCountChrome count={count} /> : "Join In For Points"}
         />
       </div>
     );
@@ -629,7 +656,7 @@ export function GameLive({
             <Editable field="venueName" placeholder={brand.name} /> · Game {game}
           </>
         }
-        right="Eyes Down"
+        right={count ? <SongCountChrome count={count} /> : "Eyes Down"}
       />
     </div>
   );

@@ -227,9 +227,7 @@ export function Welcome({ brand, runtime, variant = "A", eventDateInput = null }
         size={1700}
         style={{ top: "44%", left: "50%", transform: "translate(-50%,-50%)" }}
       />
-      <div style={{ position: "absolute", left: 90, top: 70, zIndex: 3 }}>
-        <VenueLogo brand={brand} />
-      </div>
+      {/* The corner logo is drawn over every TV screen (TvCornerLogo). */}
       <div
         className="col center-all"
         style={{ position: "relative", zIndex: 2, gap: 30 }}

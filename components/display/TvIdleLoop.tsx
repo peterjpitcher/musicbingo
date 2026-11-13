@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { getLondonIsoDate } from "@anchor-nights/kit/dates";
 import { Stage, useWakeLock } from "@anchor-nights/kit/tv";
 
+import { TvCornerLogo } from "@/components/motifs/TvCornerLogo";
 import { PromoLoop } from "@/components/promo/PromoLoop";
 import { DEFAULT_BRAND_CONFIG } from "@/lib/brands/defaultBrand";
 import type { PromoMode } from "@/lib/promo/promoMode";
@@ -36,8 +37,9 @@ export function TvIdleLoop({ recheckMs }: TvIdleLoopProps): React.JSX.Element {
   return (
     <Stage>
       <div className="screen-wrap in">
-        <PromoLoop mode={IDLE_MODE} brand={DEFAULT_BRAND_CONFIG} sessionDate={sessionDate} />
+        <PromoLoop mode={IDLE_MODE} sessionDate={sessionDate} />
       </div>
+      <TvCornerLogo brand={DEFAULT_BRAND_CONFIG} />
     </Stage>
   );
 }

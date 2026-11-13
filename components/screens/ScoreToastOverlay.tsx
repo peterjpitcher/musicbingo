@@ -24,13 +24,15 @@ export function ScoreToastOverlay({ toast }: ScoreToastOverlayProps): React.JSX.
     return null;
   }
 
+  // Only the points just won: a team's running total stays secret until the
+  // Winners reveal (Peter, 13 November 2026). The toast still carries `total`
+  // for older saved runtimes; it is never drawn.
   return (
     <div className="score-toast" role="status" aria-live="polite">
       <div className="score-toast__label">{toast.label}</div>
       <div className="score-toast__main">
         {toast.teamName} +{toast.points} points
       </div>
-      <div className="score-toast__total">{toast.total} total</div>
     </div>
   );
 }

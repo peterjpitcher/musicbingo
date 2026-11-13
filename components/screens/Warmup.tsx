@@ -38,7 +38,9 @@ export function Warmup({
   return (
     <div
       className={`screen grain vignette${dance ? " screen--warm" : ""}`}
-      style={{ flexDirection: "row", alignItems: "center", padding: "0 130px" }}
+      // 60px on top keeps the dance screen's "Warm up" pill clear of the
+      // corner logo (TvCornerLogo) above it.
+      style={{ flexDirection: "row", alignItems: "center", padding: "60px 130px 0" }}
     >
       {/* Decorative sunburst — positioned left for dance, right for sing */}
       <Sunburst
