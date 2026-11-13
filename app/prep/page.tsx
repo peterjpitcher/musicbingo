@@ -8,7 +8,7 @@ import { useSearchParams } from "next/navigation";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { promotionNotice } from "@/lib/eventFeed/promotionStatus";
 import { formatEventDateDisplay } from "@/lib/eventDate";
-import { DEFAULT_GAME_THEME, MAX_SONGS_PER_GAME, makeSongSelectionValue } from "@/lib/gameInput";
+import { DEFAULT_GAME_THEME, makeSongSelectionValue } from "@/lib/gameInput";
 import { assertSignedIn } from "@/lib/live/signInGuard";
 import { exportLiveSessionJson, getLiveSession, upsertLiveSession } from "@/lib/live/sessionApi";
 import {
@@ -41,6 +41,7 @@ import {
 import { parseSpotifyTrackUrl } from "@/lib/spotifyTrackUrl";
 import { sanitizeFilenamePart } from "@/lib/utils";
 import { DEFAULT_BREAK_PLAYLIST_URL, resolveBreakPlaylist } from "@/lib/spotifyPlaylistId";
+import { canSubmitPrep } from "@/lib/prepSubmit";
 import { StepEventSetup } from "./StepEventSetup";
 import { StepGameConfig } from "./StepGameConfig";
 import { StepGenerateConnect } from "./StepGenerateConnect";
@@ -785,30 +786,23 @@ function PrepPageInner() {
     saveLiveSessionRef.current?.();
   }, [livePlaylistByGame]);
 
-  const canSubmit = useMemo(() => {
-    const count = Number.parseInt(countInput, 10);
-    if (!eventDate.trim()) return false;
-    if (!Number.isFinite(count) || count < 1 || count > 200) return false;
-    if (!parsedGame1.songs.length || !parsedGame2.songs.length) return false;
-    if (
-      parsedGame1.songs.length > MAX_SONGS_PER_GAME ||
-      parsedGame2.songs.length > MAX_SONGS_PER_GAME
-    )
-      return false;
-    if (parsedGame1.combinedPool.length < 25) return false;
-    if (parsedGame2.combinedPool.length < 25) return false;
-    if (!game1ChallengeSongs.some((c) => c.value) || !game2ChallengeSongs.some((c) => c.value)) return false;
-    return true;
-  }, [
-    countInput,
-    eventDate,
-    game1ChallengeSongs,
-    game2ChallengeSongs,
-    parsedGame1.combinedPool.length,
-    parsedGame2.combinedPool.length,
-    parsedGame1.songs.length,
-    parsedGame2.songs.length,
-  ]);
+  const canSubmit = useMemo(
+    () =>
+      canSubmitPrep({
+        eventDate,
+        countInput,
+        game1: { songCount: parsedGame1.songs.length, poolSize: parsedGame1.combinedPool.length },
+        game2: { songCount: parsedGame2.songs.length, poolSize: parsedGame2.combinedPool.length },
+      }),
+    [
+      countInput,
+      eventDate,
+      parsedGame1.combinedPool.length,
+      parsedGame2.combinedPool.length,
+      parsedGame1.songs.length,
+      parsedGame2.songs.length,
+    ]
+  );
 
   function buildBaseFormData(overrides?: {
     game1IntroSongs?: IntroSong[];

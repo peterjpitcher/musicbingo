@@ -720,9 +720,11 @@ async function openPrep(page) {
   await page.getByRole("heading", { name: "Event Setup" }).waitFor();
 }
 
-async function fillCurrentGameStep(page, songs) {
+async function fillCurrentGameStep(page, songs, { challenge = true } = {}) {
   await page.locator("textarea").fill(songs);
   await page.locator("text=26 songs").first().waitFor();
+  // Challenge songs are optional (13 November 2026): leave every row on None.
+  if (!challenge) return;
 
   // The After Hours wizard renders challenge songs as a Sing/Dance segmented
   // toggle + a song <select> per row (defaulting to "None"). Pick the first
@@ -748,7 +750,9 @@ async function fillPrepWizardToGenerate(page, game1Songs, game2Songs) {
   await page.getByRole("button", { name: /Next: Game 2/i }).click();
 
   await page.getByRole("heading", { name: /Game 2/i }).waitFor();
-  await fillCurrentGameStep(page, game2Songs);
+  // Game 2 has no challenge song, so every generate flow proves a night
+  // without one can still be generated.
+  await fillCurrentGameStep(page, game2Songs, { challenge: false });
   await waitUntilEnabled(page.getByRole("button", { name: /Next: Generate/i }));
   await page.getByRole("button", { name: /Next: Generate/i }).click();
 
