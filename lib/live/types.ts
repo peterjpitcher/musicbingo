@@ -1,5 +1,6 @@
 import type { ScreenId } from "@/lib/live/runOfShow";
 import type { ContentKey } from "@/lib/live/content";
+import type { SongStart } from "@/lib/live/songStart";
 
 export const LIVE_SESSION_VERSION = "music-bingo-live-session-v1" as const;
 export const LIVE_RUNTIME_VERSION = "music-bingo-live-runtime-v1" as const;
@@ -129,6 +130,8 @@ export type LiveGameConfig = {
   /** @deprecated Use introSongs instead */
   introSongTitle?: string;
   introSongs?: IntroSong[];
+  /** Songs that start part-way in on the night ("@0:40" in the song list). */
+  songStarts?: SongStart[];
 };
 
 /** Raw prep-screen inputs stored so the event pack ZIP can be re-generated from the host dashboard. */
@@ -257,6 +260,12 @@ export type LiveRuntimeState = {
   breakStartedAtMs: number | null;
   /** Extra ms added to the reveal schedule via the +30s and Skip 30s buttons. Resets to 0 on track change. */
   extensionMs: number;
+  /**
+   * Where the current song was started, in ms (its start time from the song
+   * list, else 0). The reveals and the song timer count from here, on the
+   * console and the TV. Optional: older runtimes omit it, which means 0.
+   */
+  songStartMs?: number;
   /** When true, auto-advance is disabled and songs play in full (free play / post-round mode). */
   freePlay: boolean;
   /** True when playing the intro song (track 1) before a game starts. Derived, not sticky. */
@@ -346,6 +355,7 @@ export function makeEmptyRuntimeState(sessionId: string): LiveRuntimeState {
     preBreakPlaylistId: null,
     breakStartedAtMs: null,
     extensionMs: 0,
+    songStartMs: 0,
     freePlay: false,
     isIntroSong: false,
     introPlayed: false,

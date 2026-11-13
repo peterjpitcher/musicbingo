@@ -310,6 +310,7 @@ export function validateRuntimeState(input: unknown): LiveRuntimeState | null {
         ? input.breakStartedAtMs
         : null,
     extensionMs: asNumber(input.extensionMs) ?? 0,
+    songStartMs: Math.max(0, asNumber(input.songStartMs) ?? 0),
     freePlay: Boolean(input.freePlay),
     isIntroSong: Boolean(input.isIntroSong),
     introPlayed: Boolean(input.introPlayed),
