@@ -153,23 +153,31 @@ function buildSchedule(params: RenderRunSheetPdfParams, game1Theme: string, game
   const g1Challenge = params.game1.challengeTypes?.[0] ?? "dance-along";
   const g2Challenge = params.game2.challengeTypes?.[0] ?? "sing-along";
 
-  return [
+  // A game with no warm-up song has no warm-up row (Peter, 13 November 2026).
+  const hasWarmup = (game: RunSheetGame): boolean => (game.introSongs?.length ?? 0) > 0;
+
+  const rows: (ScheduleRow | null)[] = [
     { title: "Welcome & intro song", note: introDetail },
     { title: "Tonight's running order", note: "Show the night's plan on screen" },
     { title: "Quiz - Round 1", note: "KaraFun mobile quiz - phones out" },
     { title: "Music Bingo title", note: "Logo reveal - hype it up" },
     { title: "House rules", note: "Explain how to play & how to win" },
-    { title: `${challengeTypeLabel(g1Challenge)} warm up`, note: "Full song - get the room moving" },
+    hasWarmup(params.game1)
+      ? { title: `${challengeTypeLabel(g1Challenge)} warm up`, note: "Full song - get the room moving" }
+      : null,
     { title: "Music Bingo - Game 1", note: `${game1Theme} - lines & full house` },
     { title: "Interval", note: "Break - bar refills (~10 min)" },
     { title: "Half-time standings", note: "Read out the positions - no scores" },
     { title: "Quiz - Round 2", note: "KaraFun mobile quiz round two" },
-    { title: `${challengeTypeLabel(g2Challenge)} warm up`, note: "Full song - big sing-along" },
+    hasWarmup(params.game2)
+      ? { title: `${challengeTypeLabel(g2Challenge)} warm up`, note: "Full song - big sing-along" }
+      : null,
     { title: "Music Bingo - Game 2", note: `${game2Theme} - different song list` },
     { title: "Winner entry", note: "Add the final team names and scores" },
     { title: "Winners reveal", note: "Reveal the league table from last place to first" },
     { title: "Thank you & reviews", note: "Review QR + plug the next event" },
   ];
+  return rows.filter((row): row is ScheduleRow => row !== null);
 }
 
 class Doc {

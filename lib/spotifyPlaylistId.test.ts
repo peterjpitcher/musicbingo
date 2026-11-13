@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isSpotifyOwnedPlaylist, normalizePlaylistId } from "@/lib/spotifyPlaylistId";
+import { DEFAULT_BREAK_PLAYLIST_URL, isSpotifyOwnedPlaylist, normalizePlaylistId, resolveBreakPlaylist } from "@/lib/spotifyPlaylistId";
 
 describe("normalizePlaylistId", () => {
   it("reads links, URIs and bare ids", () => {
@@ -26,5 +26,20 @@ describe("isSpotifyOwnedPlaylist", () => {
   it("leaves playlists people own alone", () => {
     expect(isSpotifyOwnedPlaylist("https://open.spotify.com/playlist/5xlpL99DNK4YeFOpiD5P59")).toBe(false);
     expect(isSpotifyOwnedPlaylist("")).toBe(false);
+  });
+});
+
+describe("resolveBreakPlaylist", () => {
+  it("uses the default break playlist when a game has none", () => {
+    expect(resolveBreakPlaylist("")).toBe(DEFAULT_BREAK_PLAYLIST_URL);
+    expect(resolveBreakPlaylist("   ")).toBe(DEFAULT_BREAK_PLAYLIST_URL);
+    expect(resolveBreakPlaylist(undefined)).toBe(DEFAULT_BREAK_PLAYLIST_URL);
+  });
+  it("keeps a playlist the host set", () => {
+    expect(resolveBreakPlaylist(" https://open.spotify.com/playlist/abc ")).toBe("https://open.spotify.com/playlist/abc");
+  });
+  it("points at the agreed playlist, which is not a Spotify-owned one", () => {
+    expect(normalizePlaylistId(DEFAULT_BREAK_PLAYLIST_URL)).toBe("2Iwzdan13nqGI3k3sTfwkM");
+    expect(isSpotifyOwnedPlaylist(DEFAULT_BREAK_PLAYLIST_URL)).toBe(false);
   });
 });

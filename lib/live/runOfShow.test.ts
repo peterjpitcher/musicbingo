@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { RUN_OF_SHOW, SHOW_STEPS, isScreenId, normalizeScreenId, type ScreenId } from "@/lib/live/runOfShow";
+import { RUN_OF_SHOW, SHOW_STEPS, adjacentShowStep, isScreenId, normalizeScreenId, showStepsFor, type ScreenId } from "@/lib/live/runOfShow";
 
 describe("RUN_OF_SHOW", () => {
   it("has the 15 navigable show steps in canonical order (excludes overlays + system)", () => {
@@ -61,5 +61,43 @@ describe("isScreenId / normalizeScreenId", () => {
     expect(normalizeScreenId("bogus")).toBe("welcome");
     expect(normalizeScreenId(undefined)).toBe("welcome");
     expect(normalizeScreenId(42)).toBe("welcome");
+  });
+});
+
+describe("showStepsFor (optional warm-ups, 13 November 2026)", () => {
+  it("keeps both warm-ups when both games have one", () => {
+    expect(showStepsFor(() => true).map((s) => s.id)).toEqual(SHOW_STEPS.map((s) => s.id));
+  });
+  it("drops the dance warm-up when Game 1 has no warm-up song", () => {
+    const ids = showStepsFor((n) => n === 2).map((s) => s.id);
+    expect(ids).not.toContain("dance");
+    expect(ids).toContain("sing");
+    expect(ids.indexOf("game1")).toBe(ids.indexOf("rules") + 1);
+  });
+  it("drops both warm-ups when neither game has one", () => {
+    const ids = showStepsFor(() => false).map((s) => s.id);
+    expect(ids).not.toContain("dance");
+    expect(ids).not.toContain("sing");
+    expect(ids.indexOf("game2")).toBe(ids.indexOf("quiz2") + 1);
+  });
+});
+
+describe("adjacentShowStep", () => {
+  const noWarmups = showStepsFor(() => false);
+  it("steps past a dropped warm-up", () => {
+    expect(adjacentShowStep(noWarmups, "rules", 1)).toBe("game1");
+    expect(adjacentShowStep(noWarmups, "game2", -1)).toBe("quiz2");
+  });
+  it("moves to the neighbour when the TV is still on a dropped warm-up", () => {
+    expect(adjacentShowStep(noWarmups, "dance", 1)).toBe("game1");
+    expect(adjacentShowStep(noWarmups, "dance", -1)).toBe("rules");
+    expect(adjacentShowStep(noWarmups, "sing", 1)).toBe("game2");
+  });
+  it("stays within the ends of the show", () => {
+    expect(adjacentShowStep(noWarmups, "welcome", -1)).toBe("welcome");
+    expect(adjacentShowStep(noWarmups, "thanks", 1)).toBe("thanks");
+  });
+  it("keeps the old behaviour for an overlay screen", () => {
+    expect(adjacentShowStep(SHOW_STEPS, "claim", 1)).toBe("order");
   });
 });

@@ -227,16 +227,20 @@ export async function POST(request: NextRequest) {
       if (game1ChallengeArr.length > 0) {
         game1ChallengeSongsList = resolveChallengeSongs(game1ChallengeArr, parsedGame1.songs, "Game 1 challenge");
       } else {
-        game1ChallengeSongsList = [resolveChallengeSong(
-          asString(form.get("game1_challenge_song")), parsedGame1.songs, "Game 1 dancing challenge"
-        )];
+        // No challenge song is allowed (Peter, 13 November 2026); only a
+        // legacy single selection, when sent, still has to be valid.
+        const legacy = asString(form.get("game1_challenge_song"));
+        game1ChallengeSongsList = legacy
+          ? [resolveChallengeSong(legacy, parsedGame1.songs, "Game 1 dancing challenge")]
+          : [];
       }
       if (game2ChallengeArr.length > 0) {
         game2ChallengeSongsList = resolveChallengeSongs(game2ChallengeArr, parsedGame2.songs, "Game 2 challenge");
       } else {
-        game2ChallengeSongsList = [resolveChallengeSong(
-          asString(form.get("game2_challenge_song")), parsedGame2.songs, "Game 2 sing-along challenge"
-        )];
+        const legacy = asString(form.get("game2_challenge_song"));
+        game2ChallengeSongsList = legacy
+          ? [resolveChallengeSong(legacy, parsedGame2.songs, "Game 2 sing-along challenge")]
+          : [];
       }
 
       const game1IntroRaw = asString(form.get("game1_intro_song"));

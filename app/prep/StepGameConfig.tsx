@@ -127,7 +127,6 @@ export function StepGameConfig({
     parsed.songs.length >= 25 &&
     !tooMany &&
     parsed.combinedPool.length >= 25 &&
-    selectedChallengeCount >= 1 &&
     introValid;
 
   const resolveIntroUrl = useCallback(
@@ -385,7 +384,7 @@ export function StepGameConfig({
       })}
 
       <p className="fg help" style={{ marginTop: 6, marginBottom: 0 }}>
-        At least 1 challenge song required. Normal songs play for{" "}
+        Challenge songs are optional: leave every slot on None for a game without one. Normal songs play for{" "}
         {Number.isFinite(normalSongSeconds) ? Math.round(normalSongSeconds) : Math.floor(DEFAULT_REVEAL_CONFIG.nextMs / 1000)}s;
         challenge songs play for {Math.floor(CHALLENGE_REVEAL_CONFIG.nextMs / 1000)}s.
       </p>

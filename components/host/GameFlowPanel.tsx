@@ -1,5 +1,6 @@
 'use client';
 
+import { Fragment } from "react";
 import { buttonClass, HoldButton } from "@anchor-nights/kit/ui";
 
 /** The hold labels, as the host reads them (spec M-9, S4.2). */
@@ -13,6 +14,11 @@ export interface GameFlowPanelProps {
   /** Which game is active (1 or 2), or null between games */
   activeGame: number | null;
   onIntro: (n: 1 | 2) => void;
+  /**
+   * Which games have a warm-up song. A game without one gets no Dance Along or
+   * Sing Along button; its Start button takes the whole row. Omitted, both show.
+   */
+  warmups?: { 1: boolean; 2: boolean };
   onStart: (n: 1 | 2) => void;
   onBreak: () => void;
   onResume: () => void;
@@ -56,6 +62,7 @@ export function GameFlowPanel({
   mode,
   activeGame,
   onIntro,
+  warmups = { 1: true, 2: true },
   onStart,
   onBreak,
   onResume,
@@ -102,20 +109,25 @@ export function GameFlowPanel({
         </div>
       ) : (
         <>
-          {/* 2×2 grid: intro / start for each game */}
+          {/* 2×2 grid: warm-up / start for each game. A game with no warm-up
+              song has no warm-up button, and its Start button fills the row. */}
           <div className="btn-grid" style={{ marginBottom: 10 }}>
-            <button className={buttonClass({ variant: "outline", size: "sm" })} onClick={() => onIntro(1)}>
-              ▶ Dance Along
-            </button>
-            <button className={buttonClass({ variant: "primary", size: "sm" })} onClick={() => onStart(1)}>
-              Start Game 1
-            </button>
-            <button className={buttonClass({ variant: "outline", size: "sm" })} onClick={() => onIntro(2)}>
-              ▶ Sing Along
-            </button>
-            <button className={buttonClass({ variant: "primary", size: "sm" })} onClick={() => onStart(2)}>
-              Start Game 2
-            </button>
+            {([1, 2] as const).map((n) => (
+              <Fragment key={n}>
+                {warmups[n] && (
+                  <button className={buttonClass({ variant: "outline", size: "sm" })} onClick={() => onIntro(n)}>
+                    {n === 1 ? "▶ Dance Along" : "▶ Sing Along"}
+                  </button>
+                )}
+                <button
+                  className={buttonClass({ variant: "primary", size: "sm" })}
+                  style={warmups[n] ? undefined : { gridColumn: "1 / -1" }}
+                  onClick={() => onStart(n)}
+                >
+                  Start Game {n}
+                </button>
+              </Fragment>
+            ))}
           </div>
 
           {/* Bingo Claim row — only while a game is live. Switches the TV to the

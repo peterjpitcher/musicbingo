@@ -65,4 +65,27 @@ describe("renderClipboardDocx", () => {
     expect(xml).toContain("CHALLENGESONGONE");
     expect(xml).toContain("CHALLENGESONGTWO");
   });
+
+  it("leaves out the warm-up and challenge lines a night does not have", async () => {
+    const bytes = await renderClipboardDocx({
+      ...baseParams,
+      game1: { ...baseParams.game1, challengeSongs: [], challengeTypes: [] },
+      game2: { ...baseParams.game2, challengeSongs: [], challengeTypes: [] },
+    });
+    const xml = await (await JSZip.loadAsync(bytes)).file("word/document.xml")!.async("string");
+    expect(xml).not.toContain("WARM-UP SONG");
+    expect(xml).not.toContain("BONUS FUN");
+    expect(xml).not.toContain("Song TBD");
+    expect(xml).not.toContain("Challenge included");
+  });
+
+  it("keeps the warm-up section when Game 1 has a warm-up song", async () => {
+    const bytes = await renderClipboardDocx({
+      ...baseParams,
+      game1: { ...baseParams.game1, introSongs: [{ type: "dance-along", artist: "DJ Casper", title: "Cha Cha Slide" }] },
+    });
+    const xml = await (await JSZip.loadAsync(bytes)).file("word/document.xml")!.async("string");
+    expect(xml).toContain("WARM-UP SONG");
+    expect(xml).toContain("BONUS FUN");
+  });
 });

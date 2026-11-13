@@ -217,54 +217,60 @@ export async function renderClipboardDocx(params: RenderClipboardDocxParams): Pr
   children.push(sectionHeading("SCHEDULE"));
   children.push(scheduleItem("Welcome — Yes Sir (Nikki lip sync)"));
   children.push(scheduleItem("Announcements and opening rules"));
-  children.push(scheduleItem("Warm-up song in full — Cha Cha Slide by DJ Casper. Nikki uses this to get everyone moving before the game starts."));
+  // A game without a warm-up or challenge song leaves those lines out (Peter, 13 November 2026).
+  const game1Warmup = (params.game1.introSongs?.length ?? 0) > 0;
+  const game1Challenge = params.game1.challengeSongs.length > 0;
+  const game2Challenge = params.game2.challengeSongs.length > 0;
+  if (game1Warmup) {
+    children.push(scheduleItem("Warm-up song in full — Cha Cha Slide by DJ Casper. Nikki uses this to get everyone moving before the game starts."));
+  }
   children.push(scheduleItem("KaraFun mobile quiz — Round 1"));
-  children.push(scheduleItem(`Music Bingo Game 1 (${game1Theme}) — 50 songs max, with Dancing Challenge included`));
+  children.push(scheduleItem(`Music Bingo Game 1 (${game1Theme}) — 50 songs max${game1Challenge ? ", with Dancing Challenge included" : ""}`));
   children.push(scheduleItem("Break — 10 mins"));
   children.push(scheduleItem("KaraFun mobile quiz — Round 2"));
-  children.push(scheduleItem(`Music Bingo Game 2 (${game2Theme}) — 50 songs max, different song list, with Sing-Along Challenge included`));
+  children.push(scheduleItem(`Music Bingo Game 2 (${game2Theme}) — 50 songs max, different song list${game2Challenge ? ", with Sing-Along Challenge included" : ""}`));
   children.push(scheduleItem("Announcements and upcoming events"));
   children.push(scheduleItem("Sing Along/Out — end-of-night singalong"));
 
-  // ─── WARM-UP SONG ───
-  children.push(sectionHeading("WARM-UP SONG"));
-  children.push(bullet("Song: Cha Cha Slide — DJ Casper."));
-  children.push(bullet("Play in full before the first game starts."));
-  children.push(bullet("Purpose: show the room that participation is expected and welcome."));
-  children.push(scriptLine("Nikki line: \"Before we start marking cards, we are warming this room up properly. No scoring, no pressure - just get involved.\""));
-
-  // ─── BONUS FUN ───
-  children.push(sectionHeading("BONUS FUN"));
-
-  // Game 1 — Dancing Challenge
-  if (params.game1.challengeSongs.length > 0) {
-    for (let i = 0; i < params.game1.challengeSongs.length; i++) {
-      const type = params.game1.challengeTypes?.[i] ?? "dance-along";
-      const label = songLabel(params.game1.challengeSongs[i]!);
-      children.push(bullet(`${challengeTypeLabel(type)} Challenge — 20 pts — placed in Game 1.`));
-      children.push(subBullet(`Song: ${label}`));
-    }
-  } else {
-    children.push(bullet("Dancing Challenge — 20 pts — placed in Game 1. (Song TBD)"));
+  if (game1Warmup) {
+    // ─── WARM-UP SONG ───
+    children.push(sectionHeading("WARM-UP SONG"));
+    children.push(bullet("Song: Cha Cha Slide — DJ Casper."));
+    children.push(bullet("Play in full before the first game starts."));
+    children.push(bullet("Purpose: show the room that participation is expected and welcome."));
+    children.push(scriptLine("Nikki line: \"Before we start marking cards, we are warming this room up properly. No scoring, no pressure - just get involved.\""));
   }
-  children.push(subBullet("Nikki announces the song in advance. Anyone who wants to can get up and dance along. Nikki picks a winner and awards 20 bonus points."));
-  children.push(scriptLine("Nikki line: \"Cards down, eyes up. This is our dancing challenge. You can get up, stay seated, wave your arms, do the moves, whatever you can do - I am looking for commitment.\""));
 
-  children.push(spacer());
+  if (game1Challenge || game2Challenge) {
+    // ─── BONUS FUN ───
+    children.push(sectionHeading("BONUS FUN"));
 
-  // Game 2 — Sing-Along Challenge
-  if (params.game2.challengeSongs.length > 0) {
-    for (let i = 0; i < params.game2.challengeSongs.length; i++) {
-      const type = params.game2.challengeTypes?.[i] ?? "sing-along";
-      const label = songLabel(params.game2.challengeSongs[i]!);
-      children.push(bullet(`${challengeTypeLabel(type)} Challenge — 20 pts — placed in Game 2.`));
-      children.push(subBullet(`Song: ${label}`));
+    // Game 1 — Dancing Challenge
+    if (params.game1.challengeSongs.length > 0) {
+      for (let i = 0; i < params.game1.challengeSongs.length; i++) {
+        const type = params.game1.challengeTypes?.[i] ?? "dance-along";
+        const label = songLabel(params.game1.challengeSongs[i]!);
+        children.push(bullet(`${challengeTypeLabel(type)} Challenge — 20 pts — placed in Game 1.`));
+        children.push(subBullet(`Song: ${label}`));
+      }
+      children.push(subBullet("Nikki announces the song in advance. Anyone who wants to can get up and dance along. Nikki picks a winner and awards 20 bonus points."));
+      children.push(scriptLine("Nikki line: \"Cards down, eyes up. This is our dancing challenge. You can get up, stay seated, wave your arms, do the moves, whatever you can do - I am looking for commitment.\""));
     }
-  } else {
-    children.push(bullet("Sing-Along Challenge — 20 pts — placed in Game 2. (Song TBD)"));
+
+    children.push(spacer());
+
+    // Game 2 — Sing-Along Challenge
+    if (params.game2.challengeSongs.length > 0) {
+      for (let i = 0; i < params.game2.challengeSongs.length; i++) {
+        const type = params.game2.challengeTypes?.[i] ?? "sing-along";
+        const label = songLabel(params.game2.challengeSongs[i]!);
+        children.push(bullet(`${challengeTypeLabel(type)} Challenge — 20 pts — placed in Game 2.`));
+        children.push(subBullet(`Song: ${label}`));
+      }
+      children.push(subBullet("Nikki announces the song in advance. Everyone can play. Last person singing the right words wins. If you sing the wrong words, you sit down. Winner gets 20 bonus points."));
+      children.push(scriptLine("Nikki line: \"Cards down, eyes up. This is our sing-along challenge. Keep singing the right words for as long as you can. Wrong words or silence means you are out.\""));
+    }
   }
-  children.push(subBullet("Nikki announces the song in advance. Everyone can play. Last person singing the right words wins. If you sing the wrong words, you sit down. Winner gets 20 bonus points."));
-  children.push(scriptLine("Nikki line: \"Cards down, eyes up. This is our sing-along challenge. Keep singing the right words for as long as you can. Wrong words or silence means you are out.\""));
 
   // ─── OPTIONAL BONUS BANGERS ───
   children.push(sectionHeading("OPTIONAL BONUS BANGER MOMENTS"));

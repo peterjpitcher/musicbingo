@@ -39,8 +39,8 @@ import {
   type PrepDraftV1,
 } from "@/lib/prepDraft";
 import { parseSpotifyTrackUrl } from "@/lib/spotifyTrackUrl";
-import type { Song } from "@/lib/types";
 import { sanitizeFilenamePart } from "@/lib/utils";
+import { DEFAULT_BREAK_PLAYLIST_URL, resolveBreakPlaylist } from "@/lib/spotifyPlaylistId";
 import { StepEventSetup } from "./StepEventSetup";
 import { StepGameConfig } from "./StepGameConfig";
 import { StepGenerateConnect } from "./StepGenerateConnect";
@@ -225,7 +225,7 @@ function PrepPageInner() {
   );
   const [liveSessionName, setLiveSessionName] = useState<string>("");
   const [liveSessionNameDirty, setLiveSessionNameDirty] = useState<boolean>(false);
-  const [breakPlaylistId, setBreakPlaylistId] = useState<string>("");
+  const [breakPlaylistId, setBreakPlaylistId] = useState<string>(DEFAULT_BREAK_PLAYLIST_URL);
   const [selectedBrandId, setSelectedBrandId] = useState<string | null>(null);
 
   // Step 1 fields
@@ -469,7 +469,7 @@ function PrepPageInner() {
     resetRevealTimingDefaults();
     setLiveSessionName("");
     setLiveSessionNameDirty(false);
-    setBreakPlaylistId("");
+    setBreakPlaylistId(DEFAULT_BREAK_PLAYLIST_URL);
     setSelectedBrandId(null);
     setGame1Theme(DEFAULT_GAME_THEME);
     setGame1SongsText("");
@@ -505,7 +505,7 @@ function PrepPageInner() {
     if (draft.artistRevealSecondsInput) setArtistRevealSecondsInput(draft.artistRevealSecondsInput);
     setLiveSessionName(draft.liveSessionName);
     setLiveSessionNameDirty(draft.liveSessionNameDirty);
-    setBreakPlaylistId(draft.breakPlaylistId);
+    setBreakPlaylistId(resolveBreakPlaylist(draft.breakPlaylistId));
     setSelectedBrandId(draft.selectedBrandId);
     setGame1Theme(draft.game1Theme || DEFAULT_GAME_THEME);
     setGame1SongsText(draft.game1SongsText);
@@ -586,7 +586,7 @@ function PrepPageInner() {
           setLiveSessionName(loaded.name);
           setLiveSessionNameDirty(true);
         }
-        if (loaded.breakPlaylistId != null) setBreakPlaylistId(loaded.breakPlaylistId);
+        setBreakPlaylistId(resolveBreakPlaylist(loaded.breakPlaylistId));
         if (loaded.brandId != null) setSelectedBrandId(loaded.brandId);
 
         // Hydrate step-1 fields
@@ -724,7 +724,7 @@ function PrepPageInner() {
     pendingAutoSave.current = false;
   }, [clearPlaylists, playlistInputSignature, playlistSignature]);
 
-  // Auto-select first challenge song & prune stale selections for Game 1
+  // Prune challenge selections that are no longer in Game 1's song list
   useEffect(() => {
     if (!parsedGame1.songs.length) {
       if (game1ChallengeSongs.some((c) => c.value)) {
@@ -741,17 +741,11 @@ function PrepPageInner() {
     );
     const prunedChanged = pruned.some((c, i) => c.value !== game1ChallengeSongs[i]?.value);
 
-    if (!pruned.some((c) => c.value)) {
-      const autoFirst = makeSongSelectionValue(parsedGame1.songs[0] as Song);
-      const reset: ChallengeEntry[] = makeEmptyChallengeEntries();
-      reset[0] = { value: autoFirst, type: "sing-along" };
-      setGame1ChallengeSongs(reset);
-    } else if (prunedChanged) {
-      setGame1ChallengeSongs(pruned);
-    }
+    // No auto-pick: a game may have no challenge song (Peter, 13 November 2026).
+    if (prunedChanged) setGame1ChallengeSongs(pruned);
   }, [parsedGame1.songs, game1ChallengeSongs]);
 
-  // Auto-select first challenge song & prune stale selections for Game 2
+  // Prune challenge selections that are no longer in Game 2's song list
   useEffect(() => {
     if (!parsedGame2.songs.length) {
       if (game2ChallengeSongs.some((c) => c.value)) {
@@ -768,14 +762,7 @@ function PrepPageInner() {
     );
     const prunedChanged = pruned.some((c, i) => c.value !== game2ChallengeSongs[i]?.value);
 
-    if (!pruned.some((c) => c.value)) {
-      const autoFirst = makeSongSelectionValue(parsedGame2.songs[0] as Song);
-      const reset: ChallengeEntry[] = makeEmptyChallengeEntries();
-      reset[0] = { value: autoFirst, type: "sing-along" };
-      setGame2ChallengeSongs(reset);
-    } else if (prunedChanged) {
-      setGame2ChallengeSongs(pruned);
-    }
+    if (prunedChanged) setGame2ChallengeSongs(pruned);
   }, [parsedGame2.songs, game2ChallengeSongs]);
 
   useEffect(() => {
@@ -908,7 +895,7 @@ function PrepPageInner() {
       eventDateInput: eventDate,
       eventDateDisplay,
       revealConfig,
-      breakPlaylistId: breakPlaylistId.trim(),
+      breakPlaylistId: resolveBreakPlaylist(breakPlaylistId),
       games: [
         {
           gameNumber: 1,
