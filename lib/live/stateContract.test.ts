@@ -152,3 +152,26 @@ describe("validateLiveSession: optional challenge songs (13 November 2026)", () 
     expect(out?.prepData).toMatchObject({ game1ChallengeSong: "", game2ChallengeSong: "", cardCount: 40 });
   });
 });
+
+describe("song start times survive the validators (13 November 2026)", () => {
+  it("keeps a game's start times and drops bad ones", () => {
+    const out = validateLiveSession(validSession({
+      games: [
+        { ...validGame(1), songStarts: [
+          { artist: "Mud", title: "Tiger Feet", startMs: 40_000 },
+          { artist: "", title: "No artist", startMs: 10_000 },
+          { artist: "Blur", title: "Song 2", startMs: 0 },
+        ] },
+        validGame(2),
+      ],
+    }));
+    expect(out!.games[0].songStarts).toEqual([{ artist: "Mud", title: "Tiger Feet", startMs: 40_000 }]);
+    expect(out!.games[1].songStarts).toBeUndefined();
+  });
+
+  it("keeps the runtime's song start point", () => {
+    const runtime = validateRuntimeState({ ...makeEmptyRuntimeState("s1"), songStartMs: 40_000 });
+    expect(runtime?.songStartMs).toBe(40_000);
+    expect(validateRuntimeState({ ...makeEmptyRuntimeState("s1"), songStartMs: undefined })?.songStartMs).toBe(0);
+  });
+});

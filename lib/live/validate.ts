@@ -1,3 +1,4 @@
+import { MAX_SONG_START_MS } from "@/lib/parser";
 import {
   DEFAULT_CHALLENGE_BONUS_POINTS,
   DEFAULT_REVEAL_CONFIG,
@@ -92,6 +93,16 @@ function validateGameConfig(input: unknown): LiveGameConfig | null {
           title: asString(entry.title) ?? "",
         }))
         .filter(entry => entry.trackId && entry.artist && entry.title),
+    } : {}),
+    ...(Array.isArray(input.songStarts) ? {
+      songStarts: (input.songStarts as unknown[])
+        .filter((entry): entry is Record<string, unknown> => isObject(entry))
+        .map(entry => ({
+          artist: asString(entry.artist) ?? "",
+          title: asString(entry.title) ?? "",
+          startMs: Math.round(Math.min(MAX_SONG_START_MS, Math.max(0, asNumber(entry.startMs) ?? 0))),
+        }))
+        .filter(entry => entry.artist && entry.title && entry.startMs > 0),
     } : {}),
   };
 }

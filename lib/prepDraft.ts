@@ -1,4 +1,5 @@
 import { isObject } from "@/lib/live/validate";
+import { songListWithoutStartTimes } from "@/lib/parser";
 import type { IntroSong } from "@/lib/live/types";
 
 /**
@@ -78,8 +79,9 @@ export function playlistInputSignature(inputs: PlaylistInputs): string {
     eventDate: inputs.eventDate.trim(),
     game1Theme: inputs.game1Theme.trim(),
     game2Theme: inputs.game2Theme.trim(),
-    game1SongsText: inputs.game1SongsText,
-    game2SongsText: inputs.game2SongsText,
+    // Start times ("@0:40") are left out, so changing one keeps the playlists.
+    game1SongsText: songListWithoutStartTimes(inputs.game1SongsText),
+    game2SongsText: songListWithoutStartTimes(inputs.game2SongsText),
     game1IntroUrl: inputs.game1IntroUrl.trim(),
     game2IntroUrl: inputs.game2IntroUrl.trim(),
     game1IntroSongs: canonicalIntroSongs(inputs.game1IntroSongs),

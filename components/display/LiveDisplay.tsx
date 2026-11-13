@@ -1,5 +1,6 @@
 "use client";
 
+import { songProgressMs } from "@/lib/live/songStart";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Stage, useWakeLock } from "@anchor-nights/kit/tv";
@@ -189,9 +190,13 @@ export function LiveDisplay({ sessionId, mode = "link" }: LiveDisplayProps): Rea
     );
     return () => window.clearInterval(id);
   }, [songIsPlaying, songTrackId]);
-  const interpolatedProgress = songClock
-    ? progressAt(songClock.anchor, songIsPlaying, songClock.now)
-    : runtime.currentTrack?.progressMs ?? 0;
+  // Counted from the song's start time when it has one, as on the console.
+  const interpolatedProgress = songProgressMs(
+    songClock
+      ? progressAt(songClock.anchor, songIsPlaying, songClock.now)
+      : runtime.currentTrack?.progressMs ?? 0,
+    runtime.songStartMs
+  );
   const activeGame = runtime.activeGameNumber
     ? session?.games.find((game) => game.gameNumber === runtime.activeGameNumber) ?? null
     : null;

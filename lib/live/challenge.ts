@@ -63,6 +63,17 @@ function swappedFieldsMatch(track: { title: string; artist: string }, challenge:
   return fuzzyContains(track.title, challenge.artist) && fuzzyContains(track.artist, challenge.title);
 }
 
+/**
+ * True when a Spotify track is the given song: the same fuzzy match the
+ * challenge songs use, including the legacy swapped title and artist.
+ */
+export function trackMatchesSong(
+  track: { title: string; artist: string },
+  song: { title: string; artist: string }
+): boolean {
+  return fieldsMatch(track, song) || swappedFieldsMatch(track, song);
+}
+
 /** Returns the matching challenge song type, or null if no challenge song matches. */
 export function matchChallengeSong(
   track: { title: string; artist: string } | null,

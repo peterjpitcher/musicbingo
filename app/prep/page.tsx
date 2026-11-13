@@ -42,6 +42,8 @@ import { parseSpotifyTrackUrl } from "@/lib/spotifyTrackUrl";
 import { sanitizeFilenamePart } from "@/lib/utils";
 import { DEFAULT_BREAK_PLAYLIST_URL, resolveBreakPlaylist } from "@/lib/spotifyPlaylistId";
 import { canSubmitPrep } from "@/lib/prepSubmit";
+import { songStartsFromSongs } from "@/lib/live/songStart";
+import type { Song } from "@/lib/types";
 import { StepEventSetup } from "./StepEventSetup";
 import { StepGameConfig } from "./StepGameConfig";
 import { StepGenerateConnect } from "./StepGenerateConnect";
@@ -90,6 +92,12 @@ function downloadBlob(blob: Blob, filename: string) {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+/** The game's start times ("@0:40" in the song list), when it has any. */
+function withSongStarts(songs: Song[]): { songStarts?: ReturnType<typeof songStartsFromSongs> } {
+  const songStarts = songStartsFromSongs(songs);
+  return songStarts.length ? { songStarts } : {};
 }
 
 function parseChallengeSongSelection(selection: string): { artist: string; title: string } {
@@ -908,6 +916,7 @@ function PrepPageInner() {
           introSongs: game1IntroSongs.length > 0 ? game1IntroSongs : undefined,
           introSongArtist: game1IntroSongs[0]?.artist,
           introSongTitle: game1IntroSongs[0]?.title,
+          ...withSongStarts(parsedGame1.songs),
         },
         {
           gameNumber: 2,
@@ -926,6 +935,7 @@ function PrepPageInner() {
           introSongs: game2IntroSongs.length > 0 ? game2IntroSongs : undefined,
           introSongArtist: game2IntroSongs[0]?.artist,
           introSongTitle: game2IntroSongs[0]?.title,
+          ...withSongStarts(parsedGame2.songs),
         },
       ],
       prepData: {

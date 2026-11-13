@@ -36,6 +36,7 @@ import {
   updateAdvanceTrackMarker,
 } from "@/lib/live/reveal";
 import { makeIntroTracking, trackIntroPlayback, type IntroTracking } from "@/lib/live/introState";
+import { findSongStartMs, songProgressMs, songStartSeekMs, usableSongStartMs } from "@/lib/live/songStart";
 import { getLiveSession, upsertLiveSession } from "@/lib/live/sessionApi";
 import {
   formatSecondsInput,
@@ -249,6 +250,11 @@ export default function HostSessionControllerPage() {
   const challengeTrackIdsRef = useRef<Set<string>>(new Set());
   // Resolved Spotify track ID for the intro song (first track in playlist when introSongArtist is set).
   const introTrackIdRef = useRef<string | null>(null);
+  // Start times ("@0:40" in the song list) by playlist track id, resolved when
+  // the playlist loads; the text match covers relinked tracks.
+  const songStartByTrackIdRef = useRef<Map<string, number>>(new Map());
+  // The track the console last jumped to its start time, so it seeks once.
+  const songStartSeekedTrackRef = useRef<string | null>(null);
   // Anchor-based intro tracking set by playIntroSong; survives stale status
   // reports and market-relinked track ids (see lib/live/introState.ts).
   const introAnchorRef = useRef<IntroTracking | null>(null);
@@ -351,6 +357,7 @@ export default function HostSessionControllerPage() {
     setPlaylistLoadError(false);
     setPlaylistTracks([]);
     challengeTrackIdsRef.current = new Set();
+    songStartByTrackIdRef.current = new Map();
     introTrackIdRef.current = null;
     void fetch(`/api/spotify/playlist/${encodeURIComponent(playlistId)}/tracks`, { cache: "no-store" })
       .then(async (res) => {
@@ -379,6 +386,12 @@ export default function HostSessionControllerPage() {
             }
           }
           challengeTrackIdsRef.current = matched;
+          const starts = new Map<string, number>();
+          for (const playlistTrack of data.tracks) {
+            const startMs = playlistTrack.trackId ? findSongStartMs(playlistTrack, game.songStarts) : 0;
+            if (startMs > 0) starts.set(playlistTrack.trackId, startMs);
+          }
+          songStartByTrackIdRef.current = starts;
         }
         if (game) {
           const intros = getIntroSongs(game);
@@ -726,11 +739,21 @@ export default function HostSessionControllerPage() {
         const baseCfg = isChallengeSong ? CHALLENGE_REVEAL_CONFIG : (prev.revealConfig ?? session.revealConfig);
         const extensionMs = trackChanged ? 0 : prev.extensionMs;
         const cfg = getRevealConfigWithExtension(baseCfg, extensionMs);
+        // A song with a start time is counted from that point (the console
+        // seeks there below). Not for the warm-up, free play or manual control.
+        const configuredStartMs = track?.trackId
+          ? songStartByTrackIdRef.current.get(track.trackId) ?? findSongStartMs(track, game?.songStarts)
+          : 0;
+        const songStartMs = isIntroSong || prev.freePlay || !payload.canControlPlayback
+          ? 0
+          : trackChanged
+            ? usableSongStartMs(configuredStartMs, track?.durationMs)
+            : (prev.songStartMs ?? 0);
 
         // When intro or free play is active, show all metadata immediately (no timed reveal).
         const computedRevealState = (isIntroSong || prev.freePlay)
           ? { showAlbum: true, showTitle: true, showArtist: true, shouldAdvance: false }
-          : computeRevealState(track?.progressMs ?? 0, cfg);
+          : computeRevealState(songProgressMs(track?.progressMs ?? 0, songStartMs), cfg);
         const revealState = trackChanged
           ? computedRevealState
           : {
@@ -775,6 +798,7 @@ export default function HostSessionControllerPage() {
           isIntroSong,
           introPlayed,
           extensionMs,
+          songStartMs,
           advanceTriggeredForTrackId: marker,
           warningMessage: warnings[0] ?? (payload.error?.message ?? null),
         };
@@ -906,7 +930,13 @@ export default function HostSessionControllerPage() {
       );
       const extensionMs = runtimeRef.current.extensionMs;
       const cfg = getRevealConfigWithExtension(baseCfg, extensionMs);
-      const revealState = computeRevealState(track?.progressMs ?? 0, cfg);
+      // Until the snapshot above has landed for this track, its start time is
+      // not known here: wait for the next poll rather than advance early.
+      if ((runtimeRef.current.currentTrack?.trackId ?? null) !== (track?.trackId ?? null)) return;
+      const revealState = computeRevealState(
+        songProgressMs(track?.progressMs ?? 0, runtimeRef.current.songStartMs),
+        cfg
+      );
 
       if (
         isController &&
@@ -1091,6 +1121,34 @@ export default function HostSessionControllerPage() {
     },
     [applyStatusSnapshot, commitRuntime]
   );
+
+  // A song with a start time ("@0:40" in the song list): once Spotify reports
+  // it, jump there, once per track. If the jump is refused, count the song
+  // from the top again so the reveals still run on time.
+  useEffect(() => {
+    const track = runtime.currentTrack;
+    const songStartMs = runtime.songStartMs ?? 0;
+    if (!isController || !track?.trackId || runtime.mode !== "running") return;
+    // Another song since the last jump (the break playlist, say): this one
+    // may jump again when it comes back.
+    if (songStartSeekedTrackRef.current !== null && songStartSeekedTrackRef.current !== track.trackId) {
+      songStartSeekedTrackRef.current = null;
+    }
+    if (songStartSeekedTrackRef.current === track.trackId) return;
+    const seekTo = songStartSeekMs({ songStartMs, progressMs: track.progressMs });
+    if (seekTo === null) {
+      if (songStartMs > 0) songStartSeekedTrackRef.current = track.trackId;
+      return;
+    }
+    songStartSeekedTrackRef.current = track.trackId;
+    const trackId = track.trackId;
+    void sendCommand("seek", { positionMs: seekTo }).then((ok) => {
+      if (ok) return;
+      commitRuntime((prev) =>
+        prev.currentTrack?.trackId === trackId ? { ...prev, songStartMs: 0 } : prev
+      );
+    });
+  }, [commitRuntime, isController, runtime.currentTrack, runtime.mode, runtime.songStartMs, sendCommand]);
 
   // Pre-show music: the host's Pre-Show Music button on the Welcome screen
   // plays the break playlist on shuffle as background music while guests
@@ -1421,6 +1479,8 @@ export default function HostSessionControllerPage() {
       revealState: { showAlbum: false, showTitle: false, showArtist: false, shouldAdvance: false },
       advanceTriggeredForTrackId: null,
     }));
+    // A restarted song with a start time jumps to it again.
+    songStartSeekedTrackRef.current = null;
     if (current.isIntroSong && trackId) {
       void sendCommand("play_track", { trackId });
       return;
@@ -2035,7 +2095,7 @@ export default function HostSessionControllerPage() {
               <NowPlayingPanel
                 track={panelTrack}
                 playing={panelPlaying}
-                progressMs={runtime.currentTrack?.progressMs ?? 0}
+                progressMs={songProgressMs(runtime.currentTrack?.progressMs ?? 0, runtime.songStartMs)}
                 timing={timingForPanel}
                 isIntro={runtime.isIntroSong}
                 isChallenge={isChallenge}

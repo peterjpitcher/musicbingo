@@ -1,5 +1,6 @@
 "use client";
 
+import { songProgressMs } from "@/lib/live/songStart";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { buildFitSteps, layoutFits, measureLayout, useFitStep } from "@anchor-nights/kit/tv";
@@ -36,7 +37,8 @@ const infoFits = (element: HTMLElement): boolean => layoutFits(measureLayout(ele
  */
 function useLiveProgressMs(runtime: LiveRuntimeState | null | undefined): number | null {
   const track = runtime?.currentTrack ?? null;
-  const serverProgress = track?.progressMs ?? 0;
+  // Counted from the song's start time when it has one, as on the console.
+  const serverProgress = songProgressMs(track?.progressMs ?? 0, runtime?.songStartMs);
   const isPlaying = track?.isPlaying ?? false;
   const trackId = track?.trackId ?? null;
   const updatedAt = runtime?.updatedAtMs ?? 0;

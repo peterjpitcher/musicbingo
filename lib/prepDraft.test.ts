@@ -285,3 +285,10 @@ test("storage helpers are safe when window is unavailable", () => {
   expect(() => writePrepDraft(makeDraft())).not.toThrow();
   expect(() => clearPrepDraft()).not.toThrow();
 });
+
+test("playlistInputSignature ignores song start times, so changing one keeps the playlists", () => {
+  const base = makePlaylistInputs();
+  const withStart = { ...base, game1SongsText: base.game1SongsText.replace(/\n|$/, " @0:40$&") };
+  expect(withStart.game1SongsText).not.toBe(base.game1SongsText);
+  expect(playlistInputSignature(withStart)).toBe(playlistInputSignature(base));
+});
