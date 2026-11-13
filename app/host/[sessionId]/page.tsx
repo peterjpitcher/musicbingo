@@ -1139,12 +1139,12 @@ export default function HostSessionControllerPage() {
   useEffect(() => {
     const track = runtime.currentTrack;
     const songStartMs = runtime.songStartMs ?? 0;
-    if (!isController || !track?.trackId || runtime.mode !== "running") return;
-    // Another song since the last jump (the break playlist, say): this one
-    // may jump again when it comes back.
-    if (songStartSeekedTrackRef.current !== null && songStartSeekedTrackRef.current !== track.trackId) {
+    // Another song since the last jump (the break playlist, say), in any
+    // mode: this one may jump again when it comes back.
+    if (track?.trackId && songStartSeekedTrackRef.current !== null && songStartSeekedTrackRef.current !== track.trackId) {
       songStartSeekedTrackRef.current = null;
     }
+    if (!isController || !track?.trackId || runtime.mode !== "running") return;
     if (songStartSeekedTrackRef.current === track.trackId) {
       // Spotify took the jump but stayed near the top: count from the top.
       if (songStartSeekIgnored({
@@ -1301,6 +1301,9 @@ export default function HostSessionControllerPage() {
   }
 
   function openBreakScreen() {
+    // The song a break interrupts restarts from the top on resume, so it must
+    // jump to its start time again, even if no other track played meanwhile.
+    songStartSeekedTrackRef.current = null;
     // Only remember a resume point when the break interrupts an actual game
     // song (running, or paused mid-game). Breaks taken between games (or during
     // an intro, which is not part of the game playlist) have nothing to resume.
