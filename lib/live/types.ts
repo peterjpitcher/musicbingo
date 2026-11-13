@@ -370,6 +370,14 @@ export function getChallengeSongs(game: LiveGameConfig): ChallengeSong[] {
 }
 
 /** Returns the effective intro songs for a game. Uses the array when present, falls back to legacy single pair. */
+/**
+ * True when the game has a warm-up song the console can play (a Spotify track).
+ * Without one the warm-up screen and its button are left out of the night.
+ */
+export function hasPlayableWarmup(game: LiveGameConfig | null | undefined): boolean {
+  return Boolean(game && getIntroSongs(game)[0]?.trackId);
+}
+
 export function getIntroSongs(game: LiveGameConfig): IntroSong[] {
   if (game.introSongs && game.introSongs.length > 0) {
     return game.introSongs;

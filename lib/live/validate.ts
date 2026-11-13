@@ -150,13 +150,14 @@ function validatePrepData(input: unknown): PrepData | null {
   const game2SongsText = asString(input.game2SongsText);
   const game1Theme = asString(input.game1Theme);
   const game2Theme = asString(input.game2Theme);
-  const game1ChallengeSong = asString(input.game1ChallengeSong);
-  const game2ChallengeSong = asString(input.game2ChallengeSong);
+  // Challenge songs are optional (Peter, 13 November 2026): an empty one is kept as "".
+  const game1ChallengeSong = asString(input.game1ChallengeSong) ?? "";
+  const game2ChallengeSong = asString(input.game2ChallengeSong) ?? "";
   const cardCount = asNumber(input.cardCount);
   const game1ChallengeBonusPoints = asNumber(input.game1ChallengeBonusPoints);
   const game2ChallengeBonusPoints = asNumber(input.game2ChallengeBonusPoints);
 
-  if (!game1SongsText || !game2SongsText || !game1Theme || !game2Theme || !game1ChallengeSong || !game2ChallengeSong || cardCount === null || cardCount < 1) {
+  if (!game1SongsText || !game2SongsText || !game1Theme || !game2Theme || cardCount === null || cardCount < 1) {
     return null;
   }
 

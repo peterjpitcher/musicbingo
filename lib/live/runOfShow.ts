@@ -75,3 +75,39 @@ export function isScreenId(value: unknown): value is ScreenId {
 export function normalizeScreenId(value: unknown, fallback: ScreenId = "welcome"): ScreenId {
   return isScreenId(value) ? value : fallback;
 }
+
+/**
+ * The show steps for one game night. A warm-up step (the dance-along before
+ * Game 1, the sing-along before Game 2) is left out when that game has no
+ * warm-up song, so the host never steps the TV onto an empty warm-up screen.
+ */
+export function showStepsFor(hasWarmup: (game: 1 | 2) => boolean): RunOfShowStep[] {
+  return SHOW_STEPS.filter((s) => !s.intro || (s.game != null && hasWarmup(s.game)));
+}
+
+/**
+ * The step `delta` places from `currentId` within `steps`. A current screen
+ * that is a show step missing from `steps` (a warm-up the night has dropped)
+ * is placed by the full show order, so Next and Previous move to the
+ * neighbouring step. Any other screen (an overlay or system screen) keeps the
+ * old behaviour of counting from the first step.
+ */
+export function adjacentShowStep(
+  steps: RunOfShowStep[],
+  currentId: ScreenId,
+  delta: 1 | -1
+): ScreenId {
+  if (steps.length === 0) return currentId;
+  const clamp = (i: number): number => Math.max(0, Math.min(steps.length - 1, i));
+  const idx = steps.findIndex((s) => s.id === currentId);
+  if (idx >= 0) return steps[clamp(idx + delta)].id;
+  const order = SHOW_STEPS.map((s) => s.id);
+  const fullIdx = order.indexOf(currentId);
+  if (fullIdx < 0) return steps[clamp(delta)].id;
+  const position = (id: ScreenId): number => order.indexOf(id);
+  if (delta === 1) {
+    return (steps.find((s) => position(s.id) > fullIdx) ?? steps[steps.length - 1]).id;
+  }
+  const before = steps.filter((s) => position(s.id) < fullIdx);
+  return (before[before.length - 1] ?? steps[0]).id;
+}

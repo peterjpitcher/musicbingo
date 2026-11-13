@@ -23,7 +23,8 @@ import { AwardPointsModal, type AwardPreset } from "@/components/host/AwardPoint
 import { SCREEN_REGISTRY } from "@/components/screens/registry";
 import { ScoreToastOverlay } from "@/components/screens/ScoreToastOverlay";
 import { EditContext, type EditContextValue } from "@/components/motifs/EditContext";
-import { SHOW_STEPS, normalizeScreenId, type ScreenId } from "@/lib/live/runOfShow";
+import { SHOW_STEPS, adjacentShowStep, normalizeScreenId, showStepsFor, type ScreenId } from "@/lib/live/runOfShow";
+import { resolveBreakPlaylist } from "@/lib/spotifyPlaylistId";
 import { deriveScreenId } from "@/lib/live/deriveScreen";
 import { getContent, type ContentKey } from "@/lib/live/content";
 import { DEFAULT_BRAND_CONFIG } from "@/lib/brands/defaultBrand";
@@ -65,6 +66,7 @@ import {
   getRevealConfigWithExtension,
   getChallengeSongs,
   getIntroSongs,
+  hasPlayableWarmup,
   makeEmptyRuntimeState,
   sanitizeChallengeBonusPoints,
   withDefaultWelcomeSong,
@@ -173,6 +175,11 @@ function normalizeTrackSnapshot(
         : 0,
     isPlaying: Boolean(playback.isPlaying),
   };
+}
+
+/** The game's break playlist, or the default one; empty only before the game loads. */
+function sessionBreakPlaylist(session: { breakPlaylistId?: string | null } | null | undefined): string {
+  return session ? resolveBreakPlaylist(session.breakPlaylistId) : "";
 }
 
 export default function HostSessionControllerPage() {
@@ -1090,7 +1097,7 @@ export default function HostSessionControllerPage() {
   // arrive. It never starts by itself (owner's call, 16 October 2026); Play
   // Welcome Intro replaces it with the welcome song.
   const startPreShowMusic = useCallback(async (): Promise<void> => {
-    const playlistId = session?.breakPlaylistId;
+    const playlistId = sessionBreakPlaylist(session);
     if (!playlistId || spotifyDisconnectedRef.current) return;
     const ok = await sendCommand("play_break", { playlistId }, { modeOnSuccess: "idle" });
     if (ok) {
@@ -1234,8 +1241,8 @@ export default function HostSessionControllerPage() {
     }));
 
     if (spotifyAvailable) {
-      if (session?.breakPlaylistId) {
-        void sendCommand("play_break", { playlistId: session.breakPlaylistId });
+      if (sessionBreakPlaylist(session)) {
+        void sendCommand("play_break", { playlistId: sessionBreakPlaylist(session) });
       } else {
         // No break playlist configured — pause Spotify so the game doesn't
         // keep advancing silently while the display shows the break screen.
@@ -1246,8 +1253,8 @@ export default function HostSessionControllerPage() {
 
   function playBreakPlaylistAsBackground(modeOnSuccess: LiveRuntimeState["mode"]): void {
     if (!runtimeRef.current.spotifyControlAvailable) return;
-    if (session?.breakPlaylistId) {
-      void sendCommand("play_break", { playlistId: session.breakPlaylistId }, { modeOnSuccess });
+    if (sessionBreakPlaylist(session)) {
+      void sendCommand("play_break", { playlistId: sessionBreakPlaylist(session) }, { modeOnSuccess });
     } else {
       void sendCommand("pause", undefined, { modeOnSuccess });
     }
@@ -1307,10 +1314,9 @@ export default function HostSessionControllerPage() {
 
   function resumeFromBreak() {
     const currentId = normalizeScreenId(runtimeRef.current.screenId, deriveScreenId(runtimeRef.current));
-    const currentIdx = SHOW_STEPS.findIndex((s) => s.id === currentId);
-    const baseIdx = currentIdx >= 0 ? currentIdx : SHOW_STEPS.findIndex((s) => s.id === "break");
-    const nextIdx = Math.max(0, Math.min(SHOW_STEPS.length - 1, baseIdx + 1));
-    leaveBreakToScreen(SHOW_STEPS[nextIdx].id);
+    // Off the show (an overlay or system screen), carry on from the interval.
+    const fromId = SHOW_STEPS.some((s) => s.id === currentId) ? currentId : "break";
+    leaveBreakToScreen(adjacentShowStep(SHOW_SCREENS, fromId, 1));
   }
 
   /** The game a mid-game break interrupted, or null when there is nothing to resume. */
@@ -1512,7 +1518,11 @@ export default function HostSessionControllerPage() {
   // ---- Screen navigation (Change 2) ----
   // The navigable show: excludes system (sys-*) and on-demand overlay screens
   // (e.g. Bingo Claim), so Prev/Next and the run-of-show list skip over them.
-  const SHOW_SCREENS = SHOW_STEPS;
+  // A game with no warm-up song has no warm-up step: the TV never shows an
+  // empty dance-along or sing-along screen (Peter, 13 November 2026).
+  const SHOW_SCREENS = showStepsFor((n) =>
+    hasPlayableWarmup(session?.games.find((g) => g.gameNumber === n))
+  );
 
   function hasAwardedTeams(): boolean {
     return runtimeRef.current.teamScores.some((team) => team.name.trim());
@@ -1585,10 +1595,7 @@ export default function HostSessionControllerPage() {
         return;
       }
     }
-    const currentIdx = SHOW_SCREENS.findIndex((s) => s.id === currentId);
-    const baseIdx = currentIdx >= 0 ? currentIdx : 0;
-    const nextIdx = Math.max(0, Math.min(SHOW_SCREENS.length - 1, baseIdx + delta));
-    gotoScreen(SHOW_SCREENS[nextIdx].id);
+    gotoScreen(adjacentShowStep(SHOW_SCREENS, currentId, delta));
   }
 
   if (error && !session) {
@@ -2058,7 +2065,7 @@ export default function HostSessionControllerPage() {
                 welcomeIntroDisabled={welcomeSongPlayDisabled}
                 onWelcomeIntro={() => void playWelcomeSong()}
                 onPreShow={() => void startPreShowMusic()}
-                preShowDisabled={spotifyDisconnected || !session?.breakPlaylistId}
+                preShowDisabled={spotifyDisconnected || !sessionBreakPlaylist(session)}
                 preShowDisabledReason={
                   spotifyDisconnected
                     ? "Reconnect Spotify first."
@@ -2095,6 +2102,10 @@ export default function HostSessionControllerPage() {
                 mode={runtime.mode}
                 activeGame={runtime.activeGameNumber}
                 onIntro={(n) => void playIntroSong(n)}
+                warmups={{
+                  1: SHOW_SCREENS.some((s) => s.id === "dance"),
+                  2: SHOW_SCREENS.some((s) => s.id === "sing"),
+                }}
                 onStart={(n) => void startGame(n)}
                 onBreak={openBreakScreen}
                 onResume={resumeFromBreak}

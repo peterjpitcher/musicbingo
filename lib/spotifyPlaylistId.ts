@@ -27,3 +27,16 @@ export function isSpotifyOwnedPlaylist(raw: string): boolean {
   const normalized = normalizePlaylistId(raw);
   return Boolean(normalized && normalized.startsWith("37i9dQZF1"));
 }
+
+/**
+ * The break playlist every game uses unless the host sets another in Event
+ * Setup (Peter, 13 November 2026). A game saved with no break playlist gets
+ * this one on the night too.
+ */
+export const DEFAULT_BREAK_PLAYLIST_URL = "https://open.spotify.com/playlist/2Iwzdan13nqGI3k3sTfwkM";
+
+/** The game's own break playlist, or the default when it has none. */
+export function resolveBreakPlaylist(raw: string | null | undefined): string {
+  const trimmed = (raw ?? "").trim();
+  return trimmed || DEFAULT_BREAK_PLAYLIST_URL;
+}

@@ -3,7 +3,7 @@
 import { BrandSelector } from "@/components/brand/BrandSelector";
 import { parseRevealConfigInputs } from "@/lib/live/timing";
 import { MAX_SONG_PLAY_MS, MIN_SONG_PLAY_MS } from "@/lib/live/types";
-import { isSpotifyOwnedPlaylist } from "@/lib/spotifyPlaylistId";
+import { DEFAULT_BREAK_PLAYLIST_URL, isSpotifyOwnedPlaylist } from "@/lib/spotifyPlaylistId";
 import { Button } from "@anchor-nights/kit/ui";
 
 type StepEventSetupProps = {
@@ -109,14 +109,24 @@ export function StepEventSetup({
           <span className="help">Brand applied to PDFs, display screens, and host theming</span>
         </div>
         <div className="fg span2">
-          <label>Break playlist URL <span style={{ opacity: 0.5 }}>(optional)</span></label>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <label>Break playlist URL</label>
+            {breakPlaylistId.trim() !== DEFAULT_BREAK_PLAYLIST_URL && (
+              <Button type="button" variant="outline" size="sm" onClick={() => onBreakPlaylistId(DEFAULT_BREAK_PLAYLIST_URL)}>
+                Use Default
+              </Button>
+            )}
+          </div>
           <input
             type="text"
             value={breakPlaylistId}
             onChange={(e) => onBreakPlaylistId(e.target.value)}
             placeholder="https://open.spotify.com/playlist/..."
           />
-          <span className="help">Spotify switches to this playlist during breaks, then restarts the last song when you resume</span>
+          <span className="help">
+            Spotify switches to this playlist during breaks, then restarts the last song when you resume. Filled in with the usual
+            break playlist; paste another link to change it for this game. Left empty, the usual one plays.
+          </span>
           {isSpotifyOwnedPlaylist(breakPlaylistId) && (
             <span className="help warn" role="status">
               This playlist is made by Spotify. Spotify does not let this app use its own playlists, so the break music may not start.

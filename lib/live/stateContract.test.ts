@@ -139,3 +139,16 @@ describe("validateRuntimeState — screen/content/variant fields", () => {
     expect(out!.playedTracks).toBeUndefined();
   });
 });
+
+describe("validateLiveSession: optional challenge songs (13 November 2026)", () => {
+  it("keeps prep data for a game saved without challenge songs", () => {
+    const out = validateLiveSession(validSession({
+      prepData: {
+        game1SongsText: "A - B", game2SongsText: "C - D", game1Theme: "90s", game2Theme: "Pop",
+        game1ChallengeSong: "", game2ChallengeSong: "", cardCount: 40,
+        game1ChallengeSongs: [], game2ChallengeSongs: [],
+      },
+    }));
+    expect(out?.prepData).toMatchObject({ game1ChallengeSong: "", game2ChallengeSong: "", cardCount: 40 });
+  });
+});

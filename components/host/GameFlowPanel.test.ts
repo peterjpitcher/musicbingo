@@ -12,11 +12,12 @@ import { END_SESSION_HOLD_LABEL, GameFlowPanel, RESET_LOBBY_HOLD_LABEL, type Gam
 
 const noop = (): void => undefined;
 
-function render(mode: string): string {
+function render(mode: string, warmups?: GameFlowPanelProps["warmups"]): string {
   const props: GameFlowPanelProps = {
     mode,
     activeGame: mode === "running" ? 1 : null,
     onIntro: noop,
+    warmups,
     onStart: noop,
     onBreak: noop,
     onResume: noop,
@@ -60,5 +61,17 @@ describe("GameFlowPanel", () => {
     expect(html).toContain(`aria-label="${RESET_LOBBY_HOLD_LABEL}. Press and hold."`);
     expect(html).not.toContain(END_SESSION_HOLD_LABEL);
     expect(tapButtons(html).some((text) => /Reset to Lobby/i.test(text))).toBe(false);
+  });
+
+  test("hides the warm-up button of a game with no warm-up song", () => {
+    const both = tapButtons(render("idle"));
+    expect(both).toEqual(expect.arrayContaining(["▶ Dance Along", "▶ Sing Along", "Start Game 1", "Start Game 2"]));
+    const none = tapButtons(render("idle", { 1: false, 2: false }));
+    expect(none).not.toContain("▶ Dance Along");
+    expect(none).not.toContain("▶ Sing Along");
+    expect(none).toEqual(expect.arrayContaining(["Start Game 1", "Start Game 2"]));
+    const onlySing = tapButtons(render("idle", { 1: false, 2: true }));
+    expect(onlySing).not.toContain("▶ Dance Along");
+    expect(onlySing).toContain("▶ Sing Along");
   });
 });
