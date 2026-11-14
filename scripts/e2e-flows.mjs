@@ -1185,6 +1185,20 @@ async function main() {
       await flow6DisplayPage.locator("text=Flow Live Song One").waitFor({ timeout: 15_000 });
       await flow6DisplayPage.locator("text=Flow Live Artist A").waitFor({ timeout: 15_000 });
       await flow6DisplayPage.locator("text=Flow Live Song Two").waitFor({ timeout: 20_000 });
+
+      // The TV and the console's preview both keep the corner logo and show
+      // the game's songs played and left, adding up to the playlist's 26.
+      for (const [label, scope] of [
+        ["display", flow6DisplayPage.locator(".anchor-stage")],
+        ["host preview", flow6HostPage.locator(".tv-frame")],
+      ]) {
+        await scope.locator("[data-tv-corner-logo] img").waitFor({ timeout: 15_000 });
+        const countText = await scope.locator("[data-song-count]").innerText({ timeout: 15_000 });
+        const counted = countText.replace(/\s+/g, " ").match(/(\d+) played · (\d+) left/i);
+        assert.ok(counted, `${label} should show songs played and left (got "${countText}")`);
+        assert.ok(Number(counted[1]) >= 1, `${label} should count the song now playing`);
+        assert.equal(Number(counted[1]) + Number(counted[2]), 26, `${label} played and left should add up to the game's 26 songs`);
+      }
     });
 
     await flow6Context.close();

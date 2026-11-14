@@ -28,4 +28,9 @@ export type ScreenProps = {
    * Unset (the venue page's preview) the welcome screen shows no date.
    */
   eventDateInput?: string | null;
+  /**
+   * How many songs the active game has (lib/live/songCount.ts gameSongTotal),
+   * for the game screens' "played" and "left" numbers. Unset or 0 shows none.
+   */
+  songTotal?: number;
 };

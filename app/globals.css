@@ -460,13 +460,6 @@
   line-height: 1;
   margin-top: 8px;
 }
-.score-toast__total {
-  font-family: var(--font-outfit), system-ui, sans-serif;
-  font-size: 36px;
-  font-weight: 700;
-  margin-top: 8px;
-  color: var(--anchor-charcoal);
-}
 @keyframes scoretoast {
   from {
     opacity: 0;
@@ -482,6 +475,15 @@
 }
 .venue-logo--sm {
   height: 56px;
+}
+/* The logo every TV screen keeps in its top-left corner (TvCornerLogo):
+   over the footer (30), under the points pop-up (70). */
+.tv-corner-logo {
+  position: absolute;
+  left: 90px;
+  top: 70px;
+  z-index: 40;
+  pointer-events: none;
 }
 .logo-fallback {
   font-family: var(--font-dm-serif), "Times New Roman", serif;

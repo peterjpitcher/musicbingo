@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { EditContext, type EditContextValue } from "@/components/motifs/EditContext";
+import { TvCornerLogo } from "@/components/motifs/TvCornerLogo";
 import { Welcome } from "@/components/screens/Welcome";
 import type { BrandConfig } from "@/lib/brands/types";
 import type { ScreenVariant } from "@/components/screens/types";
@@ -80,6 +81,8 @@ export function BrandPreviewPane({ brand, variant = "A" }: BrandPreviewPaneProps
             style={{ transform: `scale(${scale})` }}
           >
             <Welcome brand={brand} variant={variant} runtime={null} />
+            {/* The TV draws the venue logo in the corner over every screen. */}
+            <TvCornerLogo brand={brand} />
           </div>
         </div>
     </EditContext.Provider>

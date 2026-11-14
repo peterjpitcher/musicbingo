@@ -24,7 +24,7 @@ import { readPromoHides } from "@/lib/promo/promoMode";
  * events) is drawn by LiveDisplay through PromoLoop; this component is the
  * thank-you slide on its own, for the host console's preview.
  */
-export function ThankYou({ brand }: ScreenProps): React.ReactElement {
+export function ThankYou(_props: ScreenProps): React.ReactElement {
   const { get } = useEdit();
   const { feed, reviewUrl } = usePromo();
   const nowMs = usePromoClock();
@@ -37,5 +37,5 @@ export function ThankYou({ brand }: ScreenProps): React.ReactElement {
     hideReview: hides.hideReview,
     hideNext: hides.hideNext,
   });
-  return <PromoSlideOnStage slide={slide} nowMs={nowMs} brand={brand} />;
+  return <PromoSlideOnStage slide={slide} nowMs={nowMs} />;
 }

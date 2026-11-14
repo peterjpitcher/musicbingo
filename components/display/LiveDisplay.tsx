@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Stage, useWakeLock } from "@anchor-nights/kit/tv";
 import { EditContext } from "@/components/motifs/EditContext";
+import { TvCornerLogo } from "@/components/motifs/TvCornerLogo";
 import { PromoLoop } from "@/components/promo/PromoLoop";
 import { SCREEN_REGISTRY } from "@/components/screens/registry";
 import { ScoreToastOverlay } from "@/components/screens/ScoreToastOverlay";
@@ -13,6 +14,7 @@ import type { BrandConfig } from "@/lib/brands/types";
 import { matchChallengeSong } from "@/lib/live/challenge";
 import { getContent, type ContentKey } from "@/lib/live/content";
 import { deriveScreenId } from "@/lib/live/deriveScreen";
+import { gameSongTotal } from "@/lib/live/songCount";
 import { subscribeLiveChannel } from "@/lib/live/channel";
 import { nextProgressAnchor, progressAt, type ProgressAnchor } from "@/lib/live/displayClock";
 import { decideBroadcast, decidePoll, NOTHING_APPLIED, type AppliedMark } from "@/lib/live/snapshotOrder";
@@ -248,7 +250,8 @@ export function LiveDisplay({ sessionId, mode = "link" }: LiveDisplayProps): Rea
   // on its own. The feed and the review link come from PromoProvider.
   const promoMode = loading || error ? null : resolvePromoMode(screenId, readPromoHides((key) => editValue.get(key, "")));
   const eventDateInput = session?.eventDateInput ?? null;
-  const screenProps = { brand: effectiveBrand, runtime: screenRuntime, progressMs: interpolatedProgress, eventDateInput };
+  const songTotal = gameSongTotal(session, runtime.activeGameNumber);
+  const screenProps = { brand: effectiveBrand, runtime: screenRuntime, progressMs: interpolatedProgress, eventDateInput, songTotal };
   const sessionDate = useCallback((nowMs: number) => sessionDateFor(eventDateInput, nowMs), [eventDateInput]);
   const renderLead = (lead: PromoLead) => SCREEN_REGISTRY[lead](screenProps);
 
@@ -259,12 +262,14 @@ export function LiveDisplay({ sessionId, mode = "link" }: LiveDisplayProps): Rea
       <Stage>
         <div className="screen-wrap in" key={screenId}>
           {promoMode ? (
-            <PromoLoop mode={promoMode} brand={effectiveBrand} sessionDate={sessionDate} renderLead={renderLead} />
+            <PromoLoop mode={promoMode} sessionDate={sessionDate} renderLead={renderLead} />
           ) : (
             renderScreen(screenProps)
           )}
           <ScoreToastOverlay toast={screenRuntime.scoreToast} />
         </div>
+        {/* Outside the keyed screen, so it stays still while screens change. */}
+        <TvCornerLogo brand={effectiveBrand} />
         {connectionWarning ? (
           <div
             role="status"
